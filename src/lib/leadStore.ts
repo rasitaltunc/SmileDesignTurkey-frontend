@@ -25,7 +25,6 @@ export type Lead = {
     savedTo?: 'localStorage' | 'supabase';
   };
 };
-
 const STORAGE_KEY = 'leads_v1';
 const MAX_LEADS = 10000;
 
