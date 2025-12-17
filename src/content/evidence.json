@@ -1,0 +1,143 @@
+{
+  "version": "1.0.0",
+  "sections": [
+    {
+      "key": "clinic-tour",
+      "title": "Clinic Tour",
+      "items": [
+        {
+          "id": "tour-video-1",
+          "type": "video",
+          "title": "Virtual Clinic Tour",
+          "description": "Take a virtual walkthrough of our modern facilities",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["facility", "tour"],
+          "lang": "en"
+        },
+        {
+          "id": "tour-image-1",
+          "type": "image",
+          "title": "Reception Area",
+          "description": "Welcoming reception and waiting area",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["facility"],
+          "lang": "en"
+        },
+        {
+          "id": "tour-image-2",
+          "type": "image",
+          "title": "Treatment Rooms",
+          "description": "Modern, sterile treatment rooms",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["facility"],
+          "lang": "en"
+        }
+      ]
+    },
+    {
+      "key": "certificates",
+      "title": "Certificates & Accreditations",
+      "items": [
+        {
+          "id": "cert-jci",
+          "type": "pdf",
+          "title": "JCI Accreditation",
+          "description": "Joint Commission International accreditation certificate",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["accreditation", "certification"],
+          "lang": "en"
+        },
+        {
+          "id": "cert-iso",
+          "type": "pdf",
+          "title": "ISO Certification",
+          "description": "ISO quality management certification",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["certification"],
+          "lang": "en"
+        },
+        {
+          "id": "cert-license",
+          "type": "link",
+          "title": "Clinic License",
+          "description": "Official clinic operating license",
+          "url": "#",
+          "tags": ["license"],
+          "lang": "en"
+        }
+      ]
+    },
+    {
+      "key": "before-after",
+      "title": "Before & After Cases",
+      "items": [
+        {
+          "id": "case-1",
+          "type": "image",
+          "title": "Smile Makeover Case",
+          "description": "Complete smile transformation with veneers",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["veneers", "cosmetic"],
+          "lang": "en"
+        },
+        {
+          "id": "case-2",
+          "type": "image",
+          "title": "Implant Restoration",
+          "description": "Full arch restoration with All-on-4",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["implants", "restoration"],
+          "lang": "en"
+        },
+        {
+          "id": "case-3",
+          "type": "image",
+          "title": "Whitening Results",
+          "description": "Professional whitening treatment results",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["whitening"],
+          "lang": "en"
+        }
+      ]
+    },
+    {
+      "key": "team-doctor",
+      "title": "Team & Doctor Credentials",
+      "items": [
+        {
+          "id": "doctor-1",
+          "type": "image",
+          "title": "Lead Dentist Profile",
+          "description": "Board-certified specialist with 15+ years experience",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["doctor", "credentials"],
+          "lang": "en"
+        },
+        {
+          "id": "doctor-2",
+          "type": "pdf",
+          "title": "Specialist Certification",
+          "description": "Advanced training and certification documentation",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["certification", "doctor"],
+          "lang": "en"
+        },
+        {
+          "id": "team-photo",
+          "type": "image",
+          "title": "Clinical Team",
+          "description": "Our experienced clinical team",
+          "url": "/evidence/placeholder.svg",
+          "tags": ["team"],
+          "lang": "en"
+        }
+      ]
+    }
+  ],
+  "required": {
+    "home": ["clinic-tour", "certificates"],
+    "pricing": ["certificates"],
+    "process": ["clinic-tour", "certificates", "before-after"]
+  }
+}
+

@@ -1,0 +1,279 @@
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================
+   GUIDEHEALTH DESIGN SYSTEM - FOUNDATIONS
+   Premium, Minimal Health Tourism
+   ============================================ */
+
+:root {
+  /* === TYPOGRAPHY === */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Font sizes based on design system */
+  --text-h1: 2.75rem; /* 44px */
+  --text-h2: 2rem; /* 32px */
+  --text-h3: 1.5rem; /* 24px */
+  --text-body: 1rem; /* 16px */
+  --text-body-sm: 0.875rem; /* 14px */
+  --text-label: 0.75rem; /* 12px */
+  --text-button: 0.875rem; /* 14px */
+  
+  /* Line heights */
+  --line-h1: 3.25rem; /* 52px */
+  --line-h2: 2.5rem; /* 40px */
+  --line-h3: 2rem; /* 32px */
+  --line-body: 1.5rem; /* 24px */
+  --line-body-sm: 1.375rem; /* 22px */
+  --line-label: 1rem; /* 16px */
+  --line-button: 1.25rem; /* 20px */
+
+  /* === COLORS === */
+  /* Backgrounds */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F7F8FA;
+  
+  /* Surface */
+  --surface-primary: #FFFFFF;
+  
+  /* Borders */
+  --border-subtle: #E6E8EE;
+  
+  /* Text */
+  --text-primary: #0B1220;
+  --text-secondary: #475467;
+  --text-tertiary: #667085;
+  
+  /* Accent */
+  --accent-primary: #2F6BFF;
+  --accent-hover: #2457D6;
+  --accent-soft: #EAF0FF;
+  
+  /* Semantic */
+  --success: #12B76A;
+  --warning: #F79009;
+  --error: #F04438;
+  
+  /* Overlay */
+  --overlay-wash: #F9FAFB;
+  
+  /* === SPACING (8pt grid) === */
+  --space-1: 0.5rem; /* 8px */
+  --space-2: 0.75rem; /* 12px */
+  --space-3: 1rem; /* 16px */
+  --space-4: 1.25rem; /* 20px */
+  --space-5: 1.5rem; /* 24px */
+  --space-6: 2rem; /* 32px */
+  --space-7: 2.5rem; /* 40px */
+  --space-8: 3rem; /* 48px */
+  --space-9: 4rem; /* 64px */
+  
+  /* === RADIUS === */
+  --radius-sm: 0.625rem; /* 10px */
+  --radius-md: 1rem; /* 16px */
+  --radius-lg: 1.25rem; /* 20px */
+  --radius-xl: 1.5rem; /* 24px */
+  
+  /* === SHADOWS (Premium, Soft) === */
+  --shadow-sm: 0 1px 2px rgba(11, 18, 32, 0.04), 0 1px 4px rgba(11, 18, 32, 0.02);
+  --shadow-md: 0 2px 4px rgba(11, 18, 32, 0.04), 0 4px 12px rgba(11, 18, 32, 0.06);
+  --shadow-lg: 0 4px 8px rgba(11, 18, 32, 0.04), 0 8px 24px rgba(11, 18, 32, 0.08);
+  
+  /* Font weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  
+  /* Legacy variables for compatibility */
+  --font-size: 16px;
+  --background: #FFFFFF;
+  --foreground: #0B1220;
+  --card: #FFFFFF;
+  --card-foreground: #0B1220;
+  --popover: #FFFFFF;
+  --popover-foreground: #0B1220;
+  --primary: #2F6BFF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F7F8FA;
+  --secondary-foreground: #0B1220;
+  --muted: #E6E8EE;
+  --muted-foreground: #667085;
+  --accent: #EAF0FF;
+  --accent-foreground: #2F6BFF;
+  --destructive: #F04438;
+  --destructive-foreground: #FFFFFF;
+  --border: #E6E8EE;
+  --input: transparent;
+  --input-background: #F7F8FA;
+  --switch-background: #E6E8EE;
+  --ring: #2F6BFF;
+  --radius: var(--radius-sm);
+}
+
+.dark {
+  --bg-primary: #0B1220;
+  --bg-secondary: #1A2332;
+  --surface-primary: #1A2332;
+  --border-subtle: #2D3748;
+  --text-primary: #FFFFFF;
+  --text-secondary: #CBD5E0;
+  --text-tertiary: #A0AEC0;
+  --overlay-wash: #0F1825;
+  
+  --background: #0B1220;
+  --foreground: #FFFFFF;
+  --card: #1A2332;
+  --card-foreground: #FFFFFF;
+  --popover: #1A2332;
+  --popover-foreground: #FFFFFF;
+  --primary: #5B8FFF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2D3748;
+  --secondary-foreground: #FFFFFF;
+  --muted: #2D3748;
+  --muted-foreground: #A0AEC0;
+  --accent: #2D4A7C;
+  --accent-foreground: #5B8FFF;
+  --destructive: #F04438;
+  --destructive-foreground: #FFFFFF;
+  --border: #2D3748;
+  --input-background: #2D3748;
+  --ring: #5B8FFF;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  
+  /* Design system colors */
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-surface-primary: var(--surface-primary);
+  --color-border-subtle: var(--border-subtle);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-overlay-wash: var(--overlay-wash);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-bg-primary text-text-primary;
+    font-family: var(--font-family);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/**
+ * Design System Typography
+ */
+@layer base {
+  :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
+    h1 {
+      font-size: var(--text-h1);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-h1);
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      font-size: var(--text-h2);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-h2);
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-size: var(--text-h3);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-h3);
+    }
+
+    h4 {
+      font-size: var(--text-body);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-body);
+    }
+
+    p {
+      font-size: var(--text-body);
+      font-weight: var(--font-weight-regular);
+      line-height: var(--line-body);
+    }
+
+    label {
+      font-size: var(--text-label);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-label);
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+    }
+
+    button {
+      font-size: var(--text-button);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--line-button);
+    }
+
+    input, textarea {
+      font-size: var(--text-body);
+      font-weight: var(--font-weight-regular);
+      line-height: var(--line-body);
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* === UTILITY CLASSES === */
+.shadow-premium-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+.shadow-premium-md {
+  box-shadow: var(--shadow-md);
+}
+
+.shadow-premium-lg {
+  box-shadow: var(--shadow-lg);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
