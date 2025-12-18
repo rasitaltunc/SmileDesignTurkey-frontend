@@ -15,6 +15,22 @@ interface AuthResult {
 }
 
 /**
+ * Create Supabase client with Service Role key (server-side only)
+ */
+function createSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // 🔥 ŞART
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing Supabase configuration');
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+}
+
+/**
  * Authenticate request based on X-Admin-Token header
  */
 function authenticateRequest(token: string | undefined): AuthResult {
@@ -45,16 +61,12 @@ function authenticateRequest(token: string | undefined): AuthResult {
  * GET /api/leads - Fetch leads with filters
  */
 async function handleGet(req: VercelRequest, res: VercelResponse, auth: AuthResult) {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
+  let supabase;
+  try {
+    supabase = createSupabaseClient();
+  } catch (error) {
     return res.status(500).json({ error: 'Server configuration error' });
   }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
 
   try {
     let query = supabase.from('leads').select('*');
@@ -101,16 +113,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse, auth: AuthResu
  * PATCH /api/leads - Update lead (status, notes, assigned_to)
  */
 async function handlePatch(req: VercelRequest, res: VercelResponse, auth: AuthResult) {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
+  let supabase;
+  try {
+    supabase = createSupabaseClient();
+  } catch (error) {
     return res.status(500).json({ error: 'Server configuration error' });
   }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
 
   try {
     const { id, status, notes, assigned_to } = req.body;
