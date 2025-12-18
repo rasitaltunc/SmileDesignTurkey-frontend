@@ -114,6 +114,11 @@ export default function Footer() {
               <Link to="#" className="hover:text-teal-600 transition-colors">
                 Cookie Policy
               </Link>
+              {import.meta.env.DEV && (
+                <Link to="/admin/leads" className="hover:text-teal-600 transition-colors text-xs text-gray-400">
+                  Admin (Dev)
+                </Link>
+              )}
             </div>
           </div>
         </div>

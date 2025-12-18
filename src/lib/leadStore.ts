@@ -27,7 +27,6 @@ export type Lead = {
 };
 const STORAGE_KEY = 'leads_v1';
 const MAX_LEADS = 10000;
-
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }

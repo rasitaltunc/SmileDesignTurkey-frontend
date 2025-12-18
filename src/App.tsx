@@ -83,6 +83,7 @@ export default function App() {
         return <Onboarding />;
       case '/plan-dashboard':
         return <PlanDashboard />;
+      case '/admin':
       case '/admin/leads':
         return <AdminLeads />;
       default:

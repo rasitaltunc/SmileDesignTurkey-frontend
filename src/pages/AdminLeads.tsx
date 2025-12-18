@@ -1,289 +1,488 @@
 import { useState, useEffect } from 'react';
-import { listLeadsUnified, exportLeadsCsvUnified, clearLeadsLocal, type Lead } from '../lib/leadStore';
-import { fetchLeadsFromSupabaseSecure } from '../lib/adminLeadsApi';
-import { Download, Trash2, Shield, AlertCircle, RefreshCw, Database, AlertTriangle } from 'lucide-react';
+import { Download, Shield, RefreshCw, Filter, X, Save, LogOut, User, Lock } from 'lucide-react';
+
+// Team members list
+const TEAM = [
+  { id: 'rasit', label: 'Rasit (Admin)' },
+  { id: 'agent1', label: 'Agent 1' },
+  { id: 'agent2', label: 'Agent 2' },
+];
+
+// Status options
+const STATUS_OPTIONS = [
+  { value: 'NEW', label: 'New' },
+  { value: 'CONTACTED', label: 'Contacted' },
+  { value: 'QUALIFIED', label: 'Qualified' },
+  { value: 'QUOTE_SENT', label: 'Quote Sent' },
+  { value: 'CLOSED', label: 'Closed' },
+  { value: 'LOST', label: 'Lost' },
+];
+
+interface Lead {
+  id: string;
+  created_at: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  source: string;
+  lang?: string;
+  treatment?: string;
+  timeline?: string;
+  status?: string;
+  notes?: string;
+  assigned_to?: string;
+  page_url?: string;
+  utm_source?: string;
+  device?: string;
+}
+
+interface AuthState {
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  employeeId?: string;
+}
+
+const TOKEN_STORAGE_KEY = 'admin_token';
 
 export default function AdminLeads() {
-  // Get token from URL query params
-  const getTokenFromUrl = () => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('token');
-  };
-  
-  const token = getTokenFromUrl();
-  const requiredToken = import.meta.env.VITE_ADMIN_TOKEN;
-  
-  const [leadsData, setLeadsData] = useState<{ local: Lead[]; supabase: Lead[]; all: Lead[] }>({
-    local: [],
-    supabase: [],
-    all: [],
+  const [role, setRole] = useState<'admin' | 'employee'>('admin');
+  const [username, setUsername] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [authToken, setAuthToken] = useState<string>('');
+  const [authState, setAuthState] = useState<AuthState>({
+    isAuthenticated: false,
+    isAdmin: false,
   });
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'local' | 'supabase' | 'all'>('all');
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [supabaseError, setSupabaseError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Filters
+  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterAssignedTo, setFilterAssignedTo] = useState<string>('');
+  
+  // Edit state
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [editStatus, setEditStatus] = useState<string>('');
+  const [editNotes, setEditNotes] = useState<string>('');
+  const [editAssignedTo, setEditAssignedTo] = useState<string>('');
 
+  // Load token from localStorage on mount
   useEffect(() => {
-    // Check authorization
-    const trimmedToken = requiredToken?.trim() || '';
-    
-    // If no token is set, allow access ONLY in DEV mode
-    if (trimmedToken.length === 0) {
-      if (import.meta.env.DEV) {
-        setIsAuthorized(true);
-        loadLeads();
-      } else {
-        // Production: block access if no token configured
-        setIsAuthorized(false);
-      }
+    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (savedToken) {
+      setAuthToken(savedToken);
+      authenticate(savedToken);
+    }
+  }, []);
+
+  // Check if token is valid and determine auth level
+  const authenticate = async (token: string) => {
+    if (!token.trim()) {
+      setAuthState({ isAuthenticated: false, isAdmin: false });
       return;
     }
 
-    // Token is required - check if provided token matches
-    if (token === trimmedToken) {
-      setIsAuthorized(true);
-      loadLeads();
-    } else {
-      setIsAuthorized(false);
-    }
-  }, [token, requiredToken]);
-
-  const loadLeads = async () => {
     setIsLoading(true);
-    setSupabaseError(null);
-    
+    setError(null);
+
     try {
-      // Load local leads
-      const localLeads = (await listLeadsUnified()).local;
-      
-      // Load Supabase leads via secure endpoint (if token and Supabase URL are configured)
-      let supabaseLeads: Lead[] = [];
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      
-      if (token && supabaseUrl && supabaseUrl.trim().length > 0) {
-        try {
-          const response = await fetchLeadsFromSupabaseSecure(token);
-          supabaseLeads = response.leads;
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to load from Supabase';
-          setSupabaseError(errorMessage);
-          console.warn('[AdminLeads] Failed to load Supabase leads:', error);
-          // Continue with local leads only
-        }
-      }
-      
-      // Merge and deduplicate
-      const leadMap = new Map<string, Lead>();
-      localLeads.forEach(lead => leadMap.set(lead.id, lead));
-      supabaseLeads.forEach(lead => leadMap.set(lead.id, lead));
-      
-      const allLeads = Array.from(leadMap.values()).sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      
-      setLeadsData({
-        local: localLeads,
-        supabase: supabaseLeads,
-        all: allLeads,
+      const response = await fetch('/api/leads?limit=1', {
+        headers: {
+          'X-Admin-Token': token,
+        },
       });
-    } catch (error) {
-      console.warn('[AdminLeads] Failed to load leads:', error);
+
+      if (response.ok) {
+        // Token is valid - determine if admin or employee
+        const isAdmin = !token.startsWith('EMPLOYEE:');
+        const employeeId = token.startsWith('EMPLOYEE:') 
+          ? token.split(':')[1] 
+          : undefined;
+        
+        setAuthState({
+          isAuthenticated: true,
+          isAdmin,
+          employeeId,
+        });
+        setError(null);
+        // Save token to localStorage
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setAuthState({ isAuthenticated: false, isAdmin: false });
+        setError(data.error || 'Invalid credentials');
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+      }
+    } catch (err) {
+      setAuthState({ isAuthenticated: false, isAdmin: false });
+      setError('Failed to connect to server. Please check your connection.');
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleExport = async () => {
+  // Handle login form submit
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!password.trim()) {
+      setError('Password is required');
+      return;
+    }
+
+    if (role === 'employee' && !username.trim()) {
+      setError('Username is required for employee login');
+      return;
+    }
+
+    // Build token based on role
+    let token = '';
+    if (role === 'admin') {
+      token = password; // Admin token is just the password
+    } else {
+      token = `EMPLOYEE:${username}:${password}`;
+    }
+
+    setAuthToken(token);
+    await authenticate(token);
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    setAuthToken('');
+    setAuthState({ isAuthenticated: false, isAdmin: false });
+    setLeads([]);
+    setError(null);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    setPassword('');
+    setUsername('');
+  };
+
+  // Load leads from API
+  const loadLeads = async () => {
+    if (!authToken || !authState.isAuthenticated) return;
+
+    setIsLoading(true);
+    setError(null);
+
     try {
-      const csv = await exportLeadsCsvUnified();
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `leads_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      // Fix memory leak: revoke object URL after download
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.warn('[AdminLeads] Failed to export leads:', error);
+      const params = new URLSearchParams();
+      if (filterStatus) params.set('status', filterStatus);
+      if (filterAssignedTo && authState.isAdmin) {
+        params.set('assigned_to', filterAssignedTo);
+      }
+      params.set('limit', '100');
+
+      const response = await fetch(`/api/leads?${params.toString()}`, {
+        headers: {
+          'X-Admin-Token': authToken,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired or invalid
+          handleLogout();
+          setError('Session expired. Please login again.');
+          return;
+        }
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to load leads');
+      }
+
+      const data = await response.json();
+      setLeads(data.data || []);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
+      setError(errorMessage);
+      console.error('[AdminLeads] Error loading leads:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRefresh = () => {
-    loadLeads();
+  // Update lead
+  const updateLead = async (leadId: string, updates: { status?: string; notes?: string; assigned_to?: string }) => {
+    if (!authToken || !authState.isAuthenticated) return;
+
+    try {
+      const response = await fetch('/api/leads', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Token': authToken,
+        },
+        body: JSON.stringify({
+          id: leadId,
+          ...updates,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleLogout();
+          setError('Session expired. Please login again.');
+          return;
+        }
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update lead');
+      }
+
+      // Reload leads
+      await loadLeads();
+      setEditingLead(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update lead';
+      setError(errorMessage);
+      console.error('[AdminLeads] Error updating lead:', err);
+    }
   };
 
-  const handleClear = () => {
-    clearLeadsLocal();
-    setLeadsData({ local: [], supabase: leadsData.supabase, all: leadsData.supabase });
-    setShowClearConfirm(false);
+  // Handle edit start
+  const handleEditStart = (lead: Lead) => {
+    setEditingLead(lead);
+    setEditStatus(lead.status || 'NEW');
+    setEditNotes(lead.notes || '');
+    setEditAssignedTo(lead.assigned_to || '');
   };
 
-  if (!isAuthorized) {
+  // Handle edit save
+  const handleEditSave = () => {
+    if (!editingLead) return;
+
+    const updates: any = {};
+    if (editStatus !== editingLead.status) updates.status = editStatus;
+    if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
+    if (authState.isAdmin && editAssignedTo !== (editingLead.assigned_to || '')) {
+      updates.assigned_to = editAssignedTo || null;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      updateLead(editingLead.id, updates);
+    } else {
+      setEditingLead(null);
+    }
+  };
+
+  // Auto-load when authenticated
+  useEffect(() => {
+    if (authState.isAuthenticated && authToken) {
+      loadLeads();
+    }
+  }, [authState.isAuthenticated, filterStatus, filterAssignedTo]);
+
+  // Not authenticated - show login
+  if (!authState.isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Unauthorized</h1>
-          <p className="text-gray-600 mb-4">
-            This page requires an admin token. Please provide a valid token in the URL.
-          </p>
-          <p className="text-sm text-gray-500">
-            Example: <code className="bg-gray-100 px-2 py-1 rounded">/admin/leads?token=your_token</code>
-          </p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+              <Shield className="w-8 h-8 text-blue-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Admin Login</h1>
+            <p className="text-gray-600 text-sm">
+              Sign in to access the leads management panel
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            {/* Role Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Role
+              </label>
+              <select
+                value={role}
+                onChange={(e) => {
+                  setRole(e.target.value as 'admin' | 'employee');
+                  setError(null);
+                }}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              >
+                <option value="admin">Admin</option>
+                <option value="employee">Employee</option>
+              </select>
+            </div>
+
+            {/* Username (Employee only) */}
+            {role === 'employee' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <User className="w-4 h-4 inline mr-1" />
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="e.g., agent1"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            )}
+
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Lock className="w-4 h-4 inline mr-1" />
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(null);
+                }}
+                placeholder={role === 'admin' ? 'Enter admin password' : 'Enter employee password'}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading || !password.trim() || (role === 'employee' && !username.trim())}
+              className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4" />
+                  Sign In
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              {role === 'admin' ? (
+                <>Admin: Use your admin password token</>
+              ) : (
+                <>Employee: Format is <code className="bg-gray-100 px-1 rounded">EMPLOYEE:username:password</code></>
+              )}
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  const { local, supabase, all } = leadsData;
-  const displayLeads = activeTab === 'all' 
-    ? all.map(l => ({ ...l, _source: local.some(ll => ll.id === l.id) ? 'local' : 'supabase' }))
-    : activeTab === 'local'
-    ? local.map(l => ({ ...l, _source: 'local' }))
-    : supabase.map(l => ({ ...l, _source: 'supabase' }));
-
+  // Authenticated - show leads table
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Leads Management</h1>
               <p className="text-gray-600 mt-1">
-                <span className="font-medium">{all.length} total</span>
-                {' • '}
-                <span className="text-gray-500">{local.length} local</span>
-                {supabase.length > 0 && (
-                  <>
-                    {' • '}
-                    <span className="text-purple-600">{supabase.length} Supabase</span>
-                  </>
+                <span className="font-medium">{leads.length} leads</span>
+                {authState.employeeId && (
+                  <span className="ml-2 text-blue-600">• Assigned to: {authState.employeeId}</span>
                 )}
+                {authState.isAdmin && <span className="ml-2 text-green-600">• Admin Mode</span>}
               </p>
             </div>
             <div className="flex gap-3">
               <button
-                onClick={handleRefresh}
+                onClick={loadLeads}
                 disabled={isLoading}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                title="Reload local and Supabase leads"
               >
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                {import.meta.env.VITE_SUPABASE_URL ? 'Load from Supabase' : 'Refresh'}
+                Refresh
               </button>
               <button
-                onClick={handleExport}
-                disabled={all.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
-                <Download className="w-4 h-4" />
-                Export CSV
-              </button>
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                disabled={local.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-                Clear Local Leads
+                <LogOut className="w-4 h-4" />
+                Logout
               </button>
             </div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Statuses</option>
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {authState.isAdmin && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Assigned To</label>
+                <select
+                  value={filterAssignedTo}
+                  onChange={(e) => setFilterAssignedTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Assignments</option>
+                  {TEAM.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {(filterStatus || filterAssignedTo) && (
+              <button
+                onClick={() => {
+                  setFilterStatus('');
+                  setFilterAssignedTo('');
+                }}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Supabase Error Banner */}
-        {supabaseError && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold text-yellow-800 mb-1">Supabase Connection Error</h3>
-                <p className="text-sm text-yellow-700">{supabaseError}</p>
-                <p className="text-xs text-yellow-600 mt-2">
-                  Make sure the Edge Function is deployed and environment variables are set correctly. See README_SUPABASE.md for setup instructions.
-                </p>
-              </div>
-            </div>
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
 
-        {/* Tabs */}
-        {supabase.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-            <div className="flex gap-2 border-b border-gray-200">
-              <button
-                onClick={() => setActiveTab('all')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'all'
-                    ? 'border-teal-600 text-teal-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                All ({all.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('local')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'local'
-                    ? 'border-teal-600 text-teal-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                LocalStorage ({local.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('supabase')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                  activeTab === 'supabase'
-                    ? 'border-teal-600 text-teal-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Database className="w-4 h-4" />
-                Supabase ({supabase.length})
-              </button>
-            </div>
-          </div>
-        )}
-
-        {showClearConfirm && (
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border-2 border-red-200">
-            <div className="flex items-start gap-4">
-              <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Clear Local Leads</h3>
-                <p className="text-gray-600 mb-4">
-                  This will permanently delete all {local.length} leads from localStorage. Supabase leads will remain untouched. This action cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleClear}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    Yes, Clear Local Leads
-                  </button>
-                  <button
-                    onClick={() => setShowClearConfirm(false)}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {displayLeads.length === 0 ? (
+        {/* Leads Table */}
+        {leads.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm p-12 text-center">
             <p className="text-gray-500 text-lg">No leads found.</p>
             <p className="text-gray-400 text-sm mt-2">
-              Leads will appear here when users submit the contact form or complete onboarding.
+              {isLoading ? 'Loading...' : 'Try adjusting your filters or check back later.'}
             </p>
           </div>
         ) : (
@@ -292,68 +491,23 @@ export default function AdminLeads() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Storage
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Source
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Phone
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Treatment
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Timeline
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Language
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Page URL
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      UTM Source
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Device
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Treatment</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {displayLeads.map((lead: any) => (
+                  {leads.map((lead) => (
                     <tr key={lead.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(lead.createdAt).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${
-                          lead._source === 'supabase'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {lead._source === 'supabase' && <Database className="w-3 h-3" />}
-                          {lead._source === 'supabase' ? 'Supabase' : 'Local'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          lead.source === 'onboarding' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {lead.source}
-                        </span>
+                        {new Date(lead.created_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {lead.name || '-'}
@@ -364,23 +518,102 @@ export default function AdminLeads() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {lead.phone || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          lead.source === 'onboarding' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {lead.source}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {lead.treatment || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {lead.timeline || '-'}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {editingLead?.id === lead.id ? (
+                          <select
+                            value={editStatus}
+                            onChange={(e) => setEditStatus(e.target.value)}
+                            className="text-sm border border-gray-300 rounded px-2 py-1"
+                          >
+                            {STATUS_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            lead.status === 'NEW' ? 'bg-yellow-100 text-yellow-800' :
+                            lead.status === 'CONTACTED' ? 'bg-blue-100 text-blue-800' :
+                            lead.status === 'CLOSED' ? 'bg-green-100 text-green-800' :
+                            lead.status === 'LOST' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {STATUS_OPTIONS.find(s => s.value === lead.status)?.label || lead.status || 'NEW'}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {lead.lang || '-'}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {editingLead?.id === lead.id && authState.isAdmin ? (
+                          <select
+                            value={editAssignedTo}
+                            onChange={(e) => setEditAssignedTo(e.target.value)}
+                            className="text-sm border border-gray-300 rounded px-2 py-1"
+                          >
+                            <option value="">Unassigned</option>
+                            {TEAM.map((member) => (
+                              <option key={member.id} value={member.id}>
+                                {member.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-sm text-gray-600">
+                            {lead.assigned_to ? TEAM.find(t => t.id === lead.assigned_to)?.label || lead.assigned_to : 'Unassigned'}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                        {lead.pageUrl || '-'}
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {editingLead?.id === lead.id ? (
+                          <input
+                            type="text"
+                            value={editNotes}
+                            onChange={(e) => setEditNotes(e.target.value)}
+                            placeholder="Add notes..."
+                            className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                          />
+                        ) : (
+                          <span className="max-w-xs truncate block">
+                            {lead.notes || '-'}
+                          </span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.utmSource || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {lead.device || '-'}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {editingLead?.id === lead.id ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleEditSave}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setEditingLead(null)}
+                              className="text-gray-600 hover:text-gray-700"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleEditStart(lead)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            Edit
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
