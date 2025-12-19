@@ -3,9 +3,8 @@ import { Download, Shield, RefreshCw, Filter, X, Save, LogOut, User, Lock } from
 
 // Team members list
 const TEAM = [
-  { id: 'rasit', label: 'Rasit (Admin)' },
-  { id: 'agent1', label: 'Agent 1' },
-  { id: 'agent2', label: 'Agent 2' },
+  { id: 'f4cb96d2-0923-42f6-b867-472001453bb4', label: 'Office (Admin)' },
+  { id: 'c6ac94be-6c37-40e4-9f2d-72efb53b15c5', label: 'Rasit (Employee)' },
 ];
 
 // Status options
@@ -256,7 +255,11 @@ export default function AdminLeads() {
     if (editStatus !== editingLead.status) updates.status = editStatus;
     if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
     if (authState.isAdmin && editAssignedTo !== (editingLead.assigned_to || '')) {
-      updates.assigned_to = editAssignedTo || null;
+      if (editAssignedTo) {
+        updates.assigned_to = editAssignedTo; // UUID gider
+      } else {
+        updates.assigned_to = null; // Unassign
+      }
     }
 
     if (Object.keys(updates).length > 0) {
