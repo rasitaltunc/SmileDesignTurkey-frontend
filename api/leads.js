@@ -82,6 +82,11 @@ async function handlePatch(req, res, auth) {
     const { id, status, notes, assigned_to } = req.body || {};
     if (!id) return res.status(400).json({ error: 'Missing lead id' });
 
+    // Employees cannot change assignment
+    if (!auth.isAdmin && 'assigned_to' in req.body) {
+      return res.status(403).json({ error: 'Employees cannot change assignment' });
+    }
+
     if (!auth.isAdmin && auth.employeeId) {
       const { data: lead } = await supabase.from('leads').select('assigned_to').eq('id', id).single();
       if (!lead || lead.assigned_to !== auth.employeeId) {
