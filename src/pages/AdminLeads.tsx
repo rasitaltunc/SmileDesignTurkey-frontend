@@ -58,13 +58,11 @@ export default function AdminLeads() {
   
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterAssignedTo, setFilterAssignedTo] = useState<string>('');
   
   // Edit state
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [editStatus, setEditStatus] = useState<string>('');
   const [editNotes, setEditNotes] = useState<string>('');
-  const [editAssignedTo, setEditAssignedTo] = useState<string>('');
 
   // Load token from localStorage on mount
   useEffect(() => {
@@ -242,7 +240,6 @@ export default function AdminLeads() {
     setEditingLead(lead);
     setEditStatus(lead.status || 'NEW');
     setEditNotes(lead.notes || '');
-    setEditAssignedTo(lead.assigned_to || '');
   };
 
   // Handle edit save
@@ -265,7 +262,7 @@ export default function AdminLeads() {
     if (authState.isAuthenticated && authToken) {
       loadLeads();
     }
-  }, [authState.isAuthenticated, filterStatus, filterAssignedTo]);
+  }, [authState.isAuthenticated, filterStatus]);
 
   // Not authenticated - show login
   if (!authState.isAuthenticated) {
