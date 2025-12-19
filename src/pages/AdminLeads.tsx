@@ -89,7 +89,7 @@ export default function AdminLeads() {
     try {
       const response = await fetch('/api/leads?limit=1', {
         headers: {
-          'X-Admin-Token': token,
+          'x-admin-token': token,
         },
       });
 
@@ -107,11 +107,11 @@ export default function AdminLeads() {
         });
         setError(null);
         // Save token to localStorage
-        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        localStorage.setItem(TOKEN_STORAGE_KEY, token.trim());
       } else {
         const data = await response.json().catch(() => ({}));
         setAuthState({ isAuthenticated: false, isAdmin: false });
-        setError(data.error || 'Invalid credentials');
+        setError(data.error || 'Authentication failed');
         localStorage.removeItem(TOKEN_STORAGE_KEY);
       }
     } catch (err) {
@@ -140,9 +140,9 @@ export default function AdminLeads() {
     // Build token based on role
     let token = '';
     if (role === 'admin') {
-      token = password; // Admin token is just the password
+      token = password.trim(); // Admin token is just the password
     } else {
-      token = `EMPLOYEE:${username}:${password}`;
+      token = `EMPLOYEE:${username.trim()}:${password.trim()}`;
     }
 
     setAuthToken(token);
@@ -177,7 +177,7 @@ export default function AdminLeads() {
 
       const response = await fetch(`/api/leads?${params.toString()}`, {
         headers: {
-          'X-Admin-Token': authToken,
+          'x-admin-token': authToken,
         },
       });
 
@@ -212,7 +212,7 @@ export default function AdminLeads() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Admin-Token': authToken,
+          'x-admin-token': authToken,
         },
         body: JSON.stringify({
           id: leadId,
