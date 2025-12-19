@@ -317,16 +317,21 @@ export default function AdminLeads() {
                   <User className="w-4 h-4 inline mr-1" />
                   Username
                 </label>
-                <input
-                  type="text"
+                <select
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value);
                     setError(null);
                   }}
-                  placeholder="e.g., agent1"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="">Select employee</option>
+                  {TEAM.map(member => (
+                    <option key={member.id} value={member.id}>
+                      {member.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
