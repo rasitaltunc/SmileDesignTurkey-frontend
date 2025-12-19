@@ -231,6 +231,7 @@ export default function AdminLeads() {
 
       // Reload leads
       await loadLeads();
+      setError(null);          // ✅ banner temizle
       setEditingLead(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update lead';
@@ -254,13 +255,14 @@ export default function AdminLeads() {
     const updates: any = {};
     if (editStatus !== editingLead.status) updates.status = editStatus;
     if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
-    if (authState.isAdmin && editAssignedTo !== (editingLead.assigned_to || '')) {
-      if (editAssignedTo) {
-        updates.assigned_to = editAssignedTo; // UUID gider
-      } else {
-        updates.assigned_to = null; // Unassign
-      }
-    }
+    // TEMP: disable assignment updates for now (avoid PATCH failure)
+    // if (authState.isAdmin && editAssignedTo !== (editingLead.assigned_to || '')) {
+    //   if (editAssignedTo) {
+    //     updates.assigned_to = editAssignedTo; // UUID gider
+    //   } else {
+    //     updates.assigned_to = null; // Unassign
+    //   }
+    // }
 
     if (Object.keys(updates).length > 0) {
       updateLead(editingLead.id, updates);
@@ -564,24 +566,9 @@ export default function AdminLeads() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {editingLead?.id === lead.id && authState.isAdmin ? (
-                          <select
-                            value={editAssignedTo}
-                            onChange={(e) => setEditAssignedTo(e.target.value)}
-                            className="text-sm border border-gray-300 rounded px-2 py-1"
-                          >
-                            <option value="">Unassigned</option>
-                            {TEAM.map((member) => (
-                              <option key={member.id} value={member.id}>
-                                {member.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-sm text-gray-600">
-                            {lead.assigned_to ? TEAM.find(t => t.id === lead.assigned_to)?.label || lead.assigned_to : 'Unassigned'}
-                          </span>
-                        )}
+                        <span className="text-sm text-gray-600">
+                          {lead.assigned_to ? TEAM.find(t => t.id === lead.assigned_to)?.label || lead.assigned_to : 'Unassigned'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {editingLead?.id === lead.id ? (
