@@ -1,10 +1,17 @@
-const { createClient } = require('@supabase/supabase-js');
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': 'content-type, x-admin-token',
 };
+
+interface AuthResult {
+  isAdmin: boolean;
+  employeeId?: string;
+  error?: string;
+}
 
 function createSupabaseClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -19,7 +26,7 @@ function createSupabaseClient() {
   });
 }
 
-function authenticateRequest(token) {
+function authenticateRequest(token: string | undefined): AuthResult {
   if (!token) return { isAdmin: false, error: 'Invalid credentials' };
 
   const adminToken = process.env.ADMIN_TOKEN;
@@ -37,7 +44,7 @@ function authenticateRequest(token) {
   return { isAdmin: false, error: 'Invalid credentials' };
 }
 
-async function handleGet(req, res, auth) {
+async function handleGet(req: VercelRequest, res: VercelResponse, auth: AuthResult) {
   let supabase;
   try {
     supabase = createSupabaseClient();
@@ -51,14 +58,14 @@ async function handleGet(req, res, auth) {
     if (!auth.isAdmin && auth.employeeId) {
       query = query.eq('assigned_to', auth.employeeId);
     } else {
-      const assignedTo = req.query?.assigned_to;
+      const assignedTo = req.query?.assigned_to as string | undefined;
       if (assignedTo) query = query.eq('assigned_to', assignedTo);
     }
 
-    const status = req.query?.status;
+    const status = req.query?.status as string | undefined;
     if (status) query = query.eq('status', status);
 
-    const limit = parseInt(req.query?.limit, 10) || 100;
+    const limit = parseInt(req.query?.limit as string, 10) || 100;
     query = query.limit(limit).order('created_at', { ascending: false });
 
     const { data, error } = await query;
@@ -70,7 +77,7 @@ async function handleGet(req, res, auth) {
   }
 }
 
-async function handlePatch(req, res, auth) {
+async function handlePatch(req: VercelRequest, res: VercelResponse, auth: AuthResult) {
   let supabase;
   try {
     supabase = createSupabaseClient();
@@ -79,7 +86,7 @@ async function handlePatch(req, res, auth) {
   }
 
   try {
-    const { id, status, notes } = req.body || {};
+    const { id, status, notes, assigned_to } = req.body || {};
     if (!id) return res.status(400).json({ error: 'Missing lead id' });
 
     if (!auth.isAdmin && auth.employeeId) {
@@ -88,7 +95,7 @@ async function handlePatch(req, res, auth) {
         return res.status(403).json({ error: 'Not authorized to update this lead' });
       }
 
-      const updateData = {};
+      const updateData: any = {};
       if (status !== undefined) updateData.status = status;
       if (notes !== undefined) updateData.notes = notes;
 
@@ -98,9 +105,10 @@ async function handlePatch(req, res, auth) {
       return res.status(200).json({ data: { id, ...updateData } });
     }
 
-    const updateData = {};
+    const updateData: any = {};
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
+    if (assigned_to !== undefined) updateData.assigned_to = assigned_to;
 
     const { error } = await supabase.from('leads').update(updateData).eq('id', id);
     if (error) return res.status(500).json({ error: 'Failed to update lead' });
@@ -111,7 +119,7 @@ async function handlePatch(req, res, auth) {
   }
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     Object.entries(corsHeaders).forEach(([k, v]) => res.setHeader(k, v));
@@ -130,5 +138,4 @@ module.exports = async (req, res) => {
   if (req.method === 'PATCH') return handlePatch(req, res, auth);
 
   return res.status(405).json({ error: 'Method not allowed' });
-};
-
+}

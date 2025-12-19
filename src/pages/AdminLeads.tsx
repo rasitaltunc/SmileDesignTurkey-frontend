@@ -169,9 +169,6 @@ export default function AdminLeads() {
     try {
       const params = new URLSearchParams();
       if (filterStatus) params.set('status', filterStatus);
-      if (filterAssignedTo && authState.isAdmin) {
-        params.set('assigned_to', filterAssignedTo);
-      }
       params.set('limit', '100');
 
       const response = await fetch(`/api/leads?${params.toString()}`, {
@@ -255,14 +252,6 @@ export default function AdminLeads() {
     const updates: any = {};
     if (editStatus !== editingLead.status) updates.status = editStatus;
     if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
-    // TEMP: disable assignment updates for now (avoid PATCH failure)
-    // if (authState.isAdmin && editAssignedTo !== (editingLead.assigned_to || '')) {
-    //   if (editAssignedTo) {
-    //     updates.assigned_to = editAssignedTo; // UUID gider
-    //   } else {
-    //     updates.assigned_to = null; // Unassign
-    //   }
-    // }
 
     if (Object.keys(updates).length > 0) {
       updateLead(editingLead.id, updates);
@@ -449,24 +438,7 @@ export default function AdminLeads() {
                 ))}
               </select>
             </div>
-            {authState.isAdmin && (
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Assigned To</label>
-                <select
-                  value={filterAssignedTo}
-                  onChange={(e) => setFilterAssignedTo(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Assignments</option>
-                  {TEAM.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {(filterStatus || filterAssignedTo) && (
+            {filterStatus && (
               <button
                 onClick={() => {
                   setFilterStatus('');
@@ -567,7 +539,7 @@ export default function AdminLeads() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-600">
-                          {lead.assigned_to ? TEAM.find(t => t.id === lead.assigned_to)?.label || lead.assigned_to : 'Unassigned'}
+                          {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
