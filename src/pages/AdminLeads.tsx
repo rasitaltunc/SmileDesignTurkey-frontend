@@ -210,12 +210,13 @@ export default function AdminLeads() {
     if (!editingLead) return;
 
     const updates: any = {};
-    // Normalize status to lowercase before comparing and sending
-    const normalizedEditStatus = editStatus.toLowerCase();
+    // Normalize status: trim, lowercase, default to 'new' if empty
+    const normalizedEditStatus = (editStatus || 'new').trim().toLowerCase() || 'new';
     const normalizedCurrentStatus = (editingLead.status || 'new').toLowerCase();
     
+    // Always send lowercase canonical value
     if (normalizedEditStatus !== normalizedCurrentStatus) {
-      updates.status = normalizedEditStatus; // Always send lowercase
+      updates.status = normalizedEditStatus; // Always lowercase, never empty
     }
     if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
 

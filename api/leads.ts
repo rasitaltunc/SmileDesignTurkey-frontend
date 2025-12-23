@@ -137,20 +137,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Build update object
       const update: Partial<LeadUpdate> = {};
-      if (typeof status === 'string' && status.trim()) {
-        // Normalize status to lowercase (handle any case variations)
-        const normalizedStatus = status.trim().toLowerCase();
+      
+      // Handle status update with strict normalization
+      if (status !== undefined) {
+        // Normalize: convert to string, trim, lowercase
+        const normalized = String(status).trim().toLowerCase();
         
-        // Validate status value (canonical lowercase only)
+        // If empty after normalization, default to 'new'
+        const finalStatus = normalized || 'new';
+        
+        // Validate against allowed list (DB constraint: leads_status_check)
         const validStatuses = ['new', 'contacted', 'booked', 'paid', 'completed'];
-        if (!validStatuses.includes(normalizedStatus)) {
+        if (!validStatuses.includes(finalStatus)) {
           return res.status(400).json({ 
             error: `Invalid status "${status}". Must be one of: ${validStatuses.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')}` 
           });
         }
         
-        // Always store lowercase canonical value
-        update.status = normalizedStatus;
+        // Write ONLY normalized lowercase value to DB
+        update.status = finalStatus;
       }
       if (typeof notes === 'string') {
         update.notes = notes;
