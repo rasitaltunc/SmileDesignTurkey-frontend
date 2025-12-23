@@ -33,22 +33,6 @@ function getSupabaseAdmin() {
   });
 }
 
-function getSupabaseAnon() {
-  const url = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!url || !anonKey) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
-  }
-
-  return createClient(url, anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
-
 function verifyAdminToken(req: VercelRequest): boolean {
   const adminToken = req.headers['x-admin-token'] as string | undefined;
   const expectedToken = process.env.ADMIN_TOKEN;
@@ -58,38 +42,6 @@ function verifyAdminToken(req: VercelRequest): boolean {
   }
 
   return adminToken === expectedToken;
-}
-
-async function verifyAuth(req: VercelRequest): Promise<{ userId: string; isAdmin: boolean } | null> {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
-  }
-
-  const token = authHeader.slice(7);
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      return null;
-    }
-
-    // Check if user is admin (from user_metadata)
-    const isAdmin = user.user_metadata?.role === 'admin';
-
-    return {
-      userId: user.id,
-      isAdmin,
-    };
-  } catch (err) {
-    console.error('[API] Auth verification error:', err);
-    return null;
-  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -102,33 +54,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // Check for admin token first
+  // Verify admin token - only admin token is allowed
   const isAdminToken = verifyAdminToken(req);
+  if (!isAdminToken) {
+    return res.status(401).json({ error: 'Unauthorized. Admin token required.' });
+  }
+
+  // Admin token verified - use service role key (RLS bypass)
   let supabase;
-  let auth: { userId: string; isAdmin: boolean } | null = null;
-
-  if (isAdminToken) {
-    // Admin token provided - use service role key (RLS bypass)
-    try {
-      supabase = getSupabaseAdmin();
-      // Admin token means full access
-      auth = { userId: '', isAdmin: true };
-    } catch (e: any) {
-      return res.status(500).json({ error: 'Server configuration error: ' + e.message });
-    }
-  } else {
-    // No admin token - verify JWT auth
-    auth = await verifyAuth(req);
-    if (!auth) {
-      return res.status(401).json({ error: 'Unauthorized. Valid Supabase JWT token or admin token required.' });
-    }
-
-    // Use anon key for regular users (RLS applies)
-    try {
-      supabase = getSupabaseAnon();
-    } catch (e: any) {
-      return res.status(500).json({ error: 'Server configuration error: ' + e.message });
-    }
+  try {
+    supabase = getSupabaseAdmin();
+  } catch (e: any) {
+    return res.status(500).json({ error: 'Server configuration error: ' + e.message });
   }
 
   try {
@@ -155,11 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         query = query.eq('status', status);
       }
 
-      // If employee (not admin), only show their assigned leads
-      if (!auth.isAdmin) {
-        query = query.eq('assigned_to', auth.userId);
-      } else if (assignedTo) {
-        // Admin can filter by assigned_to
+      // Admin token - can filter by assigned_to if provided
+      if (assignedTo) {
         query = query.eq('assigned_to', assignedTo);
       }
 
@@ -228,10 +162,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
       if (typeof assigned_to === 'string') {
-        // Only admins can change assigned_to
-        if (!auth.isAdmin) {
-          return res.status(403).json({ error: 'Only admins can change assigned_to' });
-        }
         update.assigned_to = assigned_to;
       }
 
@@ -239,27 +169,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Nothing to update' });
       }
 
-      // Check if employee can update this lead (must be assigned to them)
-      // Admin token users bypass this check (already using service role key)
-      if (!auth.isAdmin) {
-        const { data: existingLead, error: fetchError } = await supabase
-          .from('leads')
-          .select('assigned_to')
-          .eq('id', id)
-          .single();
-
-        if (fetchError || !existingLead) {
-          return res.status(404).json({ error: 'Lead not found' });
-        }
-
-        if (existingLead.assigned_to !== auth.userId) {
-          return res.status(403).json({ error: 'You can only update leads assigned to you' });
-        }
-      }
-
       // Perform update (id is TEXT, so we use .eq() directly)
-      // If admin token was used, supabase is already service role (RLS bypass)
-      // If JWT auth, supabase is anon key (RLS applies)
+      // Using service role key (RLS bypass)
       const { data, error } = await supabase
         .from('leads')
         .update(update)
