@@ -14,6 +14,7 @@ interface LeadUpdate {
   status?: string;
   notes?: string;
   assigned_to?: string;
+  follow_up_at?: string; // ISO string timestamp
 }
 
 function getSupabaseAdmin() {
@@ -159,6 +160,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (typeof notes === 'string') {
         update.notes = notes;
+      }
+      if (follow_up_at !== undefined) {
+        // Handle follow_up_at: accept ISO string or null to clear
+        if (follow_up_at === null || follow_up_at === '') {
+          update.follow_up_at = null;
+        } else if (typeof follow_up_at === 'string') {
+          // Validate ISO string format
+          const date = new Date(follow_up_at);
+          if (isNaN(date.getTime())) {
+            return res.status(400).json({ error: 'Invalid follow_up_at format. Must be ISO 8601 string.' });
+          }
+          update.follow_up_at = date.toISOString();
+        }
       }
       if (typeof assigned_to === 'string') {
         // Only admins can change assigned_to

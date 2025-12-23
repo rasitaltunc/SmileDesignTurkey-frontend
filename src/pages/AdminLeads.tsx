@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, X, Save, LogOut } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
@@ -25,9 +25,19 @@ interface Lead {
   status?: string;
   notes?: string;
   assigned_to?: string;
+  follow_up_at?: string;
   page_url?: string;
   utm_source?: string;
   device?: string;
+}
+
+interface LeadNote {
+  id: string;
+  lead_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function AdminLeads() {
@@ -46,6 +56,14 @@ export default function AdminLeads() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [editStatus, setEditStatus] = useState<string>('');
   const [editNotes, setEditNotes] = useState<string>('');
+  const [editFollowUpAt, setEditFollowUpAt] = useState<string>('');
+
+  // Notes modal state
+  const [notesLeadId, setNotesLeadId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<LeadNote[]>([]);
+  const [newNoteContent, setNewNoteContent] = useState<string>('');
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -107,7 +125,7 @@ export default function AdminLeads() {
   };
 
   // Update lead with optimistic UI
-  const updateLead = async (leadId: string, updates: { status?: string; notes?: string; assigned_to?: string }) => {
+  const updateLead = async (leadId: string, updates: { status?: string; notes?: string; assigned_to?: string; follow_up_at?: string | null }) => {
     if (!isAuthenticated || !user) return;
 
     // Optimistic update: Update UI immediately
@@ -203,6 +221,16 @@ export default function AdminLeads() {
     // Normalize status to lowercase (handle any case variations from DB)
     setEditStatus((lead.status || 'new').toLowerCase());
     setEditNotes(lead.notes || '');
+    // Format follow_up_at for datetime-local input (YYYY-MM-DDTHH:mm)
+    if (lead.follow_up_at) {
+      const date = new Date(lead.follow_up_at);
+      const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+      setEditFollowUpAt(localDateTime);
+    } else {
+      setEditFollowUpAt('');
+    }
   };
 
   // Handle edit save
@@ -219,12 +247,124 @@ export default function AdminLeads() {
       updates.status = normalizedEditStatus; // Always lowercase, never empty
     }
     if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
+    
+    // Handle follow_up_at: convert datetime-local to ISO string
+    const currentFollowUpAt = editingLead.follow_up_at 
+      ? new Date(editingLead.follow_up_at).toISOString()
+      : null;
+    const newFollowUpAt = editFollowUpAt 
+      ? new Date(editFollowUpAt).toISOString()
+      : null;
+    
+    if (newFollowUpAt !== currentFollowUpAt) {
+      updates.follow_up_at = newFollowUpAt || null;
+    }
 
     if (Object.keys(updates).length > 0) {
       updateLead(editingLead.id, updates);
     } else {
       setEditingLead(null);
     }
+  };
+
+  // Load notes for a lead
+  const loadNotes = async (leadId: string) => {
+    if (!isAuthenticated || !user) return;
+
+    setIsLoadingNotes(true);
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured.');
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/lead-notes?leadId=${encodeURIComponent(leadId)}`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to load notes' }));
+        throw new Error(errorData.error || 'Failed to load notes');
+      }
+
+      const result = await response.json();
+      setNotes(result.data || []);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load notes';
+      setError(errorMessage);
+      console.error('[AdminLeads] Error loading notes:', err);
+    } finally {
+      setIsLoadingNotes(false);
+    }
+  };
+
+  // Create new note
+  const createNote = async (leadId: string, content: string) => {
+    if (!isAuthenticated || !user || !content.trim()) return;
+
+    setIsSavingNote(true);
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured.');
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/lead-notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          lead_id: leadId,
+          content: content.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to create note' }));
+        throw new Error(errorData.error || 'Failed to create note');
+      }
+
+      // Reload notes
+      await loadNotes(leadId);
+      setNewNoteContent('');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create note';
+      setError(errorMessage);
+      console.error('[AdminLeads] Error creating note:', err);
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  // Open notes modal
+  const handleOpenNotes = async (leadId: string) => {
+    setNotesLeadId(leadId);
+    setNotes([]);
+    setNewNoteContent('');
+    await loadNotes(leadId);
+  };
+
+  // Close notes modal
+  const handleCloseNotes = () => {
+    setNotesLeadId(null);
+    setNotes([]);
+    setNewNoteContent('');
   };
 
   // Handle logout
@@ -346,7 +486,7 @@ export default function AdminLeads() {
         ) : (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[1100px]">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
@@ -356,14 +496,15 @@ export default function AdminLeads() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Treatment</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {leads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-gray-50">
+                    <tr key={lead.id} className="hover:bg-gray-50 group">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(lead.created_at).toLocaleString()}
                       </td>
@@ -390,17 +531,35 @@ export default function AdminLeads() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {editingLead?.id === lead.id ? (
-                          <select
-                            value={editStatus}
-                            onChange={(e) => setEditStatus(e.target.value)}
-                            className="text-sm border border-gray-300 rounded px-2 py-1"
-                          >
-                            {STATUS_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex flex-col gap-2">
+                            <select
+                              value={editStatus}
+                              onChange={(e) => setEditStatus(e.target.value)}
+                              className="text-sm border border-gray-300 rounded px-2 py-1"
+                            >
+                              {STATUS_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleEditSave}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
+                              >
+                                <Save className="w-3 h-3" />
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingLead(null)}
+                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" />
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                             (lead.status?.toLowerCase() || 'new') === 'new' ? 'bg-yellow-100 text-yellow-800' :
@@ -416,54 +575,211 @@ export default function AdminLeads() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        {editingLead?.id === lead.id ? (
+                          <div className="flex flex-col gap-2">
+                            <input
+                              type="datetime-local"
+                              value={editFollowUpAt}
+                              onChange={(e) => setEditFollowUpAt(e.target.value)}
+                              className="text-sm border border-gray-300 rounded px-2 py-1"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleEditSave}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
+                              >
+                                <Save className="w-3 h-3" />
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingLead(null)}
+                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" />
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-600">
+                            {lead.follow_up_at 
+                              ? new Date(lead.follow_up_at).toLocaleString()
+                              : '-'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-600">
                           {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px]">
                         {editingLead?.id === lead.id ? (
-                          <input
-                            type="text"
-                            value={editNotes}
-                            onChange={(e) => setEditNotes(e.target.value)}
-                            placeholder="Add notes..."
-                            className="w-full text-sm border border-gray-300 rounded px-2 py-1"
-                          />
+                          <div className="flex flex-col gap-2">
+                            <input
+                              type="text"
+                              value={editNotes}
+                              onChange={(e) => setEditNotes(e.target.value)}
+                              placeholder="Add notes..."
+                              className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleEditSave}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
+                              >
+                                <Save className="w-3 h-3" />
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingLead(null)}
+                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" />
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
                         ) : (
-                          <span className="max-w-xs truncate block">
+                          <span className="block truncate" title={lead.notes || undefined}>
                             {lead.notes || '-'}
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-200">
                         {editingLead?.id === lead.id ? (
                           <div className="flex gap-2">
                             <button
                               onClick={handleEditSave}
                               className="text-green-600 hover:text-green-700"
+                              title="Save"
                             >
                               <Save className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setEditingLead(null)}
                               className="text-gray-600 hover:text-gray-700"
+                              title="Cancel"
                             >
                               <X className="w-4 h-4" />
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => handleEditStart(lead)}
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            Edit
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditStart(lead)}
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleOpenNotes(lead.id)}
+                              className="text-purple-600 hover:text-purple-700"
+                              title="View Notes"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Notes Modal */}
+        {notesLeadId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">Notes</h2>
+                <button
+                  onClick={handleCloseNotes}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Notes List */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {isLoadingNotes ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <p>Loading notes...</p>
+                  </div>
+                ) : notes.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p>No notes yet. Add the first note below.</p>
+                  </div>
+                ) : (
+                  notes.map((note) => (
+                    <div key={note.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-sm text-gray-600">
+                          {new Date(note.created_at).toLocaleString()}
+                        </p>
+                        {note.author_id === user?.id && (
+                          <span className="text-xs text-blue-600">You</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{note.content}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Add Note Form */}
+              <div className="p-6 border-t border-gray-200">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newNoteContent.trim() && notesLeadId) {
+                      createNote(notesLeadId, newNoteContent);
+                    }
+                  }}
+                  className="space-y-3"
+                >
+                  <textarea
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    placeholder="Add a note..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCloseNotes}
+                      className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!newNoteContent.trim() || isSavingNote}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                      {isSavingNote ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <MessageSquare className="w-4 h-4" />
+                          Add Note
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         )}
