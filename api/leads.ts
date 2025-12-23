@@ -14,7 +14,7 @@ interface LeadUpdate {
   status?: string;
   notes?: string;
   assigned_to?: string;
-  follow_up_at?: string; // ISO string timestamp
+  follow_up_at?: string | null; // ISO string timestamp or null to clear
 }
 
 function getSupabaseAdmin() {
@@ -31,6 +31,33 @@ function getSupabaseAdmin() {
       autoRefreshToken: false,
     },
   });
+}
+
+function getSupabaseAnon() {
+  const url = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+  }
+
+  return createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+function verifyAdminToken(req: VercelRequest): boolean {
+  const adminToken = req.headers['x-admin-token'] as string | undefined;
+  const expectedToken = process.env.ADMIN_TOKEN;
+
+  if (!expectedToken || !adminToken) {
+    return false;
+  }
+
+  return adminToken === expectedToken;
 }
 
 async function verifyAuth(req: VercelRequest): Promise<{ userId: string; isAdmin: boolean } | null> {
@@ -69,23 +96,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,PATCH,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-token');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Verify authentication
-  const auth = await verifyAuth(req);
-  if (!auth) {
-    return res.status(401).json({ error: 'Unauthorized. Valid Supabase JWT token required.' });
-  }
-
+  // Check for admin token first
+  const isAdminToken = verifyAdminToken(req);
   let supabase;
-  try {
-    supabase = getSupabaseAdmin();
-  } catch (e: any) {
-    return res.status(500).json({ error: 'Server configuration error: ' + e.message });
+  let auth: { userId: string; isAdmin: boolean } | null = null;
+
+  if (isAdminToken) {
+    // Admin token provided - use service role key (RLS bypass)
+    try {
+      supabase = getSupabaseAdmin();
+      // Admin token means full access
+      auth = { userId: '', isAdmin: true };
+    } catch (e: any) {
+      return res.status(500).json({ error: 'Server configuration error: ' + e.message });
+    }
+  } else {
+    // No admin token - verify JWT auth
+    auth = await verifyAuth(req);
+    if (!auth) {
+      return res.status(401).json({ error: 'Unauthorized. Valid Supabase JWT token or admin token required.' });
+    }
+
+    // Use anon key for regular users (RLS applies)
+    try {
+      supabase = getSupabaseAnon();
+    } catch (e: any) {
+      return res.status(500).json({ error: 'Server configuration error: ' + e.message });
+    }
   }
 
   try {
@@ -135,14 +178,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ======================
     if (req.method === 'PATCH') {
       const body = req.body as LeadUpdate;
-      const { id, status, notes, assigned_to } = body;
+      const { id, status, notes, assigned_to, follow_up_at } = body;
 
       if (!id || typeof id !== 'string') {
         return res.status(400).json({ error: 'Missing or invalid id (must be TEXT)' });
       }
 
       // Build update object
-      const update: Partial<LeadUpdate> = {};
+      const update: {
+        status?: string;
+        notes?: string;
+        assigned_to?: string;
+        follow_up_at?: string | null;
+      } = {};
       
       // Handle status update with strict normalization
       if (status !== undefined) {
@@ -192,6 +240,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Check if employee can update this lead (must be assigned to them)
+      // Admin token users bypass this check (already using service role key)
       if (!auth.isAdmin) {
         const { data: existingLead, error: fetchError } = await supabase
           .from('leads')
@@ -209,6 +258,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Perform update (id is TEXT, so we use .eq() directly)
+      // If admin token was used, supabase is already service role (RLS bypass)
+      // If JWT auth, supabase is anon key (RLS applies)
       const { data, error } = await supabase
         .from('leads')
         .update(update)

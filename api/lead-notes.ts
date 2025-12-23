@@ -9,15 +9,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Uses Service Role key for database operations (server-side only)
  */
 
-interface Note {
-  id: string;
-  lead_id: string;
-  author_id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-}
-
 interface CreateNoteRequest {
   lead_id: string;
   content: string;
