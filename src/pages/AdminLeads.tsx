@@ -81,17 +81,6 @@ export default function AdminLeads() {
     setError(null);
 
     try {
-      const supabaseClient = getSupabaseClient();
-      if (!supabaseClient) {
-        throw new Error('Supabase client not configured. Please check your environment variables.');
-      }
-
-      // Get session token for API call
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
       // Build query params
       const params = new URLSearchParams();
       if (filterStatus) {
@@ -107,9 +96,15 @@ export default function AdminLeads() {
       const queryString = params.toString();
       const url = `${apiUrl}/api/leads${queryString ? `?${queryString}` : ''}`;
 
+      // Get admin token from environment variable
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
+      if (!adminToken) {
+        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
+      }
+
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'x-admin-token': adminToken,
         },
       });
 
@@ -495,7 +490,7 @@ export default function AdminLeads() {
         ) : (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] table-fixed">
+              <table className="w-full min-w-[1200px] table-fixed">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
@@ -622,7 +617,7 @@ export default function AdminLeads() {
                           {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500" style={{ width: '220px', maxWidth: '220px' }}>
+                      <td className="px-6 py-4 text-sm text-gray-500 overflow-hidden" style={{ width: '220px', maxWidth: '220px' }}>
                         {editingLead?.id === lead.id ? (
                           <div className="flex flex-col gap-2">
                             <input
