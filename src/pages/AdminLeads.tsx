@@ -431,7 +431,11 @@ export default function AdminLeads() {
               <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Ensure lowercase canonical value or empty string
+                  setFilterStatus(value === '' ? '' : value.toLowerCase());
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Statuses</option>
@@ -498,8 +502,8 @@ export default function AdminLeads() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase max-w-[220px]">Notes</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -613,7 +617,7 @@ export default function AdminLeads() {
                           {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px]">
+                      <td className="px-6 py-4 text-sm text-gray-500 max-w-[220px]">
                         {editingLead?.id === lead.id ? (
                           <div className="flex flex-col gap-2">
                             <input
@@ -641,12 +645,12 @@ export default function AdminLeads() {
                             </div>
                           </div>
                         ) : (
-                          <span className="block truncate" title={lead.notes || undefined}>
+                          <span className="block max-w-[220px] truncate" title={lead.notes || undefined}>
                             {lead.notes || '-'}
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-200">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                         {editingLead?.id === lead.id ? (
                           <div className="flex gap-2">
                             <button

@@ -94,7 +94,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ======================
     if (req.method === 'GET') {
       const limit = Math.min(parseInt((req.query.limit as string) || '100', 10) || 100, 500);
-      const status = req.query.status as string | undefined;
+      
+      // Normalize and validate status filter
+      const statusParam = (req.query.status ?? '').toString().trim().toLowerCase();
+      const validStatuses = ['new', 'contacted', 'booked', 'paid', 'completed'];
+      const status = statusParam && validStatuses.includes(statusParam) ? statusParam : undefined;
+      
       const assignedTo = req.query.assigned_to as string | undefined;
 
       let query = supabase
