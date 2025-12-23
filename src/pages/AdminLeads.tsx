@@ -73,7 +73,7 @@ export default function AdminLeads() {
     }
   }, [isAuthenticated]);
 
-  // Load leads from Supabase
+  // Load leads from API
   const loadLeads = async () => {
     if (!isAuthenticated || !user) return;
 
@@ -81,40 +81,45 @@ export default function AdminLeads() {
     setError(null);
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
+      const supabaseClient = getSupabaseClient();
+      if (!supabaseClient) {
         throw new Error('Supabase client not configured. Please check your environment variables.');
       }
 
-      // Build query
-      let query = supabase
-        .from('leads')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
+      // Get session token for API call
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
 
-      // Apply filters (normalize to lowercase for comparison)
+      // Build query params
+      const params = new URLSearchParams();
       if (filterStatus) {
-        query = query.eq('status', filterStatus.toLowerCase());
+        // Only include status param if filterStatus is not empty (already lowercase)
+        params.append('status', filterStatus);
+      }
+      if (filterAssignedTo && isAdmin) {
+        params.append('assigned_to', filterAssignedTo);
       }
 
-      if (filterAssignedTo) {
-        query = query.eq('assigned_to', filterAssignedTo);
+      // Use current origin if VITE_API_URL not set (for Vercel deployments)
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const queryString = params.toString();
+      const url = `${apiUrl}/api/leads${queryString ? `?${queryString}` : ''}`;
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to load leads' }));
+        throw new Error(errorData.error || 'Failed to load leads');
       }
 
-      // CRITICAL FOR SECURITY: If user is an employee (not admin), 
-      // automatically filter to show only their assigned leads
-      if (!isAdmin && user.id) {
-        query = query.eq('assigned_to', user.id);
-      }
-
-      const { data, error: queryError } = await query;
-
-      if (queryError) {
-        throw new Error(queryError.message || 'Failed to load leads');
-      }
-
-      setLeads(data || []);
+      const result = await response.json();
+      setLeads(result.data || []);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
       setError(errorMessage);
@@ -490,7 +495,7 @@ export default function AdminLeads() {
         ) : (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px]">
+              <table className="w-full min-w-[1100px] table-fixed">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
@@ -502,7 +507,7 @@ export default function AdminLeads() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase max-w-[220px]">Notes</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{ width: '220px' }}>Notes</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Actions</th>
                   </tr>
                 </thead>
@@ -617,7 +622,7 @@ export default function AdminLeads() {
                           {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 max-w-[220px]">
+                      <td className="px-6 py-4 text-sm text-gray-500" style={{ width: '220px', maxWidth: '220px' }}>
                         {editingLead?.id === lead.id ? (
                           <div className="flex flex-col gap-2">
                             <input
@@ -645,7 +650,7 @@ export default function AdminLeads() {
                             </div>
                           </div>
                         ) : (
-                          <span className="block max-w-[220px] truncate" title={lead.notes || undefined}>
+                          <span className="block truncate" title={lead.notes || undefined}>
                             {lead.notes || '-'}
                           </span>
                         )}

@@ -97,8 +97,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       // Normalize and validate status filter
       const statusParam = (req.query.status ?? '').toString().trim().toLowerCase();
-      const validStatuses = ['new', 'contacted', 'booked', 'paid', 'completed'];
-      const status = statusParam && validStatuses.includes(statusParam) ? statusParam : undefined;
+      const valid = ['new', 'contacted', 'booked', 'paid', 'completed'];
+      const status = valid.includes(statusParam) ? statusParam : undefined;
       
       const assignedTo = req.query.assigned_to as string | undefined;
 
