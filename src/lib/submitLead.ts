@@ -57,6 +57,7 @@ export async function submitLead(payload: {
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         // Do NOT send created_at - let DB handle default
         source: payload.source,
+        status: 'new', // CRM MVP: Default status for new leads
         name: payload.name || null,
         email: payload.email || null,
         phone: payload.phone || null,

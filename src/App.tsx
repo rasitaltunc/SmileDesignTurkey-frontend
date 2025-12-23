@@ -1,4 +1,5 @@
 import { useState, createContext, useEffect } from 'react';
+import { useAuthStore } from './store/authStore';
 import Home from './pages/Home';
 import Treatments from './pages/Treatments';
 import TreatmentDetail from './pages/TreatmentDetail';
@@ -11,9 +12,9 @@ import UploadCenter from './pages/UploadCenter';
 import Onboarding from './pages/Onboarding';
 import PlanDashboard from './pages/PlanDashboard';
 import AdminLeads from './pages/AdminLeads';
+import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
 
-// Navigation context
 export const NavigationContext = createContext<{
   navigate: (path: string, params?: any) => void;
   currentPath: string;
@@ -25,7 +26,8 @@ export const NavigationContext = createContext<{
 });
 
 export default function App() {
-  // Initialize from URL
+  const { isAuthenticated, isLoading } = useAuthStore();
+  
   const getPathFromUrl = () => {
     return window.location.pathname || '/';
   };
@@ -33,16 +35,12 @@ export default function App() {
   const [currentPath, setCurrentPath] = useState(getPathFromUrl());
   const [params, setParams] = useState<any>({});
 
-  // Sync with browser URL on mount and popstate
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(getPathFromUrl());
     };
 
-    // Set initial path from URL
     setCurrentPath(getPathFromUrl());
-
-    // Listen for browser back/forward
     window.addEventListener('popstate', handlePopState);
 
     return () => {
@@ -55,11 +53,29 @@ export default function App() {
     if (newParams) {
       setParams(newParams);
     }
-    // Update browser URL without page reload
     window.history.pushState({}, '', path);
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && currentPath !== '/') {
+    return <Login />;
+  }
+
   const renderPage = () => {
+    if (!isAuthenticated && currentPath === '/') {
+      return <Home />;
+    }
+
     switch (currentPath) {
       case '/':
         return <Home />;
