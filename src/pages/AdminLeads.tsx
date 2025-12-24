@@ -700,7 +700,7 @@ export default function AdminLeads() {
               </div>
 
               {/* Add Note Form */}
-              <div className="p-6 border-t border-gray-200">
+              <div className="p-6 border-t border-gray-200 bg-white sticky bottom-0 z-10">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -728,7 +728,7 @@ export default function AdminLeads() {
                     <button
                       type="submit"
                       disabled={!newNoteContent.trim() || isSavingNote}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                      className="px-4 py-2 bg-black text-white rounded-lg border border-black hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                     >
                       {isSavingNote ? (
                         <>
