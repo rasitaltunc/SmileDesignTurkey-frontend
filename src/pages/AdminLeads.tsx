@@ -35,7 +35,7 @@ interface LeadNote {
   id: string;
   lead_id: string;
   author_id: string;
-  content: string;
+  note: string;
   created_at: string;
   updated_at: string;
 }
@@ -273,20 +273,18 @@ export default function AdminLeads() {
 
     setIsLoadingNotes(true);
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured.');
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const response = await fetch(`${apiUrl}/api/lead-notes?leadId=${encodeURIComponent(leadId)}`, {
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
+      
+      if (!adminToken) {
+        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
+      }
+
+      const response = await fetch(`${apiUrl}/api/lead-notes?lead_id=${encodeURIComponent(leadId)}`, {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
         },
       });
 
@@ -312,26 +310,22 @@ export default function AdminLeads() {
 
     setIsSavingNote(true);
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured.');
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
-      }
-
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
+      
+      if (!adminToken) {
+        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
+      }
+
       const response = await fetch(`${apiUrl}/api/lead-notes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          'x-admin-token': adminToken,
         },
         body: JSON.stringify({
           lead_id: leadId,
-          content: content.trim(),
+          note: content.trim(),
         }),
       });
 
@@ -732,7 +726,7 @@ export default function AdminLeads() {
                           <span className="text-xs text-blue-600">You</span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{note.content}</p>
+                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{note.note}</p>
                     </div>
                   ))
                 )}
