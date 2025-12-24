@@ -13,7 +13,7 @@ interface AuthState {
   loginWithTestUser: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
-  fetchRole: (userId?: string) => Promise<void>;
+  fetchRole: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -47,7 +47,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
-          await get().fetchRole(data.user.id);
+          await get().fetchRole();
         } catch (error: any) {
           set({
             error: error.message || 'Login failed',
@@ -86,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
-          await get().fetchRole(data.user.id);
+          await get().fetchRole();
 
           window.history.pushState({}, '', '/admin/leads');
           window.dispatchEvent(new PopStateEvent('popstate'));
@@ -141,7 +141,7 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               error: null,
             });
-            await get().fetchRole(data.session.user.id);
+            await get().fetchRole();
           } else {
             set({
               user: null,
@@ -163,28 +163,20 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      fetchRole: async (userId?: string) => {
+      fetchRole: async () => {
         try {
           const supabase = getSupabaseClient();
-          if (!supabase) return;
-
-          const uid = userId || get().user?.id;
-          if (!uid) {
+          if (!supabase) {
             set({ role: null });
             return;
           }
 
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', uid)
-            .single();
-
+          // ✅ En sağlam: DB fonksiyonundan rol çek
+          const { data, error } = await supabase.rpc("get_current_user_role");
           if (error) throw error;
 
-          set({ role: data?.role || null });
+          set({ role: (data as string) || null });
         } catch (e) {
-          // role okunamazsa güvenlik için role'u null yap
           set({ role: null });
         }
       },
