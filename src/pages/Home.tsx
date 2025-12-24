@@ -3,7 +3,6 @@ import { Link } from '../components/Link';
 import { NavigationContext } from '../App';
 import { 
   Button, 
-  TopNav, 
   GuidedPanel, 
   TrustStage, 
   ChoiceCard, 
@@ -129,7 +128,6 @@ export default function Home() {
         description={copy.seo.home.description}
         url="/"
       />
-      <TopNav variant="desktop" />
 
       {/* Split Hero Section */}
       <section className="relative bg-overlay-wash">
