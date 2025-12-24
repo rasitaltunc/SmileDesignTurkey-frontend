@@ -8,10 +8,12 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  role: string | null;
   login: (email: string, password: string) => Promise<void>;
   loginWithTestUser: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
+  fetchRole: (userId?: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -22,6 +24,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      role: null,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -44,6 +47,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
+          await get().fetchRole(data.user.id);
         } catch (error: any) {
           set({
             error: error.message || 'Login failed',
@@ -82,6 +86,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
+          await get().fetchRole(data.user.id);
 
           window.history.pushState({}, '', '/admin/leads');
           window.dispatchEvent(new PopStateEvent('popstate'));
@@ -111,6 +116,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             isLoading: false,
             error: null,
+            role: null,
           });
         }
       },
@@ -135,12 +141,14 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               error: null,
             });
+            await get().fetchRole(data.session.user.id);
           } else {
             set({
               user: null,
               isAuthenticated: false,
               isLoading: false,
               error: null,
+              role: null,
             });
           }
         } catch (error: any) {
@@ -150,7 +158,34 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             isLoading: false,
             error: null,
+            role: null,
           });
+        }
+      },
+
+      fetchRole: async (userId?: string) => {
+        try {
+          const supabase = getSupabaseClient();
+          if (!supabase) return;
+
+          const uid = userId || get().user?.id;
+          if (!uid) {
+            set({ role: null });
+            return;
+          }
+
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', uid)
+            .single();
+
+          if (error) throw error;
+
+          set({ role: data?.role || null });
+        } catch (e) {
+          // role okunamazsa güvenlik için role'u null yap
+          set({ role: null });
         }
       },
 
