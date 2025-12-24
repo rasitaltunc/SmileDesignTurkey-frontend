@@ -23,7 +23,7 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, X-Admin-Token"
+          "value": "Content-Type, Authorization"
         }
       ]
     }

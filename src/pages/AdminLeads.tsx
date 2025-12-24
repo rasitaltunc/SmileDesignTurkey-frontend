@@ -81,6 +81,19 @@ export default function AdminLeads() {
     setError(null);
 
     try {
+      // Get JWT token from Supabase session
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured.');
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        window.location.href = '/';
+        return;
+      }
+
       // Build query params
       const params = new URLSearchParams();
       if (filterStatus) {
@@ -96,15 +109,9 @@ export default function AdminLeads() {
       const queryString = params.toString();
       const url = `${apiUrl}/api/leads${queryString ? `?${queryString}` : ''}`;
 
-      // Get admin token from environment variable
-      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
-      if (!adminToken) {
-        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
-      }
-
       const response = await fetch(url, {
         headers: {
-          'x-admin-token': adminToken,
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -114,7 +121,7 @@ export default function AdminLeads() {
       }
 
       const result = await response.json();
-      setLeads(result.data || []);
+      setLeads(result.leads || []);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
       setError(errorMessage);
@@ -137,19 +144,27 @@ export default function AdminLeads() {
     }
 
     try {
-      // Use API endpoint with admin token (server-side with service role)
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
-      
-      if (!adminToken) {
-        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
+      // Get JWT token from Supabase session
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured.');
       }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        window.location.href = '/';
+        return;
+      }
+
+      // Use API endpoint with JWT token
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
 
       const response = await fetch(`${apiUrl}/api/leads`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-token': adminToken,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           id: leadId,
@@ -165,9 +180,9 @@ export default function AdminLeads() {
       const result = await response.json();
       
       // Update with server response
-      if (result.data && leadIndex !== -1) {
+      if (result.lead && leadIndex !== -1) {
         const updatedLeads = [...leads];
-        updatedLeads[leadIndex] = result.data;
+        updatedLeads[leadIndex] = result.lead;
         setLeads(updatedLeads);
       }
 
@@ -240,18 +255,26 @@ export default function AdminLeads() {
 
     setIsLoadingNotes(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
-      
-      if (!adminToken) {
-        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
+      // Get JWT token from Supabase session
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured.');
       }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        window.location.href = '/';
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
 
       const response = await fetch(`${apiUrl}/api/lead-notes?lead_id=${encodeURIComponent(leadId)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-token': adminToken,
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -261,7 +284,7 @@ export default function AdminLeads() {
       }
 
       const result = await response.json();
-      setNotes(result.data || []);
+      setNotes(result.notes || []);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load notes';
       setError(errorMessage);
@@ -277,22 +300,30 @@ export default function AdminLeads() {
 
     setIsSavingNote(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
-      
-      if (!adminToken) {
-        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
+      // Get JWT token from Supabase session
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured.');
       }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        window.location.href = '/';
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
 
       const response = await fetch(`${apiUrl}/api/lead-notes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-token': adminToken,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           lead_id: leadId,
-          note: content.trim(),
+          content: content.trim(),
         }),
       });
 

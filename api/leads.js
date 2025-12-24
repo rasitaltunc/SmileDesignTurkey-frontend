@@ -1,123 +1,104 @@
 // api/leads.js
-const { createClient } = require('@supabase/supabase-js');
+const { createClient } = require("@supabase/supabase-js");
+
+function getBearerToken(req) {
+  const h = req.headers["authorization"] || req.headers["Authorization"];
+  if (!h) return null;
+  const parts = String(h).split(" ");
+  if (parts.length === 2 && parts[0].toLowerCase() === "bearer") return parts[1];
+  return null;
+}
 
 module.exports = async function handler(req, res) {
   // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Token');
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  const url = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceKey) {
+    return res.status(500).json({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" });
   }
 
-  try {
-    // 1) Token check FIRST (before supabase)
-    const token =
-      req.headers['x-admin-token'] ||
-      req.headers['X-Admin-Token'] ||
-      req.headers['x-admin-token'.toLowerCase()];
+  // Admin client (service role) - used ONLY on server
+  const supabase = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
-    const expected = process.env.ADMIN_TOKEN;
+  // ✅ JWT-based auth (replaces x-admin-token)
+  const jwt = getBearerToken(req);
+  if (!jwt) return res.status(401).json({ error: "Missing Authorization Bearer token" });
 
-    if (!expected || !token || token !== expected) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
+  const user = userData?.user;
+  if (userErr || !user) return res.status(401).json({ error: "Invalid session" });
 
-    // 2) Env check
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // ✅ role from profiles
+  const { data: profile, error: profErr } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
 
-    if (!url || !key) {
-      return res.status(500).json({ error: 'Missing SUPABASE env' });
-    }
+  if (profErr) return res.status(500).json({ error: "Failed to read profile role" });
 
-    // 3) Create admin client (service role)
-    const supabase = createClient(url, key, {
-      auth: { persistSession: false },
-    });
+  const role = profile?.role || "unknown";
+  const isAdmin = role === "admin";
+  const isEmployee = role === "employee";
 
-    // ========= GET =========
-    if (req.method === 'GET') {
-      const allowedStatuses = new Set(['new', 'contacted', 'booked', 'paid', 'completed']);
-
-      const limitRaw = req.query?.limit;
-      const limit = Math.min(parseInt(limitRaw, 10) || 50, 200);
-
-      const statusRaw = (req.query?.status || '').toString().trim().toLowerCase();
-      const assignedToRaw = (req.query?.assigned_to || '').toString().trim();
-
-      let q = supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
-
-      if (statusRaw && allowedStatuses.has(statusRaw)) {
-        q = q.eq('status', statusRaw);
-      }
-
-      if (assignedToRaw) {
-        q = q.eq('assigned_to', assignedToRaw);
-      }
-
-      const { data, error } = await q;
-      if (error) return res.status(500).json({ error: error.message });
-
-      return res.status(200).json({ data });
-    }
-
-    // ========= PATCH =========
-    if (req.method === 'PATCH') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-      const { id, status, notes, assigned_to, follow_up_at } = body;
-
-      if (!id || typeof id !== 'string') {
-        return res.status(400).json({ error: 'Missing or invalid id' });
-      }
-
-      const update = {};
-
-      if (status !== undefined) {
-        const s = String(status).trim().toLowerCase();
-        const allowed = new Set(['new', 'contacted', 'booked', 'paid', 'completed']);
-        if (!allowed.has(s)) {
-          return res.status(400).json({ error: 'Invalid status value' });
-        }
-        update.status = s;
-      }
-
-      if (notes !== undefined) {
-        update.notes = notes === null ? null : String(notes);
-      }
-
-      if (assigned_to !== undefined) {
-        update.assigned_to = assigned_to === null ? null : String(assigned_to);
-      }
-
-      // follow_up_at: string (ISO) or null to clear, undefined => ignore
-      if (follow_up_at !== undefined) {
-        if (follow_up_at === null || follow_up_at === '') {
-          update.follow_up_at = null;
-        } else {
-          const d = new Date(String(follow_up_at));
-          if (isNaN(d.getTime())) {
-            return res.status(400).json({ error: 'Invalid follow_up_at format' });
-          }
-          update.follow_up_at = d.toISOString();
-        }
-      }
-
-      const { data, error } = await supabase
-        .from('leads')
-        .update(update)
-        .eq('id', id)
-        .select('*')
-        .single();
-
-      if (error) return res.status(500).json({ error: error.message });
-
-      return res.status(200).json({ data });
-    }
-
-    return res.status(405).json({ error: 'Method not allowed' });
-  } catch (e) {
-    return res.status(500).json({ error: e?.message || 'Server error' });
+  // 🔒 Leads are ONLY for admin/employee
+  if (!isAdmin && !isEmployee) {
+    return res.status(403).json({ error: "Forbidden: leads access is admin/employee only" });
   }
+
+  // GET /api/leads
+  if (req.method === "GET") {
+    const { status } = req.query || {};
+    const limit = Math.min(parseInt(req.query?.limit || "200", 10) || 200, 500);
+
+    let q = supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
+
+    if (status && status !== "all") q = q.eq("status", status);
+
+    // employee sees only assigned leads
+    if (isEmployee) q = q.eq("assigned_to", user.id);
+
+    const { data, error } = await q;
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ leads: data });
+  }
+
+  // PATCH /api/leads  (update status/notes/assigned_to etc.)
+  if (req.method === "PATCH") {
+    const body = req.body || {};
+    const id = body.id || body.lead_id;
+    const lead_uuid = body.lead_uuid;
+
+    // accept either {updates:{...}} or direct fields
+    const updates = body.updates ? { ...body.updates } : { ...body };
+    delete updates.id;
+    delete updates.lead_id;
+    delete updates.lead_uuid;
+
+    if (!id && !lead_uuid) return res.status(400).json({ error: "Missing id or lead_uuid" });
+    if (!Object.keys(updates).length) return res.status(400).json({ error: "No updates provided" });
+
+    let q = supabase.from("leads").update(updates).select("*").limit(1);
+
+    // employee can only update assigned leads
+    if (isEmployee) q = q.eq("assigned_to", user.id);
+
+    q = id ? q.eq("id", id) : q.eq("lead_uuid", lead_uuid);
+
+    const { data, error } = await q;
+    if (error) return res.status(500).json({ error: error.message });
+
+    return res.status(200).json({ lead: data?.[0] || null });
+  }
+
+  return res.status(405).json({ error: "Method not allowed" });
 };

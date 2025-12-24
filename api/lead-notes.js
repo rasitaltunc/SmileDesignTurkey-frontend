@@ -1,95 +1,105 @@
-const { createClient } = require('@supabase/supabase-js');
+// api/lead-notes.js
+const { createClient } = require("@supabase/supabase-js");
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Token');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+function getBearerToken(req) {
+  const h = req.headers["authorization"] || req.headers["Authorization"];
+  if (!h) return null;
+  const parts = String(h).split(" ");
+  if (parts.length === 2 && parts[0].toLowerCase() === "bearer") return parts[1];
+  return null;
 }
 
-function getHeaderToken(req) {
-  // Node header keys are lowercased
-  return (req.headers['x-admin-token'] || req.headers['x-admin-token'.toLowerCase()] || '').toString();
-}
+module.exports = async function handler(req, res) {
+  // CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-function pickString(v) {
-  if (typeof v === 'string') return v;
-  if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
-  return '';
-}
+  if (req.method === "OPTIONS") return res.status(200).end();
 
-module.exports = async (req, res) => {
-  setCors(res);
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+  const url = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    return res.status(500).json({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" });
   }
 
-  try {
-    // 1) Token-first
-    const token = getHeaderToken(req);
-    const adminToken = process.env.ADMIN_TOKEN || '';
-    if (!adminToken || token !== adminToken) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+  const supabase = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
-    // 2) Env check after token
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl || !serviceKey) {
-      return res.status(500).json({ error: 'Missing SUPABASE env' });
-    }
+  const jwt = getBearerToken(req);
+  if (!jwt) return res.status(401).json({ error: "Missing Authorization Bearer token" });
 
-    const supabase = createClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
+  const user = userData?.user;
+  if (userErr || !user) return res.status(401).json({ error: "Invalid session" });
 
-    // GET /api/lead-notes?lead_id=...  (lead_uuid de kabul)
-    if (req.method === 'GET') {
-      const lead_id =
-        pickString(req.query?.lead_id) ||
-        pickString(req.query?.lead_uuid);
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const role = profile?.role || "unknown";
+  const isAdmin = role === "admin";
+  const isEmployee = role === "employee";
 
-      if (!lead_id) return res.status(400).json({ error: 'Missing lead_id' });
+  if (!isAdmin && !isEmployee) {
+    return res.status(403).json({ error: "Forbidden: notes are admin/employee only" });
+  }
 
-      const { data, error } = await supabase
-        .from('lead_notes')
-        .select('*')
-        .eq('lead_id', lead_id)
-        .order('created_at', { ascending: false })
-        .limit(200);
+  // GET /api/lead-notes?lead_id=...
+  if (req.method === "GET") {
+    const lead_id = req.query?.lead_id;
+    if (!lead_id) return res.status(400).json({ error: "Missing lead_id" });
 
-      if (error) return res.status(500).json({ error: error.message });
-      return res.status(200).json({ data });
-    }
-
-    // POST body: { lead_id|lead_uuid, note|content }
-    if (req.method === 'POST') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-
-      const lead_id = (body.lead_id || body.lead_uuid || '').toString();
-      const note = (body.note || body.content || '').toString();
-
-      if (!lead_id) return res.status(400).json({ error: 'Missing lead_id' });
-      if (!note) return res.status(400).json({ error: 'Missing note' });
-
-      // author_id konusu: şemanda var ama nullable mı bilmiyoruz.
-      // Önce author_id göndermeden deneriz. Eğer "null value in column author_id" hatası gelirse,
-      // o zaman DB'de default/system author tanımlarız (aşağıda veriyorum).
-      const row = { lead_id, note };
-
-      const { data, error } = await supabase
-        .from('lead_notes')
-        .insert([row])
-        .select('*')
+    // employee can only access notes for leads assigned to them
+    if (isEmployee) {
+      const { data: lead } = await supabase
+        .from("leads")
+        .select("id, assigned_to")
+        .eq("id", lead_id)
         .single();
 
-      if (error) return res.status(500).json({ error: error.message });
-      return res.status(200).json({ data });
+      if (!lead || lead.assigned_to !== user.id) {
+        return res.status(403).json({ error: "Forbidden: not assigned" });
+      }
     }
 
-    return res.status(405).json({ error: 'Method not allowed' });
-  } catch (e) {
-    return res.status(500).json({ error: 'Unhandled error', details: String(e?.message || e) });
-  }
-};
+    const { data, error } = await supabase
+      .from("lead_notes")
+      .select("*")
+      .eq("lead_id", lead_id)
+      .order("created_at", { ascending: false });
 
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ notes: data });
+  }
+
+  // POST /api/lead-notes
+  if (req.method === "POST") {
+    const body = req.body || {};
+    const lead_id = body.lead_id || body.leadId;
+    const content = body.content || body.note || body.text;
+
+    if (!lead_id || !content) return res.status(400).json({ error: "Missing lead_id or content" });
+
+    if (isEmployee) {
+      const { data: lead } = await supabase
+        .from("leads")
+        .select("id, assigned_to")
+        .eq("id", lead_id)
+        .single();
+
+      if (!lead || lead.assigned_to !== user.id) {
+        return res.status(403).json({ error: "Forbidden: not assigned" });
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("lead_notes")
+      .insert([{ lead_id, content }])
+      .select("*")
+      .limit(1);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ note: data?.[0] || null });
+  }
+
+  return res.status(405).json({ error: "Method not allowed" });
+};
