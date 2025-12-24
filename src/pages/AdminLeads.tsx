@@ -137,73 +137,40 @@ export default function AdminLeads() {
     }
 
     try {
-      // Try API endpoint first (server-side with service role)
-      // Use current origin if VITE_API_URL not set (for Vercel deployments)
+      // Use API endpoint with admin token (server-side with service role)
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
       
-      const supabaseClient = getSupabaseClient();
-      if (!supabaseClient) {
-        throw new Error('Supabase client not configured.');
+      if (!adminToken) {
+        throw new Error('Admin token not configured. Please set VITE_ADMIN_TOKEN environment variable.');
       }
 
-      // Get session token for API call
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      if (!session) {
-        throw new Error('Not authenticated');
+      const response = await fetch(`${apiUrl}/api/leads`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          id: leadId,
+          ...updates,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to update lead' }));
+        throw new Error(errorData.error || 'Failed to update lead');
       }
 
-      try {
-        const response = await fetch(`${apiUrl}/api/leads`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            id: leadId,
-            ...updates,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to update lead' }));
-          throw new Error(errorData.error || 'Failed to update lead');
-        }
-
-        const result = await response.json();
-        
-        // Update with server response
-        if (result.data && leadIndex !== -1) {
-          const updatedLeads = [...leads];
-          updatedLeads[leadIndex] = result.data;
-          setLeads(updatedLeads);
-        }
-
-        setError(null);
-        setEditingLead(null);
-        return;
-      } catch (apiError) {
-        // If API endpoint fails, fall through to direct Supabase update
-        console.warn('[AdminLeads] API endpoint failed, using direct Supabase:', apiError);
+      const result = await response.json();
+      
+      // Update with server response
+      if (result.data && leadIndex !== -1) {
+        const updatedLeads = [...leads];
+        updatedLeads[leadIndex] = result.data;
+        setLeads(updatedLeads);
       }
 
-      // Fallback: Direct Supabase client update
-      const supabaseFallback = getSupabaseClient();
-      if (!supabaseFallback) {
-        throw new Error('Supabase client not configured.');
-      }
-
-      const { error: updateError } = await supabaseFallback
-        .from('leads')
-        .update(updates)
-        .eq('id', leadId);
-
-      if (updateError) {
-        throw new Error(updateError.message || 'Failed to update lead');
-      }
-
-      // Reload leads to ensure consistency
-      await loadLeads();
       setError(null);
       setEditingLead(null);
     } catch (err) {
@@ -761,7 +728,7 @@ export default function AdminLeads() {
                     <button
                       type="submit"
                       disabled={!newNoteContent.trim() || isSavingNote}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                      className="px-4 py-2 bg-black text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
                     >
                       {isSavingNote ? (
                         <>
