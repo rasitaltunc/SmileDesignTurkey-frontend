@@ -31,13 +31,14 @@ export default async function handler(req, res) {
     });
 
     if (req.method === 'GET') {
-      const lead_uuid = typeof req.query?.lead_uuid === 'string' ? req.query.lead_uuid : '';
-      if (!lead_uuid) return res.status(400).json({ error: 'Missing lead_uuid' });
+      const lead_id = typeof req.query?.lead_id === 'string' ? req.query.lead_id : 
+                      typeof req.query?.lead_uuid === 'string' ? req.query.lead_uuid : '';
+      if (!lead_id) return res.status(400).json({ error: 'Missing lead_id' });
 
       const { data, error } = await supabase
         .from('lead_notes')
         .select('*')
-        .eq('lead_uuid', lead_uuid)
+        .eq('lead_id', lead_id)
         .order('created_at', { ascending: false })
         .limit(200);
 
@@ -47,19 +48,23 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      const lead_uuid = body?.lead_uuid;
-      const note = body?.note;
+      const lead_id = body?.lead_id || body?.lead_uuid;
+      const content = body?.content || body?.note;
 
-      if (!lead_uuid || typeof lead_uuid !== 'string') {
-        return res.status(400).json({ error: 'Missing/invalid lead_uuid' });
+      if (!lead_id || typeof lead_id !== 'string') {
+        return res.status(400).json({ error: 'Missing/invalid lead_id' });
       }
-      if (!note || typeof note !== 'string') {
-        return res.status(400).json({ error: 'Missing/invalid note' });
+      if (!content || typeof content !== 'string') {
+        return res.status(400).json({ error: 'Missing/invalid content' });
       }
+
+      // Service role key kullanırken author_id için system UUID kullanıyoruz
+      // (auth.uid() null döner, bu yüzden placeholder kullanıyoruz)
+      const systemAuthorId = '00000000-0000-0000-0000-000000000000';
 
       const { data, error } = await supabase
         .from('lead_notes')
-        .insert([{ lead_uuid, note }])
+        .insert([{ lead_id, content, author_id: systemAuthorId }])
         .select('*')
         .single();
 
