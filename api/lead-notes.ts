@@ -1,89 +1,77 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
-
-type CreateNoteBody = {
-  lead_uuid?: string;
-  note?: string;
-};
-
-function setCors(res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Token');
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCors(res);
+  // --- CORS (always) ---
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return res.status(200).end();
   }
 
   try {
-    // 1) Token-first (Supabase'e dokunmadan önce)
-    const token = (req.headers['x-admin-token'] as string | undefined) ?? '';
-    const adminToken = process.env.ADMIN_TOKEN ?? '';
-    if (!adminToken || token !== adminToken) {
+    // --- token first ---
+    const headerToken = (req.headers['x-admin-token'] as string | undefined) ?? '';
+    const expectedToken = process.env.ADMIN_TOKEN ?? '';
+
+    if (!expectedToken || headerToken !== expectedToken) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // 2) Env check (token doğruysa)
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
+    // --- env checks after token ---
+    const supabaseUrl = process.env.SUPABASE_URL ?? '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+    if (!supabaseUrl || !serviceKey) {
       return res.status(500).json({ error: 'Missing SUPABASE env' });
     }
 
-    // 3) Client (service role)
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
+    // IMPORTANT: avoid top-level ESM import -> dynamic import inside handler
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
     });
 
-    // 4) GET: /api/lead-notes?lead_uuid=...
     if (req.method === 'GET') {
-      const lead_uuid = typeof req.query.lead_uuid === 'string' ? req.query.lead_uuid : undefined;
+      const lead_uuid = (req.query.lead_uuid as string | undefined) ?? '';
+      if (!lead_uuid) {
+        return res.status(400).json({ error: 'Missing lead_uuid' });
+      }
 
-      let q = supabase
+      const { data, error } = await supabase
         .from('lead_notes')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .eq('lead_uuid', lead_uuid)
+        .order('created_at', { ascending: false });
 
-      if (lead_uuid) q = q.eq('lead_uuid', lead_uuid);
-
-      const { data, error } = await q;
       if (error) return res.status(500).json({ error: error.message });
-
       return res.status(200).json({ data });
     }
 
-    // 5) POST: { lead_uuid, note }
     if (req.method === 'POST') {
-      const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as CreateNoteBody;
-
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const lead_uuid = body?.lead_uuid;
       const note = body?.note;
 
       if (!lead_uuid || typeof lead_uuid !== 'string') {
-        return res.status(400).json({ error: 'Missing lead_uuid' });
+        return res.status(400).json({ error: 'Missing/invalid lead_uuid' });
       }
       if (!note || typeof note !== 'string') {
-        return res.status(400).json({ error: 'Missing note' });
+        return res.status(400).json({ error: 'Missing/invalid note' });
       }
 
       const { data, error } = await supabase
         .from('lead_notes')
         .insert([{ lead_uuid, note }])
-        .select('*')
+        .select()
         .single();
 
       if (error) return res.status(500).json({ error: error.message });
-
       return res.status(200).json({ data });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Unhandled error', details: err?.message ?? String(err) });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message ?? 'Unknown error' });
   }
 }
