@@ -728,7 +728,7 @@ export default function AdminLeads() {
                     <button
                       type="submit"
                       disabled={!newNoteContent.trim() || isSavingNote}
-                      className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-600 disabled:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-black text-white hover:bg-gray-900 disabled:bg-gray-700 disabled:text-white disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {isSavingNote ? (
                         <>
