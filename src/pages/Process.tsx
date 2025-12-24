@@ -1,7 +1,6 @@
 import { Link } from '../components/Link';
 import { MessageCircle, FileText, Calendar, Plane, Heart, CheckCircle, Lock, Shield, Globe, Video, Building, Headphones, Package } from 'lucide-react';
 import React, { useEffect, useContext } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
@@ -82,7 +81,6 @@ export default function Process() {
         description={copy.seo.process.description}
         url="/process"
       />
-      <Navbar />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">

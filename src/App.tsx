@@ -14,6 +14,7 @@ import PlanDashboard from './pages/PlanDashboard';
 import AdminLeads from './pages/AdminLeads';
 import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
+import Navbar from './components/Navbar';
 
 export const NavigationContext = createContext<{
   navigate: (path: string, params?: any) => void;
@@ -71,6 +72,9 @@ export default function App() {
     return <Login />;
   }
 
+  const isAdminRoute = currentPath.startsWith('/admin');
+  const navbarVariant = isAdminRoute ? 'admin' : 'public';
+
   const renderPage = () => {
     if (!isAuthenticated && currentPath === '/') {
       return <Home />;
@@ -127,6 +131,7 @@ export default function App() {
 
   return (
     <NavigationContext.Provider value={{ navigate, currentPath, params }}>
+      <Navbar variant={navbarVariant} minimal={false} />
       <PageTransition currentPath={currentPath}>
         {renderPage()}
       </PageTransition>

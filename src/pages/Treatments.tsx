@@ -1,7 +1,6 @@
 import { Link } from '../components/Link';
 import { Smile, Anchor, Layers, Crown, Sun, FileCheck, ChevronRight, MessageCircle } from 'lucide-react';
 import React, { useEffect } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { treatments } from '../data/treatments';
 import { useLanguage } from '../lib/i18n';
@@ -57,7 +56,6 @@ export default function Treatments() {
         description={copy.seo.treatments.description}
         url="/treatments"
       />
-      <Navbar />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">

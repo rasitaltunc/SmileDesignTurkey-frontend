@@ -1,7 +1,6 @@
 import { Link } from '../components/Link';
 import { MessageCircle, Filter, Star } from 'lucide-react';
 import React, { useState, useEffect, useContext } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
@@ -150,7 +149,6 @@ export default function Reviews() {
         description={copy.seo.reviews.description}
         url="/reviews"
       />
-      <Navbar />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">

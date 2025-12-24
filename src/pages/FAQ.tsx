@@ -1,7 +1,6 @@
 import { Link } from '../components/Link';
 import { MessageCircle, ChevronRight } from 'lucide-react';
 import React, { useState, useEffect, useContext } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
@@ -55,7 +54,6 @@ export default function FAQ() {
         description={copy.seo.faq.description}
         url="/faq"
       />
-      <Navbar />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">

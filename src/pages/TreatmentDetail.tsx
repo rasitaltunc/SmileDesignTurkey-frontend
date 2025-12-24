@@ -1,6 +1,5 @@
 import { Link, useParams } from '../components/Link';
 import { MessageCircle, ChevronRight, Check, Clock, DollarSign } from 'lucide-react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { treatments } from '../data/treatments';
 import { BRAND } from '../config';
@@ -31,7 +30,6 @@ export default function TreatmentDetail() {
   if (!treatment) {
     return (
       <div className="min-h-screen bg-white">
-        <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
           <h1 className="text-gray-900 mb-4">Treatment Not Found</h1>
           <Link to="/treatments" className="text-teal-600 hover:text-teal-700">
@@ -45,7 +43,6 @@ export default function TreatmentDetail() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
 
       {/* Header */}
       <section className="relative bg-gradient-to-br from-teal-50 to-white py-12">

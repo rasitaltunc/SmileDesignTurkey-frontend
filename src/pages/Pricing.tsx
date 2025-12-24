@@ -1,7 +1,6 @@
 import { Link } from '../components/Link';
 import { MessageCircle, Check, TrendingUp, Package, Headphones, CheckCircle } from 'lucide-react';
 import React, { useEffect, useContext } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { treatments } from '../data/treatments';
 import { BRAND } from '../config';
@@ -85,7 +84,6 @@ export default function Pricing() {
         description={copy.seo.pricing.description}
         url="/pricing"
       />
-      <Navbar />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">

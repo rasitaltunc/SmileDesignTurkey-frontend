@@ -1,7 +1,6 @@
 import { Link } from '../components/Link';
 import { Download, MessageCircle, Calendar, Upload, CheckCircle, Clock, User, Image as ImageIcon, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { trackEvent } from '../lib/analytics';
 import { BRAND } from '../config';
@@ -156,7 +155,6 @@ export default function PlanDashboard() {
         description={copy.seo.planDashboard.description}
         url="/plan-dashboard"
       />
-      <Navbar minimal />
 
       {/* Header */}
       <section className="bg-gradient-to-r from-teal-600 to-teal-500 py-12">

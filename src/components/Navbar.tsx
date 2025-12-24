@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 
 interface NavbarProps {
   minimal?: boolean;
+  variant?: 'public' | 'app' | 'admin';
 }
 
 type Portal = 'patient' | 'doctor' | 'employee' | 'admin';
@@ -18,7 +19,7 @@ function pushRoute(path: string) {
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
-export default function Navbar({ minimal = false }: NavbarProps) {
+export default function Navbar({ minimal = false, variant = 'public' }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { lang, setLang, content } = useLanguage();
 
@@ -189,26 +190,28 @@ export default function Navbar({ minimal = false }: NavbarProps) {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
-            <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors">
-              Treatments
-            </Link>
-            <Link to="/pricing" className="text-gray-700 hover:text-teal-600 transition-colors">
-              Pricing
-            </Link>
-            <Link to="/process" className="text-gray-700 hover:text-teal-600 transition-colors">
-              Process
-            </Link>
-            <Link to="/reviews" className="text-gray-700 hover:text-teal-600 transition-colors">
-              Reviews
-            </Link>
-            <Link to="/faq" className="text-gray-700 hover:text-teal-600 transition-colors">
-              FAQ
-            </Link>
-            <Link to="/contact" className="text-gray-700 hover:text-teal-600 transition-colors">
-              Contact
-            </Link>
-          </div>
+          {variant !== 'admin' && (
+            <div className="hidden md:flex items-center gap-8">
+              <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors">
+                Treatments
+              </Link>
+              <Link to="/pricing" className="text-gray-700 hover:text-teal-600 transition-colors">
+                Pricing
+              </Link>
+              <Link to="/process" className="text-gray-700 hover:text-teal-600 transition-colors">
+                Process
+              </Link>
+              <Link to="/reviews" className="text-gray-700 hover:text-teal-600 transition-colors">
+                Reviews
+              </Link>
+              <Link to="/faq" className="text-gray-700 hover:text-teal-600 transition-colors">
+                FAQ
+              </Link>
+              <Link to="/contact" className="text-gray-700 hover:text-teal-600 transition-colors">
+                Contact
+              </Link>
+            </div>
+          )}
 
           {/* Desktop CTAs */}
           <div className="hidden md:flex items-center gap-3">
@@ -221,24 +224,28 @@ export default function Navbar({ minimal = false }: NavbarProps) {
               {lang.toUpperCase()}
             </button>
 
-            <button
-              onClick={handleWhatsAppClick}
-              className="flex items-center gap-2 px-4 py-2 text-teal-600 border border-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
-              aria-label={content.whatsapp.ctaText}
-            >
-              <MessageCircle className="w-4 h-4" />
-              {content.whatsapp.ctaText}
-            </button>
+            {variant !== 'admin' && (
+              <>
+                <button
+                  onClick={handleWhatsAppClick}
+                  className="flex items-center gap-2 px-4 py-2 text-teal-600 border border-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
+                  aria-label={content.whatsapp.ctaText}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {content.whatsapp.ctaText}
+                </button>
 
-            <Link
-              to="/onboarding"
-              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
-              onClick={() => trackEvent({ type: 'cta_click', where: 'navbar', cta: 'free_consultation', lang })}
-            >
-              {content.cta.primary}
-            </Link>
+                <Link
+                  to="/onboarding"
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  onClick={() => trackEvent({ type: 'cta_click', where: 'navbar', cta: 'free_consultation', lang })}
+                >
+                  {content.cta.primary}
+                </Link>
+              </>
+            )}
 
-            {/* Account */}
+            {/* Account - her zaman görünür */}
             {!isAuthenticated ? (
               <button
                 onClick={openAuth}
@@ -280,24 +287,51 @@ export default function Navbar({ minimal = false }: NavbarProps) {
         {isOpen && (
           <div className="md:hidden py-4 border-t border-gray-100">
             <div className="flex flex-col gap-4">
-              <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
-                Treatments
-              </Link>
-              <Link to="/pricing" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
-                Pricing
-              </Link>
-              <Link to="/process" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
-                Process
-              </Link>
-              <Link to="/reviews" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
-                Reviews
-              </Link>
-              <Link to="/faq" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
-                FAQ
-              </Link>
-              <Link to="/contact" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
-                Contact
-              </Link>
+              {variant !== 'admin' && (
+                <>
+                  <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                    Treatments
+                  </Link>
+                  <Link to="/pricing" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                    Pricing
+                  </Link>
+                  <Link to="/process" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                    Process
+                  </Link>
+                  <Link to="/reviews" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                    Reviews
+                  </Link>
+                  <Link to="/faq" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                    FAQ
+                  </Link>
+                  <Link to="/contact" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                    Contact
+                  </Link>
+
+                  <button
+                    onClick={() => {
+                      setIsOpen(false);
+                      handleWhatsAppClick();
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-teal-600 border border-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
+                    aria-label={content.whatsapp.ctaText}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    {content.whatsapp.ctaText}
+                  </button>
+
+                  <Link
+                    to="/onboarding"
+                    className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center"
+                    onClick={() => {
+                      setIsOpen(false);
+                      trackEvent({ type: 'cta_click', where: 'navbar_mobile', cta: 'free_consultation', lang });
+                    }}
+                  >
+                    {content.cta.primary}
+                  </Link>
+                </>
+              )}
 
               <button
                 onClick={() => {
@@ -309,29 +343,7 @@ export default function Navbar({ minimal = false }: NavbarProps) {
                 {lang.toUpperCase()}
               </button>
 
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  handleWhatsAppClick();
-                }}
-                className="flex items-center justify-center gap-2 px-4 py-2 text-teal-600 border border-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
-                aria-label={content.whatsapp.ctaText}
-              >
-                <MessageCircle className="w-4 h-4" />
-                {content.whatsapp.ctaText}
-              </button>
-
-              <Link
-                to="/onboarding"
-                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center"
-                onClick={() => {
-                  setIsOpen(false);
-                  trackEvent({ type: 'cta_click', where: 'navbar_mobile', cta: 'free_consultation', lang });
-                }}
-              >
-                {content.cta.primary}
-              </Link>
-
+              {/* Account - her zaman görünür */}
               {!isAuthenticated ? (
                 <button
                   onClick={() => {

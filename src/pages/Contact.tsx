@@ -1,6 +1,5 @@
 import { MessageCircle, Phone, Mail, MapPin, Clock, Globe } from 'lucide-react';
 import { useState } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
@@ -100,7 +99,6 @@ export default function Contact() {
         description={copy.seo.contact.description}
         url="/contact"
       />
-      <Navbar />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">

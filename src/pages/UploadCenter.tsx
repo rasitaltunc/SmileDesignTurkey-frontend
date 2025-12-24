@@ -1,7 +1,6 @@
 import { Link } from '../components/Link';
 import { Upload, File, CheckCircle, XCircle, Shield, Lock, HelpCircle, MessageCircle, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
@@ -94,7 +93,6 @@ export default function UploadCenter() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar minimal />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-12">
