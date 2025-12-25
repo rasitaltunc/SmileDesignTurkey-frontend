@@ -38,6 +38,9 @@ module.exports = async function handler(req, res) {
   const jwt = getBearerToken(req);
   if (!jwt) return res.status(401).json({ error: "Missing Authorization Bearer token" });
 
+  // DEBUG header (verify handler execution)
+  res.setHeader("x-sdt-api", "leads-v1");
+
   // auth-bound client (uses caller JWT for auth checks)
   const authClient = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
