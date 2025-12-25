@@ -3,14 +3,16 @@ import { RefreshCw, X, Save, LogOut, MessageSquare } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
-// Status options - CRM MVP Pipeline
-const STATUS_OPTIONS = [
+// Status options - CRM MVP Pipeline (3C: Deposit + Appointment separate)
+const LEAD_STATUSES = [
   { value: 'new', label: 'New' },
   { value: 'contacted', label: 'Contacted' },
-  { value: 'booked', label: 'Booked' },
-  { value: 'paid', label: 'Paid' },
+  { value: 'deposit_paid', label: 'Deposit Paid' },
+  { value: 'appointment_set', label: 'Appointment Set' },
+  { value: 'arrived', label: 'Arrived' },
   { value: 'completed', label: 'Completed' },
-];
+  { value: 'lost', label: 'Lost' },
+] as const;
 
 interface Lead {
   id: string;
@@ -526,7 +528,7 @@ export default function AdminLeads() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Statuses</option>
-                {STATUS_OPTIONS.map((opt) => (
+                {LEAD_STATUSES.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -660,7 +662,7 @@ export default function AdminLeads() {
                             lead.status?.toLowerCase() === 'completed' ? 'bg-emerald-100 text-emerald-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
-                            {STATUS_OPTIONS.find(s => s.value === lead.status?.toLowerCase())?.label || 
+                            {LEAD_STATUSES.find(s => s.value === lead.status?.toLowerCase())?.label || 
                              (lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1).toLowerCase() : 'New')}
                           </span>
                         )}
