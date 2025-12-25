@@ -72,14 +72,13 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ leads: data });
   }
 
-  // PATCH /api/leads  (update status/notes/assigned_to etc.)
+  // PATCH /api/leads
   if (req.method === "PATCH") {
     try {
       const body = req.body || {};
       const id = body.id || body.lead_id;
       const lead_uuid = body.lead_uuid;
 
-      // accept either {updates:{...}} or direct fields
       const updates = body.updates ? { ...body.updates } : { ...body };
       delete updates.id;
       delete updates.lead_id;
@@ -88,21 +87,24 @@ module.exports = async function handler(req, res) {
       if (!id && !lead_uuid) return res.status(400).json({ error: "Missing id or lead_uuid" });
       if (!Object.keys(updates).length) return res.status(400).json({ error: "No updates provided" });
 
-      // Allowed fields list
-      const allowed = [
-        'status',
-        'notes',
-        'follow_up_at',
-        'next_action',
-        'contacted_at',
-        'patient_id',
-        // assignment fields
-        'assigned_to',
-        'assigned_at',
-        'assigned_by',
+      // ✅ Admin: her şeyi yapabilir; Employee: assignment alanlarını değiştiremez
+      const allowedForAll = [
+        "status",
+        "notes",
+        "follow_up_at",
+        "next_action",
+        "contacted_at",
+        "patient_id",
       ];
 
-      // Filter updates to only allowed fields
+      const allowedForAdminExtra = [
+        "assigned_to",
+        "assigned_at",
+        "assigned_by",
+      ];
+
+      const allowed = isAdmin ? [...allowedForAll, ...allowedForAdminExtra] : allowedForAll;
+
       const filtered = Object.fromEntries(
         Object.entries(updates).filter(([k]) => allowed.includes(k))
       );
@@ -111,19 +113,31 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "No allowed fields to update" });
       }
 
-      let q = supabase.from("leads").update(filtered).select("*").limit(1);
+      // ✅ Güvenlik/istikrar: assigned_by/assigned_at'ı server set etsin
+      if (isAdmin && filtered.assigned_to) {
+        filtered.assigned_by = user.id;
+        if (!filtered.assigned_at) filtered.assigned_at = new Date().toISOString();
+      }
 
-      // employee can only update assigned leads
+      // ✅ UPDATE query: limit yok, single ile net
+      let q = supabase
+        .from("leads")
+        .update(filtered)
+        .select("*");
+
       if (isEmployee) q = q.eq("assigned_to", user.id);
 
       q = id ? q.eq("id", id) : q.eq("lead_uuid", lead_uuid);
 
-      const { data, error } = await q;
-      if (error) return res.status(500).json({ error: error.message });
+      const { data, error } = await q.single();
 
-      return res.status(200).json({ lead: data?.[0] || null });
+      if (error) {
+        return res.status(500).json({ error: error.message, hint: error.hint || null });
+      }
+
+      return res.status(200).json({ lead: data });
     } catch (e) {
-      return res.status(500).json({ error: "Server error" });
+      return res.status(500).json({ error: e?.message || "Server error" });
     }
   }
 
