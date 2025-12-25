@@ -149,7 +149,7 @@ export default function AdminLeads() {
       const token = data.session?.access_token;
       if (!token) return;
 
-      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const url = `${apiUrl}/api/employees`;
 
       const res = await fetch(url, {
@@ -179,7 +179,7 @@ export default function AdminLeads() {
       const token = data.session?.access_token;
       if (!token) throw new Error('No session');
 
-      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const url = `${apiUrl}/api/leads`;
 
       const userData = await supabase.auth.getUser();
