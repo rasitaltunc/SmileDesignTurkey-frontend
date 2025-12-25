@@ -37,16 +37,27 @@ module.exports = async function handler(req, res) {
   const user = userData?.user;
   if (userErr || !user) return res.status(401).json({ error: "Invalid session" });
 
-  // ✅ role from profiles
-  const { data: profile, error: profErr } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  // ✅ role from RPC (same as frontend + RLS functions)
+  const anonKey =
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "";
 
-  if (profErr) return res.status(500).json({ error: "Failed to read profile role" });
+  if (!anonKey) {
+    return res.status(500).json({ error: "Missing SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY)" });
+  }
 
-  const role = profile?.role || "unknown";
+  // auth-bound client (uses caller JWT)
+  const authClient = createClient(url, anonKey, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data: roleData, error: roleErr } = await authClient.rpc("get_current_user_role");
+  if (roleErr) {
+    return res.status(500).json({ error: "Failed to resolve role via RPC", details: roleErr.message });
+  }
+  const role = roleData || "unknown";
   const isAdmin = role === "admin";
   const isEmployee = role === "employee";
 
