@@ -155,14 +155,18 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                 </button>
               ) : (
                 <div className="flex items-center gap-2">
-                  {roleLabel && (
+                  {roleLabel && role ? (
                     <Link
                       to={role === 'admin' ? '/admin/leads' : '/employee/leads'}
                       className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer"
                     >
                       {roleLabel}
                     </Link>
-                  )}
+                  ) : roleLabel ? (
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
+                      {roleLabel}
+                    </span>
+                  ) : null}
                   <button
                     onClick={handleLogout}
                     className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
