@@ -39,10 +39,16 @@ export const useAuthStore = create<AuthState>()(
             password,
           });
 
-          if (error) throw error;
+          if (error) {
+            set({ isAuthenticated: false, role: null, user: null });
+            throw error; // ÖNEMLİ: throw et ki catch'e düşsün
+          }
 
           const uid = data.user?.id;
-          if (!uid) throw new Error('User ID not found');
+          if (!uid) {
+            set({ isAuthenticated: false, role: null, user: null });
+            throw new Error('Login succeeded but no user returned');
+          }
 
           // Role'u direkt çek (fetchRole RPC kullanıyor, burada da aynısını yapabiliriz)
           const { data: roleData, error: roleErr } = await supabase.rpc('get_current_user_role');
@@ -58,15 +64,15 @@ export const useAuthStore = create<AuthState>()(
           });
 
           return { user: data.user, role };
-        } catch (error: any) {
+        } catch (e: any) {
           set({
-            error: error.message || 'Login failed',
+            error: e?.message || 'Login failed',
             isLoading: false,
             isAuthenticated: false,
             user: null,
             role: null,
           });
-          throw error;
+          throw e; // ÖNEMLİ: throw et ki Navbar.tsx'te catch'e düşsün
         }
       },
 
