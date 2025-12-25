@@ -118,6 +118,18 @@ export default function App() {
         navigate('/employee/leads', { replace: true });
         return null;
       case '/admin/leads':
+        // Role gelene kadar loader göster (ÇOK ÖNEMLİ)
+        if (isLoading || !role) {
+          return (
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading...</p>
+              </div>
+            </div>
+          );
+        }
+        // Role uyuşmuyorsa -> home
         if (role !== 'admin') {
           return (
             <div className="min-h-screen flex items-center justify-center p-6">
@@ -138,6 +150,18 @@ export default function App() {
         }
         return <AdminLeads />;
       case '/employee/leads':
+        // Role gelene kadar loader göster (ÇOK ÖNEMLİ)
+        if (isLoading || !role) {
+          return (
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading...</p>
+              </div>
+            </div>
+          );
+        }
+        // Role uyuşmuyorsa -> home
         if (role !== 'employee' && role !== 'admin') {
           return (
             <div className="min-h-screen flex items-center justify-center p-6">

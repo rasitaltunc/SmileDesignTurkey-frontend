@@ -23,22 +23,28 @@ const TEST_USERS = [
 ];
 
 export default function Login() {
-  const { loginWithTestUser, isLoading, error, clearError, isAuthenticated } = useAuthStore();
-
-  const { role } = useAuthStore();
-
-  useEffect(() => {
-    if (isAuthenticated && role) {
-      // Role-based redirect
-      const dashboardPath = role === 'admin' ? '/admin/leads' : '/employee/leads';
-      window.history.pushState({}, '', dashboardPath);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }
-  }, [isAuthenticated, role]);
+  const { loginWithTestUser, isLoading, error, clearError } = useAuthStore();
 
   const handleTestLogin = async (email: string, password: string) => {
     clearError();
-    await loginWithTestUser(email, password);
+    try {
+      const result = await loginWithTestUser(email, password);
+      // Store role henüz hydrate olmadan guard tetiklenmesin diye direkt result ile navigate
+      const role = result?.role;
+
+      if (role === 'admin') {
+        window.history.pushState({}, '', '/admin/leads');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } else if (role === 'employee') {
+        window.history.pushState({}, '', '/employee/leads');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        window.history.pushState({}, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+    } catch (err) {
+      // Error already handled in store
+    }
   };
 
   return (

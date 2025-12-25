@@ -41,23 +41,30 @@ export const useAuthStore = create<AuthState>()(
 
           if (error) throw error;
 
+          const uid = data.user?.id;
+          if (!uid) throw new Error('User ID not found');
+
+          // Role'u direkt çek (fetchRole RPC kullanıyor, burada da aynısını yapabiliriz)
+          const { data: roleData, error: roleErr } = await supabase.rpc('get_current_user_role');
+          const role = roleErr ? null : (String(roleData || '').trim().toLowerCase() || null);
+
+          // Store'a set et
           set({
             user: data.user,
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            role,
           });
-          await get().fetchRole();
-          
-          // Return role for redirect logic
-          const currentRole = get().role;
-          return { role: currentRole };
+
+          return { user: data.user, role };
         } catch (error: any) {
           set({
             error: error.message || 'Login failed',
             isLoading: false,
             isAuthenticated: false,
             user: null,
+            role: null,
           });
           throw error;
         }
@@ -84,18 +91,24 @@ export const useAuthStore = create<AuthState>()(
           }
 
           console.log('Login successful!', data.user);
-          
+
+          const uid = data.user?.id;
+          if (!uid) throw new Error('User ID not found');
+
+          // Role'u direkt çek
+          const { data: roleData, error: roleErr } = await supabase.rpc('get_current_user_role');
+          const role = roleErr ? null : (String(roleData || '').trim().toLowerCase() || null);
+
+          // Store'a set et
           set({
             user: data.user,
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            role,
           });
-          await get().fetchRole();
           
-          // Return role for redirect logic
-          const currentRole = get().role;
-          return { role: currentRole };
+          return { user: data.user, role };
         } catch (error: any) {
           console.error('Login error:', error);
           set({
@@ -103,7 +116,9 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             isAuthenticated: false,
             user: null,
+            role: null,
           });
+          throw error;
         }
       },
 
