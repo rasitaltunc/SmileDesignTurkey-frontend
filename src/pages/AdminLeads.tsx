@@ -888,7 +888,7 @@ type NotesModalProps = {
   isSavingNote: boolean;
   isLoadingNotes?: boolean;
   onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: any) => void;
 };
 
 function NotesModalPortal({
