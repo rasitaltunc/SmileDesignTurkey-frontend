@@ -858,47 +858,49 @@ export default function AdminLeads() {
         {/* Notes Modal */}
         {notesLeadId && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-2xl h-[85vh] rounded-2xl shadow-xl overflow-hidden flex flex-col">
+            <div className="bg-white w-full max-w-2xl h-[85vh] rounded-2xl shadow-xl flex flex-col overflow-hidden">
               {/* Header (fixed) */}
-              <div className="shrink-0 px-6 py-4 border-b flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Notes</h3>
+              <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Notes</h3>
                 <button
                   type="button"
                   onClick={handleCloseNotes}
-                  className="text-gray-500 hover:text-gray-800 text-xl leading-none"
+                  className="text-gray-500 hover:text-gray-800 text-2xl leading-none w-8 h-8 flex items-center justify-center"
                   aria-label="Close"
                 >
                   ×
                 </button>
               </div>
 
-              {/* Scrollable body (IMPORTANT: min-h-0) */}
-              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
-                {isLoadingNotes ? (
-                  <div className="text-center text-gray-500 py-10">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    <p>Loading notes...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {notes.length === 0 ? (
-                      <div className="text-center text-gray-500 py-10">
-                        No notes yet.
-                      </div>
-                    ) : (
-                      notes.map((n: any) => (
-                        <div key={n.id} className="border border-gray-200 rounded-lg p-3">
-                          <div className="text-xs text-gray-500 mb-1">
-                            {new Date(n.created_at).toLocaleString()}
-                          </div>
-                          <div className="text-sm text-gray-900 whitespace-pre-wrap">
-                            {n.content || n.note || ""}
-                          </div>
+              {/* Scrollable body - CRITICAL: min-h-0 + overflow-hidden on parent */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="h-full overflow-y-auto px-6 py-4">
+                  {isLoadingNotes ? (
+                    <div className="text-center text-gray-500 py-10">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                      <p>Loading notes...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {notes.length === 0 ? (
+                        <div className="text-center text-gray-500 py-10">
+                          No notes yet.
                         </div>
-                      ))
-                    )}
-                  </div>
-                )}
+                      ) : (
+                        notes.map((n: any) => (
+                          <div key={n.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                            <div className="text-xs text-gray-500 mb-1">
+                              {new Date(n.created_at).toLocaleString()}
+                            </div>
+                            <div className="text-sm text-gray-900 whitespace-pre-wrap">
+                              {n.content || n.note || ""}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Footer (always visible) */}
@@ -909,7 +911,7 @@ export default function AdminLeads() {
                     createNote(notesLeadId, newNoteContent);
                   }
                 }}
-                className="shrink-0 border-t px-6 py-4 bg-white"
+                className="flex-shrink-0 border-t border-gray-200 px-6 py-4 bg-white"
               >
                 <textarea
                   value={newNoteContent}
