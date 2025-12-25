@@ -74,30 +74,57 @@ module.exports = async function handler(req, res) {
 
   // PATCH /api/leads  (update status/notes/assigned_to etc.)
   if (req.method === "PATCH") {
-    const body = req.body || {};
-    const id = body.id || body.lead_id;
-    const lead_uuid = body.lead_uuid;
+    try {
+      const body = req.body || {};
+      const id = body.id || body.lead_id;
+      const lead_uuid = body.lead_uuid;
 
-    // accept either {updates:{...}} or direct fields
-    const updates = body.updates ? { ...body.updates } : { ...body };
-    delete updates.id;
-    delete updates.lead_id;
-    delete updates.lead_uuid;
+      // accept either {updates:{...}} or direct fields
+      const updates = body.updates ? { ...body.updates } : { ...body };
+      delete updates.id;
+      delete updates.lead_id;
+      delete updates.lead_uuid;
 
-    if (!id && !lead_uuid) return res.status(400).json({ error: "Missing id or lead_uuid" });
-    if (!Object.keys(updates).length) return res.status(400).json({ error: "No updates provided" });
+      if (!id && !lead_uuid) return res.status(400).json({ error: "Missing id or lead_uuid" });
+      if (!Object.keys(updates).length) return res.status(400).json({ error: "No updates provided" });
 
-    let q = supabase.from("leads").update(updates).select("*").limit(1);
+      // Allowed fields list
+      const allowed = [
+        'status',
+        'notes',
+        'follow_up_at',
+        'next_action',
+        'contacted_at',
+        'patient_id',
+        // assignment fields
+        'assigned_to',
+        'assigned_at',
+        'assigned_by',
+      ];
 
-    // employee can only update assigned leads
-    if (isEmployee) q = q.eq("assigned_to", user.id);
+      // Filter updates to only allowed fields
+      const filtered = Object.fromEntries(
+        Object.entries(updates).filter(([k]) => allowed.includes(k))
+      );
 
-    q = id ? q.eq("id", id) : q.eq("lead_uuid", lead_uuid);
+      if (Object.keys(filtered).length === 0) {
+        return res.status(400).json({ error: "No allowed fields to update" });
+      }
 
-    const { data, error } = await q;
-    if (error) return res.status(500).json({ error: error.message });
+      let q = supabase.from("leads").update(filtered).select("*").limit(1);
 
-    return res.status(200).json({ lead: data?.[0] || null });
+      // employee can only update assigned leads
+      if (isEmployee) q = q.eq("assigned_to", user.id);
+
+      q = id ? q.eq("id", id) : q.eq("lead_uuid", lead_uuid);
+
+      const { data, error } = await q;
+      if (error) return res.status(500).json({ error: error.message });
+
+      return res.status(200).json({ lead: data?.[0] || null });
+    } catch (e) {
+      return res.status(500).json({ error: "Server error" });
+    }
   }
 
   return res.status(405).json({ error: "Method not allowed" });
