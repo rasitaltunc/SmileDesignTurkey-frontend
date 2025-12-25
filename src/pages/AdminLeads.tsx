@@ -41,8 +41,8 @@ interface LeadNote {
 }
 
 export default function AdminLeads() {
-  const { user, isAuthenticated, logout } = useAuthStore();
-  const isAdmin = user?.user_metadata?.role === 'admin';
+  const { user, isAuthenticated, logout, role } = useAuthStore();
+  const isAdmin = role === 'admin';
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,6 +64,11 @@ export default function AdminLeads() {
   const [newNoteContent, setNewNoteContent] = useState<string>('');
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
+
+  // Employee assignment state
+  const [employees, setEmployees] = useState<Array<{ id: string; full_name: string | null }>>([]);
+  const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
+  const [selectedEmployeeByLead, setSelectedEmployeeByLead] = useState<Record<string, string>>({});
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -376,6 +381,11 @@ export default function AdminLeads() {
     }
   }, [isAuthenticated, filterStatus, filterAssignedTo]);
 
+  useEffect(() => {
+    loadEmployees();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
+
   // Show nothing while checking auth or redirecting
   if (!isAuthenticated) {
     return null;
@@ -605,9 +615,37 @@ export default function AdminLeads() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-600">
-                          {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
-                        </span>
+                        {role === 'admin' && (
+                          <div className="flex flex-col gap-2">
+                            <select
+                              className="px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                              value={selectedEmployeeByLead[lead.id] || lead.assigned_to || ''}
+                              onChange={(e) =>
+                                setSelectedEmployeeByLead((prev) => ({ ...prev, [lead.id]: e.target.value }))
+                              }
+                            >
+                              <option value="">Assign to employee…</option>
+                              {employees.map((emp) => (
+                                <option key={emp.id} value={emp.id}>
+                                  {emp.full_name ? emp.full_name : emp.id.slice(0, 8)}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              disabled={!selectedEmployeeByLead[lead.id] || assigningLeadId === lead.id}
+                              onClick={() => assignLead(lead.id)}
+                              className="px-3 py-2 rounded-lg bg-gray-900 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {assigningLeadId === lead.id ? 'Assigning…' : 'Assign'}
+                            </button>
+                          </div>
+                        )}
+                        {role !== 'admin' && (
+                          <span className="text-sm text-gray-600">
+                            {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500 overflow-hidden" style={{ width: '220px', maxWidth: '220px' }}>
                         {editingLead?.id === lead.id ? (
