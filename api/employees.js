@@ -52,7 +52,7 @@ module.exports = async function handler(req, res) {
 
   const { data, error } = await adminClient
     .from("profiles")
-    .select("id, email, full_name, role")
+    .select("id, full_name, role")
     .eq("role", "employee")
     .order("created_at", { ascending: false });
 
