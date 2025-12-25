@@ -17,13 +17,6 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  // ✅ DEBUG: "Ben hangi code'u çalıştırıyorum?" kanıt endpoint'i
-  return res.status(418).json({
-    who: "api/leads.js",
-    commit: "DEBUG-ROLE-1",
-    time: new Date().toISOString()
-  });
-
   const url = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
