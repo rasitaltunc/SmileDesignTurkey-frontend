@@ -253,6 +253,9 @@ export default function AdminLeads() {
     if (!employeeId) return;
 
     setAssigningLeadId(leadId);
+    
+    // ✅ Sadece assigned_to gönder, tüm lead objesi değil
+    await updateLead(leadId, { assigned_to: employeeId });
 
     try {
       const supabase = getSupabaseClient();
@@ -669,7 +672,7 @@ export default function AdminLeads() {
                               className="text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700 transition-colors"
                               onClick={() => {
                                 const wa = normalizePhoneToWhatsApp(lead.phone);
-                                if (!wa) return alert("No phone number for WhatsApp");
+                                if (!wa) return alert("Invalid phone number for WhatsApp");
                                 const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
                                 window.open(url, "_blank", "noopener,noreferrer");
                               }}
