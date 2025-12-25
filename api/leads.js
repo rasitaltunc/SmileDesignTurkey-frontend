@@ -124,10 +124,15 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "No allowed fields to update" });
       }
 
-      // ✅ Güvenlik/istikrar: assigned_by/assigned_at'ı server set etsin
-      if (isAdmin && filtered.assigned_to) {
+      // 🔒 Only admin can change assignment
+      if ("assigned_to" in filtered) {
+        if (!isAdmin) {
+          return res.status(403).json({ error: "Only admins can change assigned_to" });
+        }
+
+        // prevent spoofing
         filtered.assigned_by = user.id;
-        if (!filtered.assigned_at) filtered.assigned_at = new Date().toISOString();
+        filtered.assigned_at = new Date().toISOString();
       }
 
       // ✅ UPDATE query: limit yok, single ile net
