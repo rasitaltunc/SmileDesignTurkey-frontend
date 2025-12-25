@@ -57,6 +57,7 @@ module.exports = async function handler(req, res) {
   }
 
   // ✅ Normalize role (RPC might return "Admin", "ADMIN", with spaces, etc.)
+  const roleRaw = roleData;
   const role = String(roleData || "").trim().toLowerCase();
   const isAdmin = role === "admin";
   const isEmployee = role === "employee";
@@ -130,11 +131,11 @@ module.exports = async function handler(req, res) {
       }
 
       // 🔒 Only admin can change assignment
-      if ("assigned_to" in filtered) {
+      if (Object.prototype.hasOwnProperty.call(filtered, "assigned_to")) {
         if (!isAdmin) {
           return res.status(403).json({
             error: "Only admins can change assigned_to",
-            debug: { role, uid: user.id, email: user.email }
+            debug: { roleRaw, role, uid: user.id, email: user.email }
           });
         }
 
