@@ -766,7 +766,7 @@ export default function AdminLeads() {
                               onChange={(e) => setEditStatus(e.target.value)}
                               className="text-sm border border-gray-300 rounded px-2 py-1"
                             >
-                              {STATUS_OPTIONS.map((opt) => (
+                              {LEAD_STATUSES.map((opt) => (
                                 <option key={opt.value} value={opt.value}>
                                   {opt.label}
                                 </option>
