@@ -127,6 +127,13 @@ export default function AdminLeads() {
 
       const result = await response.json();
       setLeads(result.leads || []);
+
+      // ✅ Hydrate dropdown selections from DB values
+      const initialSelections: Record<string, string> = {};
+      for (const l of (result.leads || [])) {
+        if (l.assigned_to) initialSelections[l.id] = l.assigned_to;
+      }
+      setSelectedEmployeeByLead(prev => ({ ...prev, ...initialSelections }));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
       setError(errorMessage);
@@ -693,7 +700,7 @@ export default function AdminLeads() {
                           <div className="flex flex-col gap-2">
                             <select
                               className="px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                              value={selectedEmployeeByLead[lead.id] || lead.assigned_to || ''}
+                              value={selectedEmployeeByLead[lead.id] ?? lead.assigned_to ?? ''}
                               onChange={(e) =>
                                 setSelectedEmployeeByLead((prev) => ({ ...prev, [lead.id]: e.target.value }))
                               }
