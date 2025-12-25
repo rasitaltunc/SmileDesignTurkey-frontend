@@ -501,7 +501,7 @@ export default function AdminLeads() {
     if (isAuthenticated && user) {
       loadLeads();
     }
-  }, [isAuthenticated, filterStatus, filterAssignedTo]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     loadEmployees();
