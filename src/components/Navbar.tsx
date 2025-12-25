@@ -97,8 +97,10 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     clearError();
     try {
       const result = await login(email.trim(), password);
-      // Store role henüz hydrate olmadan guard tetiklenmesin diye direkt result ile navigate
+      
+      // ÖNEMLİ: role yoksa redirect yok, modal açık kalır
       const role = result?.role;
+      if (!role) return;
 
       if (role === 'admin') {
         closeAuth();
@@ -110,8 +112,8 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
         closeAuth();
         pushRoute('/');
       }
-    } catch (err) {
-      // Error already handled in store
+    } catch {
+      // store error gösteriyor; burada hiçbir şey yapma (redirect yok, modal açık kalır)
     }
   };
 

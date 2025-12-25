@@ -29,8 +29,10 @@ export default function Login() {
     clearError();
     try {
       const result = await loginWithTestUser(email, password);
-      // Store role henüz hydrate olmadan guard tetiklenmesin diye direkt result ile navigate
+      
+      // ÖNEMLİ: role yoksa redirect yok
       const role = result?.role;
+      if (!role) return;
 
       if (role === 'admin') {
         window.history.pushState({}, '', '/admin/leads');
@@ -42,8 +44,8 @@ export default function Login() {
         window.history.pushState({}, '', '/');
         window.dispatchEvent(new PopStateEvent('popstate'));
       }
-    } catch (err) {
-      // Error already handled in store
+    } catch {
+      // store error gösteriyor; burada hiçbir şey yapma (redirect yok, modal açık kalır)
     }
   };
 
