@@ -28,7 +28,12 @@ function normalizePhoneToWhatsApp(phone?: string) {
   // if still no +, add +
   if (!p.startsWith("+")) p = "+" + p;
 
-  return p.replace(/\+/g, ""); // wa.me wants digits only (remove all + signs)
+  const digits = p.replace(/\+/g, ""); // wa.me wants digits only (remove all + signs)
+
+  // ✅ minimum uzunluk kontrolü (TR için genelde 12: 90 + 10 hane)
+  if (digits.length < 11) return null;
+
+  return digits;
 }
 
 function waMessageEN(lead: any) {
@@ -254,45 +259,14 @@ export default function AdminLeads() {
 
     setAssigningLeadId(leadId);
     
-    // ✅ Sadece assigned_to gönder, tüm lead objesi değil
-    await updateLead(leadId, { assigned_to: employeeId });
-
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) throw new Error('Supabase client not configured.');
-
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error('No session');
-
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const url = `${apiUrl}/api/leads`;
-
-      // Only send assigned_to - server will set assigned_by and assigned_at
-      const updates = {
-        assigned_to: employeeId,
-      };
-
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ id: leadId, updates }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || 'Assign failed');
-      }
-
-      // UI refresh
-      await loadLeads();
-    } catch (e) {
-      console.error('Failed to assign lead:', e);
+      // ✅ Sadece assigned_to gönder, tüm lead objesi değil
+      await updateLead(leadId, { assigned_to: employeeId });
+    } catch (error) {
+      console.error('[AdminLeads] Error assigning lead:', error);
+      setError('Failed to assign lead');
     } finally {
-      setAssigningLeadId(null);
+      setAssigningLeadId('');
     }
   };
 
