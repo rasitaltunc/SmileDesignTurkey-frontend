@@ -876,3 +876,123 @@ export default function AdminLeads() {
     </div>
   );
 }
+
+// Notes Modal Portal Component (rendered to document.body)
+type NotesModalProps = {
+  open: boolean;
+  title?: string;
+  notes: any[];
+  newNoteContent: string;
+  setNewNoteContent: (v: string) => void;
+  isSavingNote: boolean;
+  isLoadingNotes?: boolean;
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+};
+
+function NotesModalPortal({
+  open,
+  title = "Notes",
+  notes,
+  newNoteContent,
+  setNewNoteContent,
+  isSavingNote,
+  isLoadingNotes = false,
+  onClose,
+  onSubmit,
+}: NotesModalProps) {
+  // Body scroll'u kapat (modal açılınca)
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-3xl h-[85vh] rounded-2xl shadow-xl overflow-hidden grid grid-rows-[auto,1fr,auto]">
+        {/* Header */}
+        <div className="px-6 py-4 border-b flex items-center justify-between">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-800 text-xl leading-none"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="min-h-0 overflow-y-auto px-6 py-4">
+          {isLoadingNotes ? (
+            <div className="text-center text-gray-500 py-10">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+              <p>Loading notes...</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(!notes || notes.length === 0) ? (
+                <div className="text-center text-gray-500 py-10">
+                  No notes yet.
+                </div>
+              ) : (
+                notes
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                  ) // oldest -> newest (scroll mantıklı olsun)
+                  .map((n) => (
+                    <div key={n.id} className="border rounded-lg p-3">
+                      <div className="text-xs text-gray-500 mb-1">
+                        {new Date(n.created_at).toLocaleString()}
+                      </div>
+                      <div className="text-sm whitespace-pre-wrap">
+                        {n.content || n.note || ""}
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <form onSubmit={onSubmit} className="px-6 py-4 border-t bg-white">
+          <textarea
+            value={newNoteContent}
+            onChange={(e) => setNewNoteContent(e.target.value)}
+            placeholder="Add a note..."
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+          />
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Close
+            </button>
+
+            <button
+              type="submit"
+              disabled={!newNoteContent.trim() || isSavingNote}
+              className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-black text-white hover:bg-gray-900 disabled:bg-gray-700 disabled:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSavingNote ? "Saving..." : "Add Note"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+}
