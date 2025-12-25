@@ -750,31 +750,25 @@ export default function AdminLeads() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-3 min-w-[180px]">
                         {role === 'admin' && (
-                          <div className="flex flex-col gap-2">
+                          <div className="min-w-[240px] flex items-center gap-2">
                             <select
-                              className="px-3 py-2 rounded-lg border border-gray-200 text-sm"
-                              value={selectedEmployeeByLead[lead.id] ?? lead.assigned_to ?? ''}
-                              onChange={(e) =>
-                                setSelectedEmployeeByLead((prev) => ({ ...prev, [lead.id]: e.target.value }))
-                              }
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm bg-white"
+                              value={selectedEmployeeByLead[lead.id] ?? lead.assigned_to ?? ""}
+                              onChange={(e) => handleAssignChange(lead.id, e.target.value)}
                             >
-                              <option value="">Assign to employee…</option>
-                              {employees.map((emp) => (
+                              <option value="">Unassigned</option>
+                              {employees.map((emp: any) => (
                                 <option key={emp.id} value={emp.id}>
-                                  {emp.full_name ? emp.full_name : emp.id.slice(0, 8)}
+                                  {emp.full_name || emp.email || emp.id}
                                 </option>
                               ))}
                             </select>
 
-                            <button
-                              disabled={!selectedEmployeeByLead[lead.id] || assigningLeadId === lead.id}
-                              onClick={() => assignLead(lead.id)}
-                              className="px-3 py-2 rounded-lg bg-gray-900 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {assigningLeadId === lead.id ? 'Assigning…' : 'Assign'}
-                            </button>
+                            {assigningLeadId === lead.id && (
+                              <span className="text-xs text-gray-500 whitespace-nowrap">Saving…</span>
+                            )}
                           </div>
                         )}
                         {role !== 'admin' && (
