@@ -48,6 +48,10 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
           await get().fetchRole();
+          
+          // Return role for redirect logic
+          const currentRole = get().role;
+          return { role: currentRole };
         } catch (error: any) {
           set({
             error: error.message || 'Login failed',
@@ -55,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             user: null,
           });
+          throw error;
         }
       },
 
@@ -87,9 +92,10 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
           await get().fetchRole();
-
-          window.history.pushState({}, '', '/admin/leads');
-          window.dispatchEvent(new PopStateEvent('popstate'));
+          
+          // Return role for redirect logic
+          const currentRole = get().role;
+          return { role: currentRole };
         } catch (error: any) {
           console.error('Login error:', error);
           set({

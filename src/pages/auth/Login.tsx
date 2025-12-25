@@ -25,12 +25,16 @@ const TEST_USERS = [
 export default function Login() {
   const { loginWithTestUser, isLoading, error, clearError, isAuthenticated } = useAuthStore();
 
+  const { role } = useAuthStore();
+
   useEffect(() => {
-    if (isAuthenticated) {
-      window.history.pushState({}, '', '/');
+    if (isAuthenticated && role) {
+      // Role-based redirect
+      const dashboardPath = role === 'admin' ? '/admin/leads' : '/employee/leads';
+      window.history.pushState({}, '', dashboardPath);
       window.dispatchEvent(new PopStateEvent('popstate'));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, role]);
 
   const handleTestLogin = async (email: string, password: string) => {
     clearError();

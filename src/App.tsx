@@ -110,6 +110,13 @@ export default function App() {
       case '/plan-dashboard':
         return <PlanDashboard />;
       case '/admin':
+        // Redirect /admin to /admin/leads
+        navigate('/admin/leads', { replace: true });
+        return null;
+      case '/employee':
+        // Redirect /employee to /employee/leads
+        navigate('/employee/leads', { replace: true });
+        return null;
       case '/admin/leads':
         if (role !== 'admin') {
           return (
