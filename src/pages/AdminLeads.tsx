@@ -81,10 +81,6 @@ export default function AdminLeads() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Filters
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterAssignedTo, setFilterAssignedTo] = useState<string>('');
-  
   // Quick filter tabs
   type QuickFilter = 'all' | 'unassigned' | 'due_today' | 'deposit_paid' | 'my_leads' | 'appointment_set';
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all');
@@ -139,15 +135,8 @@ export default function AdminLeads() {
         return;
       }
 
-      // Build query params
+      // Build query params (quick filters are frontend-only, no backend params needed)
       const params = new URLSearchParams();
-      if (filterStatus) {
-        // Only include status param if filterStatus is not empty (already lowercase)
-        params.append('status', filterStatus);
-      }
-      if (filterAssignedTo && isAdmin) {
-        params.append('assigned_to', filterAssignedTo);
-      }
 
       // Use current origin if VITE_API_URL not set (for Vercel deployments)
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
