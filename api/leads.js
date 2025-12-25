@@ -53,22 +53,27 @@ module.exports = async function handler(req, res) {
 
   const user = userData.user;
 
-  // ✅ Role from RPC (same as frontend + RLS functions)
-  const { data: roleData, error: roleErr } = await authClient.rpc("get_current_user_role");
-  if (roleErr) {
-    return res.status(500).json({ error: "Role RPC failed", details: roleErr.message });
-  }
-
-  // ✅ Normalize role (RPC might return "Admin", "ADMIN", with spaces, etc.)
-  const roleRaw = roleData;
-  const role = String(roleData || "").trim().toLowerCase();
-  const isAdmin = role === "admin";
-  const isEmployee = role === "employee";
-
   // DB client (service role) - used for DB operations (RLS bypass)
   const dbClient = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // ✅ Role from profiles table (service-role bypasses RLS, more reliable than RPC)
+  const { data: prof, error: profErr } = await dbClient
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profErr) {
+    return res.status(500).json({ error: "Failed to read profile role", details: profErr.message });
+  }
+
+  // ✅ Normalize role (might be "Admin", "ADMIN", with spaces, etc.)
+  const roleRaw = prof?.role;
+  const role = String(prof?.role || "").trim().toLowerCase();
+  const isAdmin = role === "admin";
+  const isEmployee = role === "employee";
 
   // 🔒 Leads are ONLY for admin/employee
   if (!isAdmin && !isEmployee) {
