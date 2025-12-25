@@ -73,7 +73,8 @@ export default function App() {
   }
 
   const isAdminRoute = currentPath.startsWith('/admin');
-  const navbarVariant = isAdminRoute ? 'admin' : 'public';
+  const isEmployeeRoute = currentPath.startsWith('/employee');
+  const navbarVariant = (isAdminRoute || isEmployeeRoute) ? 'admin' : 'public';
 
   const renderPage = () => {
     if (!isAuthenticated && currentPath === '/') {
