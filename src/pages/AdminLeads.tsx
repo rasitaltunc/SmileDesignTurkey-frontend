@@ -260,7 +260,7 @@ export default function AdminLeads() {
     setAssigningLeadId(leadId);
     try {
       // sadece assigned_to gönder
-      await updateLead(leadId, { assigned_to: employeeId || null });
+      await updateLead(leadId, { assigned_to: employeeId || undefined });
 
       // istersen local state update edebilirsin; en garanti: yeniden çek
       await loadLeads();
