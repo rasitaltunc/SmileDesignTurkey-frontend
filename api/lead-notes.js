@@ -75,9 +75,9 @@ module.exports = async function handler(req, res) {
   if (req.method === "POST") {
     const body = req.body || {};
     const lead_id = body.lead_id || body.leadId;
-    const content = body.content || body.note || body.text;
+    const noteText = body.note || body.content || body.text;
 
-    if (!lead_id || !content) return res.status(400).json({ error: "Missing lead_id or content" });
+    if (!lead_id || !noteText) return res.status(400).json({ error: "Missing lead_id or note" });
 
     if (isEmployee) {
       const { data: lead } = await supabase
@@ -91,9 +91,10 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // Insert with both note and content for compatibility
     const { data, error } = await supabase
       .from("lead_notes")
-      .insert([{ lead_id, content }])
+      .insert([{ lead_id, note: noteText, content: noteText }])
       .select("*")
       .limit(1);
 

@@ -412,6 +412,7 @@ export default function AdminLeads() {
         },
         body: JSON.stringify({
           lead_id: leadId,
+          note: content.trim(),
           content: content.trim(),
         }),
       });
