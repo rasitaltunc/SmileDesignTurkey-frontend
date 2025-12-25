@@ -28,7 +28,7 @@ function normalizePhoneToWhatsApp(phone?: string) {
   // if still no +, add +
   if (!p.startsWith("+")) p = "+" + p;
 
-  return p.replace("+", ""); // wa.me wants digits only
+  return p.replace(/\+/g, ""); // wa.me wants digits only (remove all + signs)
 }
 
 function waMessageEN(lead: any) {
