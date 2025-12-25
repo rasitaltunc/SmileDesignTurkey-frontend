@@ -523,7 +523,63 @@ export default function AdminLeads() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Leads Management</h1>
               <p className="text-gray-600 mt-1">
-                <span className="font-medium">{leads.length} leads</span>
+                <span className="font-medium">
+                  {(() => {
+                    // Count filtered leads
+                    let filteredLeads = leads;
+                    const now = new Date();
+                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const todayEnd = new Date(todayStart);
+                    todayEnd.setDate(todayEnd.getDate() + 1);
+
+                    if (isAdmin) {
+                      switch (activeQuickFilter) {
+                        case 'all':
+                          filteredLeads = leads;
+                          break;
+                        case 'unassigned':
+                          filteredLeads = leads.filter(l => !l.assigned_to);
+                          break;
+                        case 'due_today':
+                          filteredLeads = leads.filter(l => {
+                            if (!l.follow_up_at) return false;
+                            const followUp = new Date(l.follow_up_at);
+                            return followUp >= todayStart && followUp < todayEnd;
+                          });
+                          break;
+                        case 'deposit_paid':
+                          filteredLeads = leads.filter(l => l.status === 'deposit_paid');
+                          break;
+                      }
+                    } else {
+                      switch (activeQuickFilter) {
+                        case 'my_leads':
+                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
+                          break;
+                        case 'due_today':
+                          filteredLeads = leads.filter(l => {
+                            if (!l.follow_up_at || l.assigned_to !== user?.id) return false;
+                            const followUp = new Date(l.follow_up_at);
+                            return followUp >= todayStart && followUp < todayEnd;
+                          });
+                          break;
+                        case 'appointment_set':
+                          filteredLeads = leads.filter(l => 
+                            l.status === 'appointment_set' && l.assigned_to === user?.id
+                          );
+                          break;
+                        case 'deposit_paid':
+                          filteredLeads = leads.filter(l => 
+                            l.status === 'deposit_paid' && l.assigned_to === user?.id
+                          );
+                          break;
+                        default:
+                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
+                      }
+                    }
+                    return filteredLeads.length;
+                  })()} leads
+                </span>
                 {!isAdmin && user?.id && (
                   <span className="ml-2 text-blue-600">• Assigned to: {user.id}</span>
                 )}
@@ -549,50 +605,97 @@ export default function AdminLeads() {
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Ensure lowercase canonical value or empty string
-                  setFilterStatus(value === '' ? '' : value.toLowerCase());
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Statuses</option>
-                {LEAD_STATUSES.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {isAdmin && (
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Assigned To</label>
-                <input
-                  type="text"
-                  value={filterAssignedTo}
-                  onChange={(e) => setFilterAssignedTo(e.target.value)}
-                  placeholder="Filter by user ID..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
-            {(filterStatus || filterAssignedTo) && (
-              <button
-                onClick={() => {
-                  setFilterStatus('');
-                  setFilterAssignedTo('');
-                }}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+          {/* Quick Filter Tabs */}
+          <div className="border-b border-gray-200 mb-4">
+            <nav className="flex space-x-1" aria-label="Tabs">
+              {isAdmin ? (
+                <>
+                  <button
+                    onClick={() => setActiveQuickFilter('all')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'all'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('unassigned')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'unassigned'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Unassigned
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('due_today')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'due_today'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Due Today
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('deposit_paid')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'deposit_paid'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Deposit Paid
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setActiveQuickFilter('my_leads')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'my_leads'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    My Leads
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('due_today')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'due_today'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Due Today
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('appointment_set')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'appointment_set'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Appointment Set
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('deposit_paid')}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      activeQuickFilter === 'deposit_paid'
+                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Deposit Paid
+                  </button>
+                </>
+              )}
+            </nav>
           </div>
         </div>
 
