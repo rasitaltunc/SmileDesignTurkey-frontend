@@ -586,96 +586,29 @@ export default function AdminLeads() {
           </div>
 
           {/* Quick Filter Tabs */}
-          <div className="border-b border-gray-200 mb-4">
-            <nav className="flex space-x-1" aria-label="Tabs">
-              {isAdmin ? (
-                <>
-                  <button
-                    onClick={() => setActiveQuickFilter('all')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'all'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('unassigned')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'unassigned'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Unassigned
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('due_today')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'due_today'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Due Today
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('deposit_paid')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'deposit_paid'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Deposit Paid
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setActiveQuickFilter('my_leads')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'my_leads'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    My Leads
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('due_today')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'due_today'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Due Today
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('appointment_set')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'appointment_set'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Appointment Set
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('deposit_paid')}
-                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                      activeQuickFilter === 'deposit_paid'
-                        ? 'bg-teal-50 text-teal-700 border-b-2 border-teal-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Deposit Paid
-                  </button>
-                </>
-              )}
-            </nav>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {(isAdmin ? [
+              ['all', 'All'],
+              ['unassigned', 'Unassigned'],
+              ['due_today', 'Due Today'],
+              ['appointment_set', 'Appointment'],
+              ['deposit_paid', 'Deposit Paid'],
+            ] : [
+              ['all', 'All'],
+              ['due_today', 'Due Today'],
+              ['appointment_set', 'Appointment'],
+              ['deposit_paid', 'Deposit Paid'],
+            ]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key as LeadTab)}
+                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                  tab === key ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
