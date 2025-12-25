@@ -154,10 +154,21 @@ export default function AdminLeads() {
   // Body scroll lock when notes modal is open
   useEffect(() => {
     if (!notesLeadId) return;
-    const prev = document.body.style.overflow;
+
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+
+    // Scrollbar width to prevent layout shift
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
     document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
     };
   }, [notesLeadId]);
 
@@ -900,7 +911,7 @@ export default function AdminLeads() {
 
                 {/* SCROLL BODY: tek scroll burası */}
                 <div
-                  className="flex-1 min-h-0 overflow-y-auto px-6 py-4"
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   <div className="space-y-3">
