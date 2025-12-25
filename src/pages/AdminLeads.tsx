@@ -855,92 +855,23 @@ export default function AdminLeads() {
           );
         })()}
 
-        {/* Notes Modal */}
-        {notesLeadId && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-2xl h-[85vh] rounded-2xl shadow-xl flex flex-col overflow-hidden">
-              {/* Header (fixed) */}
-              <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Notes</h3>
-                <button
-                  type="button"
-                  onClick={handleCloseNotes}
-                  className="text-gray-500 hover:text-gray-800 text-2xl leading-none w-8 h-8 flex items-center justify-center"
-                  aria-label="Close"
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Scrollable body - CRITICAL: min-h-0 + overflow-hidden on parent */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="h-full overflow-y-auto px-6 py-4">
-                  {isLoadingNotes ? (
-                    <div className="text-center text-gray-500 py-10">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                      <p>Loading notes...</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {notes.length === 0 ? (
-                        <div className="text-center text-gray-500 py-10">
-                          No notes yet.
-                        </div>
-                      ) : (
-                        notes.map((n: any) => (
-                          <div key={n.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                            <div className="text-xs text-gray-500 mb-1">
-                              {new Date(n.created_at).toLocaleString()}
-                            </div>
-                            <div className="text-sm text-gray-900 whitespace-pre-wrap">
-                              {n.content || n.note || ""}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Footer (always visible) */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (newNoteContent.trim() && notesLeadId) {
-                    createNote(notesLeadId, newNoteContent);
-                  }
-                }}
-                className="flex-shrink-0 border-t border-gray-200 px-6 py-4 bg-white"
-              >
-                <textarea
-                  value={newNoteContent}
-                  onChange={(e) => setNewNoteContent(e.target.value)}
-                  placeholder="Add a note..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                />
-                <div className="mt-3 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCloseNotes}
-                    className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Close
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={!newNoteContent.trim() || isSavingNote}
-                    className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-black text-white hover:bg-gray-900 disabled:bg-gray-700 disabled:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {isSavingNote ? "Saving..." : "Add Note"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        {/* Notes Modal - Portal to document.body */}
+        <NotesModalPortal
+          open={!!notesLeadId}
+          title="Notes"
+          notes={notes}
+          newNoteContent={newNoteContent}
+          setNewNoteContent={setNewNoteContent}
+          isSavingNote={isSavingNote}
+          isLoadingNotes={isLoadingNotes}
+          onClose={handleCloseNotes}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (newNoteContent.trim() && notesLeadId) {
+              createNote(notesLeadId, newNoteContent);
+            }
+          }}
+        />
       </div>
     </div>
   );
