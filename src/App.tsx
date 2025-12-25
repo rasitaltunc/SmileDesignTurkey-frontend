@@ -126,7 +126,7 @@ export default function App() {
         }
         return <AdminLeads />;
       case '/employee/leads':
-        if (role !== 'employee') {
+        if (role !== 'employee' && role !== 'admin') {
           return (
             <div className="min-h-screen flex items-center justify-center p-6">
               <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
