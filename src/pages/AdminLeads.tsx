@@ -30,8 +30,8 @@ function normalizePhoneToWhatsApp(phone?: string) {
 
   const digits = p.replace(/\+/g, ""); // wa.me wants digits only (remove all + signs)
 
-  // ✅ minimum uzunluk kontrolü (TR için genelde 12: 90 + 10 hane)
-  if (digits.length < 11) return null;
+  // ✅ minimum uzunluk kontrolü (wa.me digits only)
+  if (p.replace(/\D/g, "").length < 11) return null;
 
   return digits;
 }
@@ -610,7 +610,7 @@ export default function AdminLeads() {
           ) : (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1200px] table-fixed">
+                <table className="min-w-[1100px] w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
@@ -621,7 +621,7 @@ export default function AdminLeads() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Treatment</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[180px]">Assigned To</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{ width: '220px' }}>Notes</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Actions</th>
                     </tr>
@@ -641,19 +641,20 @@ export default function AdminLeads() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div className="flex items-center gap-2">
                           <span>{lead.phone || '-'}</span>
-                          {lead.phone && (
-                            <button
-                              className="text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-                              onClick={() => {
-                                const wa = normalizePhoneToWhatsApp(lead.phone);
-                                if (!wa) return alert("Invalid phone number for WhatsApp");
-                                const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                window.open(url, "_blank", "noopener,noreferrer");
-                              }}
-                            >
-                              WhatsApp
-                            </button>
-                          )}
+                          {(() => {
+                            const wa = normalizePhoneToWhatsApp(lead.phone);
+                            return wa ? (
+                              <button
+                                className="text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                                onClick={() => {
+                                  const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                  window.open(url, "_blank", "noopener,noreferrer");
+                                }}
+                              >
+                                WhatsApp
+                              </button>
+                            ) : null;
+                          })()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -860,21 +861,21 @@ export default function AdminLeads() {
 
         {/* Notes Modal */}
         {notesLeadId && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900">Notes</h2>
+          <div className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
+            <div className="w-full max-w-3xl max-h-[85vh] bg-white rounded-xl shadow-lg flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="p-4 border-b flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Notes</h3>
                 <button
                   onClick={handleCloseNotes}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="px-3 py-1 rounded border hover:bg-gray-50 transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  Close
                 </button>
               </div>
 
-              {/* Notes List */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* Notes list (scrollable) */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {isLoadingNotes ? (
                   <div className="text-center text-gray-500 py-8">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
@@ -886,68 +887,53 @@ export default function AdminLeads() {
                     <p>No notes yet. Add the first note below.</p>
                   </div>
                 ) : (
-                  notes.map((note) => (
-                    <div key={note.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm text-gray-600">
-                          {new Date(note.created_at).toLocaleString()}
-                        </p>
-                        {note.author_id === user?.id && (
-                          <span className="text-xs text-blue-600">You</span>
-                        )}
+                  notes.map((n) => (
+                    <div key={n.id} className="border rounded-lg p-3">
+                      <div className="text-xs text-gray-500 mb-1">
+                        {new Date(n.created_at).toLocaleString()}
                       </div>
-                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{note.note}</p>
+                      <div className="text-sm whitespace-pre-wrap">
+                        {n.content || n.note || "-"}
+                      </div>
                     </div>
                   ))
                 )}
               </div>
 
-              {/* Add Note Form */}
-              <div className="p-6 border-t border-gray-200 bg-white sticky bottom-0 z-10">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (newNoteContent.trim() && notesLeadId) {
-                      createNote(notesLeadId, newNoteContent);
-                    }
-                  }}
-                  className="space-y-3"
-                >
-                  <textarea
-                    value={newNoteContent}
-                    onChange={(e) => setNewNoteContent(e.target.value)}
-                    placeholder="Add a note..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCloseNotes}
-                      className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Close
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!newNoteContent.trim() || isSavingNote}
-                      className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-black text-white hover:bg-gray-900 disabled:bg-gray-700 disabled:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {isSavingNote ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <MessageSquare className="w-4 h-4" />
-                          Add Note
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
+              {/* Footer (always visible) */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newNoteContent.trim() && notesLeadId) {
+                    createNote(notesLeadId, newNoteContent);
+                  }
+                }}
+                className="border-t p-4 bg-white"
+              >
+                <textarea
+                  value={newNoteContent}
+                  onChange={(e) => setNewNoteContent(e.target.value)}
+                  placeholder="Add a note..."
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-lg resize-none"
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseNotes}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newNoteContent.trim() || isSavingNote}
+                    className="px-4 py-2 rounded-lg bg-black text-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSavingNote ? "Saving..." : "Add Note"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
