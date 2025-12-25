@@ -95,20 +95,25 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
   const handleSubmitLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     clearError();
-    await login(email.trim(), password);
+    try {
+      const result = await login(email.trim(), password);
+      // Store role henüz hydrate olmadan guard tetiklenmesin diye direkt result ile navigate
+      const role = result?.role;
+
+      if (role === 'admin') {
+        closeAuth();
+        pushRoute('/admin/leads');
+      } else if (role === 'employee') {
+        closeAuth();
+        pushRoute('/employee/leads');
+      } else {
+        closeAuth();
+        pushRoute('/');
+      }
+    } catch (err) {
+      // Error already handled in store
+    }
   };
-
-  // Close modal automatically when user becomes authenticated
-  useEffect(() => {
-    if (!authOpen) return;
-    if (!isAuthenticated) return;
-
-    // If admin logged in, go to admin leads directly
-    // (Others can stay where they are)
-    const r = String(role || '').toLowerCase();
-    closeAuth();
-    if (r === 'admin') pushRoute('/admin/leads');
-  }, [isAuthenticated, role, authOpen]);
 
   // ESC to close modal
   useEffect(() => {
