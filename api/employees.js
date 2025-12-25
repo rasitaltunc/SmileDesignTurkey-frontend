@@ -32,7 +32,8 @@ module.exports = async function handler(req, res) {
   if (!token) return res.status(401).json({ error: "Missing bearer token" });
 
   // Verify JWT + role via RPC
-  const authClient = createClient(url, process.env.SUPABASE_ANON_KEY || "", {
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+  const authClient = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
