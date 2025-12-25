@@ -125,41 +125,21 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           const supabase = getSupabaseClient();
-          if (!supabase) {
-            set({ isLoading: false });
-            return;
-          }
+          if (!supabase) throw new Error("Supabase client not configured");
 
-          const { data, error } = await supabase.auth.getSession();
-          
-          if (error) throw error;
+          const { data } = await supabase.auth.getSession();
+          const session = data.session;
 
-          if (data.session?.user) {
-            set({
-              user: data.session.user,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
-            });
-            await get().fetchRole();
+          if (session?.user) {
+            set({ user: session.user, isAuthenticated: true, error: null });
+            await get().fetchRole(); // role'u da çek
           } else {
-            set({
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
-              error: null,
-              role: null,
-            });
+            set({ user: null, isAuthenticated: false, role: null });
           }
-        } catch (error: any) {
-          console.error('Session check error:', error);
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
-            error: null,
-            role: null,
-          });
+        } catch (e: any) {
+          set({ user: null, isAuthenticated: false, role: null, error: e.message });
+        } finally {
+          set({ isLoading: false });
         }
       },
 

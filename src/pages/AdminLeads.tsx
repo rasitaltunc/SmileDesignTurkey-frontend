@@ -94,8 +94,11 @@ export default function AdminLeads() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
+      
       if (!token) {
-        window.location.href = '/';
+        // session daha yüklenmemiş olabilir
+        console.warn("[AdminLeads] No token yet, skipping loadLeads");
+        setIsLoading(false);
         return;
       }
 

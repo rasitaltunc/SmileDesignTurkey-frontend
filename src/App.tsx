@@ -27,7 +27,12 @@ export const NavigationContext = createContext<{
 });
 
 export default function App() {
-  const { isAuthenticated, isLoading, role } = useAuthStore();
+  const { isAuthenticated, isLoading, role, checkSession } = useAuthStore();
+  
+  // Initialize auth session on mount
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
   
   const getPathFromUrl = () => {
     return window.location.pathname || '/';
