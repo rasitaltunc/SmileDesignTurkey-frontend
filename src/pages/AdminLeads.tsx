@@ -3,12 +3,12 @@ import { RefreshCw, X, Save, LogOut, MessageSquare } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
-// Status options - CRM MVP Pipeline (3C: Deposit + Appointment separate)
+// Status options - CRM MVP Pipeline (3C: Appointment → Deposit)
 const LEAD_STATUSES = [
   { value: 'new', label: 'New' },
   { value: 'contacted', label: 'Contacted' },
-  { value: 'deposit_paid', label: 'Deposit Paid' },
   { value: 'appointment_set', label: 'Appointment Set' },
+  { value: 'deposit_paid', label: 'Deposit Paid' },
   { value: 'arrived', label: 'Arrived' },
   { value: 'completed', label: 'Completed' },
   { value: 'lost', label: 'Lost' },
@@ -82,8 +82,55 @@ export default function AdminLeads() {
   const [error, setError] = useState<string | null>(null);
   
   // Quick filter tabs
-  type QuickFilter = 'all' | 'unassigned' | 'due_today' | 'deposit_paid' | 'my_leads' | 'appointment_set';
-  const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all');
+  type LeadTab = 'all' | 'unassigned' | 'due_today' | 'appointment_set' | 'deposit_paid';
+  const [tab, setTab] = useState<LeadTab>('all');
+
+  function isDueTodayISO(dt?: string | null) {
+    if (!dt) return false;
+    const d = new Date(dt);
+    if (Number.isNaN(d.getTime())) return false;
+
+    const now = new Date();
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+  }
+
+  function applyTabFilter(allLeads: Lead[]) {
+    if (isAdmin) {
+      // Admin filters apply to all leads
+      switch (tab) {
+        case 'unassigned':
+          return allLeads.filter(l => !l.assigned_to);
+        case 'due_today':
+          return allLeads.filter(l => isDueTodayISO(l.follow_up_at));
+        case 'appointment_set':
+          return allLeads.filter(l => l.status === 'appointment_set');
+        case 'deposit_paid':
+          return allLeads.filter(l => l.status === 'deposit_paid');
+        case 'all':
+        default:
+          return allLeads;
+      }
+    } else {
+      // Employee filters apply only to assigned leads
+      const myLeads = allLeads.filter(l => l.assigned_to === user?.id);
+      switch (tab) {
+        case 'due_today':
+          return myLeads.filter(l => isDueTodayISO(l.follow_up_at));
+        case 'appointment_set':
+          return myLeads.filter(l => l.status === 'appointment_set');
+        case 'deposit_paid':
+          return myLeads.filter(l => l.status === 'deposit_paid');
+        case 'all':
+        case 'unassigned': // Employee doesn't see unassigned, treat as 'all'
+        default:
+          return myLeads;
+      }
+    }
+  }
   
   // Edit state
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -512,63 +559,7 @@ export default function AdminLeads() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Leads Management</h1>
               <p className="text-gray-600 mt-1">
-                <span className="font-medium">
-                  {(() => {
-                    // Count filtered leads
-                    let filteredLeads = leads;
-                    const now = new Date();
-                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const todayEnd = new Date(todayStart);
-                    todayEnd.setDate(todayEnd.getDate() + 1);
-
-                    if (isAdmin) {
-                      switch (activeQuickFilter) {
-                        case 'all':
-                          filteredLeads = leads;
-                          break;
-                        case 'unassigned':
-                          filteredLeads = leads.filter(l => !l.assigned_to);
-                          break;
-                        case 'due_today':
-                          filteredLeads = leads.filter(l => {
-                            if (!l.follow_up_at) return false;
-                            const followUp = new Date(l.follow_up_at);
-                            return followUp >= todayStart && followUp < todayEnd;
-                          });
-                          break;
-                        case 'deposit_paid':
-                          filteredLeads = leads.filter(l => l.status === 'deposit_paid');
-                          break;
-                      }
-                    } else {
-                      switch (activeQuickFilter) {
-                        case 'my_leads':
-                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
-                          break;
-                        case 'due_today':
-                          filteredLeads = leads.filter(l => {
-                            if (!l.follow_up_at || l.assigned_to !== user?.id) return false;
-                            const followUp = new Date(l.follow_up_at);
-                            return followUp >= todayStart && followUp < todayEnd;
-                          });
-                          break;
-                        case 'appointment_set':
-                          filteredLeads = leads.filter(l => 
-                            l.status === 'appointment_set' && l.assigned_to === user?.id
-                          );
-                          break;
-                        case 'deposit_paid':
-                          filteredLeads = leads.filter(l => 
-                            l.status === 'deposit_paid' && l.assigned_to === user?.id
-                          );
-                          break;
-                        default:
-                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
-                      }
-                    }
-                    return filteredLeads.length;
-                  })()} leads
-                </span>
+                <span className="font-medium">{applyTabFilter(leads).length} leads</span>
                 {!isAdmin && user?.id && (
                   <span className="ml-2 text-blue-600">• Assigned to: {user.id}</span>
                 )}
@@ -696,89 +687,37 @@ export default function AdminLeads() {
         )}
 
         {/* Leads Table */}
-        {leads.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <p className="text-gray-500 text-lg">No leads found.</p>
-            <p className="text-gray-400 text-sm mt-2">
-              {isLoading ? 'Loading...' : 'Try adjusting your filters or check back later.'}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] table-fixed">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Treatment</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{ width: '220px' }}>Notes</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {(() => {
-                    // Apply quick filter (frontend-only, fast)
-                    let filteredLeads = leads;
-                    const now = new Date();
-                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const todayEnd = new Date(todayStart);
-                    todayEnd.setDate(todayEnd.getDate() + 1);
-
-                    if (isAdmin) {
-                      switch (activeQuickFilter) {
-                        case 'all':
-                          filteredLeads = leads;
-                          break;
-                        case 'unassigned':
-                          filteredLeads = leads.filter(l => !l.assigned_to);
-                          break;
-                        case 'due_today':
-                          filteredLeads = leads.filter(l => {
-                            if (!l.follow_up_at) return false;
-                            const followUp = new Date(l.follow_up_at);
-                            return followUp >= todayStart && followUp < todayEnd;
-                          });
-                          break;
-                        case 'deposit_paid':
-                          filteredLeads = leads.filter(l => l.status === 'deposit_paid');
-                          break;
-                      }
-                    } else {
-                      // Employee filters
-                      switch (activeQuickFilter) {
-                        case 'my_leads':
-                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
-                          break;
-                        case 'due_today':
-                          filteredLeads = leads.filter(l => {
-                            if (!l.follow_up_at || l.assigned_to !== user?.id) return false;
-                            const followUp = new Date(l.follow_up_at);
-                            return followUp >= todayStart && followUp < todayEnd;
-                          });
-                          break;
-                        case 'appointment_set':
-                          filteredLeads = leads.filter(l => 
-                            l.status === 'appointment_set' && l.assigned_to === user?.id
-                          );
-                          break;
-                        case 'deposit_paid':
-                          filteredLeads = leads.filter(l => 
-                            l.status === 'deposit_paid' && l.assigned_to === user?.id
-                          );
-                          break;
-                        default:
-                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
-                      }
-                    }
-
-                    return filteredLeads.map((lead) => (
+        {(() => {
+          const filteredLeads = applyTabFilter(leads);
+          
+          return filteredLeads.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <p className="text-gray-500 text-lg">No leads found.</p>
+              <p className="text-gray-400 text-sm mt-2">
+                {isLoading ? 'Loading...' : 'Try adjusting your filters or check back later.'}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1200px] table-fixed">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Treatment</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{ width: '220px' }}>Notes</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredLeads.map((lead) => (
                       <tr key={lead.id} className="hover:bg-gray-50 group">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(lead.created_at).toLocaleString()}
