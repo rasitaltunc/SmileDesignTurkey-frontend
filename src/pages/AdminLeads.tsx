@@ -85,6 +85,10 @@ export default function AdminLeads() {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterAssignedTo, setFilterAssignedTo] = useState<string>('');
   
+  // Quick filter tabs
+  type QuickFilter = 'all' | 'unassigned' | 'due_today' | 'deposit_paid' | 'my_leads' | 'appointment_set';
+  const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all');
+  
   // Edit state
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [editStatus, setEditStatus] = useState<string>('');
@@ -627,8 +631,63 @@ export default function AdminLeads() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {leads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-gray-50 group">
+                  {(() => {
+                    // Apply quick filter (frontend-only, fast)
+                    let filteredLeads = leads;
+                    const now = new Date();
+                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const todayEnd = new Date(todayStart);
+                    todayEnd.setDate(todayEnd.getDate() + 1);
+
+                    if (isAdmin) {
+                      switch (activeQuickFilter) {
+                        case 'all':
+                          filteredLeads = leads;
+                          break;
+                        case 'unassigned':
+                          filteredLeads = leads.filter(l => !l.assigned_to);
+                          break;
+                        case 'due_today':
+                          filteredLeads = leads.filter(l => {
+                            if (!l.follow_up_at) return false;
+                            const followUp = new Date(l.follow_up_at);
+                            return followUp >= todayStart && followUp < todayEnd;
+                          });
+                          break;
+                        case 'deposit_paid':
+                          filteredLeads = leads.filter(l => l.status === 'deposit_paid');
+                          break;
+                      }
+                    } else {
+                      // Employee filters
+                      switch (activeQuickFilter) {
+                        case 'my_leads':
+                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
+                          break;
+                        case 'due_today':
+                          filteredLeads = leads.filter(l => {
+                            if (!l.follow_up_at || l.assigned_to !== user?.id) return false;
+                            const followUp = new Date(l.follow_up_at);
+                            return followUp >= todayStart && followUp < todayEnd;
+                          });
+                          break;
+                        case 'appointment_set':
+                          filteredLeads = leads.filter(l => 
+                            l.status === 'appointment_set' && l.assigned_to === user?.id
+                          );
+                          break;
+                        case 'deposit_paid':
+                          filteredLeads = leads.filter(l => 
+                            l.status === 'deposit_paid' && l.assigned_to === user?.id
+                          );
+                          break;
+                        default:
+                          filteredLeads = leads.filter(l => l.assigned_to === user?.id);
+                      }
+                    }
+
+                    return filteredLeads.map((lead) => (
+                      <tr key={lead.id} className="hover:bg-gray-50 group">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(lead.created_at).toLocaleString()}
                       </td>
