@@ -878,83 +878,89 @@ export default function AdminLeads() {
         {notesLeadId &&
           createPortal(
             <div
-              className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-4"
-              onMouseDown={handleCloseNotes}
+              className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) handleCloseNotes();
+              }}
             >
-              <div
-                className="w-full max-w-3xl h-[85vh] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
+              {/* MODAL ROOT: height burada şart */}
+              <div className="bg-white w-full max-w-3xl h-[85vh] rounded-xl shadow-xl flex flex-col overflow-hidden">
+                {/* HEADER: asla kaybolmaz */}
                 <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Notes</h3>
-                    <p className="text-sm text-gray-500">Lead: {notesLeadId}</p>
-                  </div>
-
+                  <h3 className="text-lg font-semibold">Notes</h3>
                   <button
                     type="button"
                     onClick={handleCloseNotes}
-                    className="text-gray-500 hover:text-gray-900 text-2xl leading-none"
+                    className="text-gray-500 hover:text-gray-700 text-xl leading-none"
                     aria-label="Close"
                   >
                     ×
                   </button>
                 </div>
 
-                {/* Body (SCROLL ONLY HERE) */}
-                <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
-                  {isLoadingNotes ? (
-                    <div className="text-center text-gray-500 py-10">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                      <p>Loading notes...</p>
-                    </div>
-                  ) : (!notes || notes.length === 0) ? (
-                    <div className="text-sm text-gray-500">No notes yet.</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {notes.map((n: any) => (
-                        <div key={n.id} className="border border-gray-200 rounded-xl p-4">
-                          <div className="text-xs text-gray-500 mb-2">
+                {/* SCROLL BODY: tek scroll burası */}
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto px-6 py-4"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <div className="space-y-3">
+                    {isLoadingNotes ? (
+                      <div className="text-gray-500 text-sm">Loading notes…</div>
+                    ) : notes.length === 0 ? (
+                      <div className="text-gray-500 text-sm">No notes yet.</div>
+                    ) : (
+                      notes.map((n: any) => (
+                        <div key={n.id} className="border border-gray-200 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 mb-1">
                             {new Date(n.created_at).toLocaleString()}
                           </div>
-                          <div className="text-sm text-gray-900 whitespace-pre-wrap break-words">
+                          <div className="text-sm text-gray-900 whitespace-pre-wrap">
                             {n.content ?? n.note ?? ""}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
 
-                {/* Footer (STICKY) */}
-                <form onSubmit={handleAddNote} className="border-t px-6 py-4 bg-white flex-shrink-0 sticky bottom-0">
-                  <textarea
-                    value={newNoteContent}
-                    onChange={(e) => setNewNoteContent(e.target.value)}
-                    placeholder="Add a note..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  />
-
-                  <div className="mt-3 flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCloseNotes}
-                      className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Close
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={!newNoteContent.trim() || isSavingNote}
-                      className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-black text-white hover:bg-gray-900 disabled:bg-gray-700 disabled:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {isSavingNote ? "Saving..." : "Add Note"}
-                    </button>
-                  </div>
-                </form>
+                {/* FOOTER: her zaman görünür */}
+                <div className="border-t px-6 py-4 bg-white flex-shrink-0">
+                  <form onSubmit={handleAddNote} className="space-y-3">
+                    <textarea
+                      value={newNoteContent}
+                      onChange={(e) => setNewNoteContent(e.target.value)}
+                      placeholder="Add a note..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCloseNotes}
+                        className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Close
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!newNoteContent.trim() || isSavingNote}
+                        className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-black text-white hover:bg-gray-900 disabled:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {isSavingNote ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <MessageSquare className="w-4 h-4" />
+                            Add Note
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>,
             document.body
