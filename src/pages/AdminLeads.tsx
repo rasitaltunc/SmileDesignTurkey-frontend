@@ -136,6 +136,83 @@ export default function AdminLeads() {
     }
   };
 
+  // Load employees (admin only)
+  const loadEmployees = async () => {
+    try {
+      // role admin değilse çekme
+      if (role !== 'admin') return;
+
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Supabase client not configured.');
+
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
+
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const url = `${apiUrl}/api/employees`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) return;
+      const json = await res.json();
+      setEmployees(json.employees || []);
+    } catch (e) {
+      // sessiz geç
+    }
+  };
+
+  // Assign lead to employee
+  const assignLead = async (leadId: string) => {
+    const employeeId = selectedEmployeeByLead[leadId];
+    if (!employeeId) return;
+
+    setAssigningLeadId(leadId);
+
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Supabase client not configured.');
+
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('No session');
+
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const url = `${apiUrl}/api/leads`;
+
+      const userData = await supabase.auth.getUser();
+      const updates = {
+        assigned_to: employeeId,
+        assigned_at: new Date().toISOString(),
+        assigned_by: userData.data.user?.id || null,
+        status: 'contacted', // opsiyonel: ilk assign'da contacted yapma istersen kaldır
+      };
+
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id: leadId, updates }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || 'Assign failed');
+      }
+
+      // UI refresh
+      await loadLeads();
+    } catch (e) {
+      console.error('Failed to assign lead:', e);
+    } finally {
+      setAssigningLeadId(null);
+    }
+  };
+
   // Update lead with optimistic UI
   const updateLead = async (leadId: string, updates: { status?: string; notes?: string; assigned_to?: string; follow_up_at?: string | null }) => {
     if (!isAuthenticated || !user) return;
