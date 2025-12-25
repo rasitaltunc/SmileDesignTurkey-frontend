@@ -252,21 +252,23 @@ export default function AdminLeads() {
     }
   };
 
-  // Assign lead to employee
-  const assignLead = async (leadId: string) => {
-    const employeeId = selectedEmployeeByLead[leadId];
-    if (!employeeId) return;
+  // Assign lead to employee (automatic on select change)
+  const handleAssignChange = async (leadId: string, employeeId: string) => {
+    // UI hemen güncellensin
+    setSelectedEmployeeByLead((prev) => ({ ...prev, [leadId]: employeeId }));
 
     setAssigningLeadId(leadId);
-    
     try {
-      // ✅ Sadece assigned_to gönder, tüm lead objesi değil
-      await updateLead(leadId, { assigned_to: employeeId });
-    } catch (error) {
-      console.error('[AdminLeads] Error assigning lead:', error);
-      setError('Failed to assign lead');
+      // sadece assigned_to gönder
+      await updateLead(leadId, { assigned_to: employeeId || null });
+
+      // istersen local state update edebilirsin; en garanti: yeniden çek
+      await loadLeads();
+    } catch (e: any) {
+      console.error("[Assign] failed", e);
+      alert(e?.message || "Assign failed");
     } finally {
-      setAssigningLeadId('');
+      setAssigningLeadId(null);
     }
   };
 
