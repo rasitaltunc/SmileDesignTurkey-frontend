@@ -903,7 +903,7 @@ export default function AdminLeads() {
                 </div>
 
                 {/* Body (SCROLL ONLY HERE) */}
-                <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+                <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4" style={{ WebkitOverflowScrolling: "touch" }}>
                   {isLoadingNotes ? (
                     <div className="text-center text-gray-500 py-10">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
@@ -928,7 +928,7 @@ export default function AdminLeads() {
                 </div>
 
                 {/* Footer (STICKY) */}
-                <form onSubmit={handleAddNote} className="border-t px-6 py-4 bg-white flex-shrink-0">
+                <form onSubmit={handleAddNote} className="border-t px-6 py-4 bg-white flex-shrink-0 sticky bottom-0">
                   <textarea
                     value={newNoteContent}
                     onChange={(e) => setNewNoteContent(e.target.value)}
