@@ -512,6 +512,14 @@ export default function AdminLeads() {
     setNewNoteContent('');
   };
 
+  // Handle add note form submission
+  const handleAddNote = (e: any) => {
+    e.preventDefault();
+    if (newNoteContent.trim() && notesLeadId) {
+      createNote(notesLeadId, newNoteContent);
+    }
+  };
+
   // Handle logout
   const handleLogout = async () => {
     await logout();
