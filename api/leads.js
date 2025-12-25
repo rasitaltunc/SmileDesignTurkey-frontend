@@ -89,7 +89,8 @@ module.exports = async function handler(req, res) {
 
     const { data, error } = await q;
     if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ leads: data });
+    // TEMP DEBUG: role bilgisini response'a ekle
+    return res.status(200).json({ leads: data, debug: { roleRaw, role, uid: user.id, email: user.email } });
   }
 
   // PATCH /api/leads
