@@ -878,7 +878,8 @@ export default function AdminLeads() {
               </table>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Notes Modal */}
         {notesLeadId && (
