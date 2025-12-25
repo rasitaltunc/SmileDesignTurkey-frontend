@@ -24,20 +24,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" });
   }
 
-  // Admin client (service role) - used ONLY on server
-  const supabase = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  // ✅ JWT-based auth (replaces x-admin-token)
-  const jwt = getBearerToken(req);
-  if (!jwt) return res.status(401).json({ error: "Missing Authorization Bearer token" });
-
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-  const user = userData?.user;
-  if (userErr || !user) return res.status(401).json({ error: "Invalid session" });
-
-  // ✅ role from RPC (same as frontend + RLS functions)
+  // ✅ Anon key with fallback
   const anonKey =
     process.env.SUPABASE_ANON_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
@@ -47,19 +34,36 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Missing SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY)" });
   }
 
-  // auth-bound client (uses caller JWT)
+  // ✅ JWT-based auth
+  const jwt = getBearerToken(req);
+  if (!jwt) return res.status(401).json({ error: "Missing Authorization Bearer token" });
+
+  // auth-bound client (uses caller JWT for auth checks)
   const authClient = createClient(url, anonKey, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // Verify user via authClient
+  const { data: userData, error: userErr } = await authClient.auth.getUser();
+  if (userErr || !userData?.user) return res.status(401).json({ error: "Invalid session" });
+
+  const user = userData.user;
+
+  // ✅ Role from RPC (same as frontend + RLS functions)
   const { data: roleData, error: roleErr } = await authClient.rpc("get_current_user_role");
   if (roleErr) {
-    return res.status(500).json({ error: "Failed to resolve role via RPC", details: roleErr.message });
+    return res.status(500).json({ error: "Role RPC failed", details: roleErr.message });
   }
+
   const role = roleData || "unknown";
   const isAdmin = role === "admin";
   const isEmployee = role === "employee";
+
+  // Admin client (service role) - used for DB operations (RLS bypass)
+  const supabase = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   // 🔒 Leads are ONLY for admin/employee
   if (!isAdmin && !isEmployee) {
