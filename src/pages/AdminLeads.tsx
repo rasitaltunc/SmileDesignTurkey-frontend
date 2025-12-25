@@ -182,11 +182,9 @@ export default function AdminLeads() {
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const url = `${apiUrl}/api/leads`;
 
-      const userData = await supabase.auth.getUser();
+      // Only send assigned_to - server will set assigned_by and assigned_at
       const updates = {
         assigned_to: employeeId,
-        assigned_at: new Date().toISOString(),
-        assigned_by: userData.data.user?.id || null,
       };
 
       const res = await fetch(url, {
