@@ -42,7 +42,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
 
   const roleLabel = useMemo(() => {
     if (!role) return null;
-    return String(role).toUpperCase();
+    return role === 'admin' ? 'Admin Dashboard' : 'My Leads';
   }, [role]);
 
   const handleWhatsAppClick = () => {

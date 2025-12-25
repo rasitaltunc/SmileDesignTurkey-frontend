@@ -14,6 +14,37 @@ const LEAD_STATUSES = [
   { value: 'lost', label: 'Lost' },
 ] as const;
 
+// WhatsApp helper functions
+function normalizePhoneToWhatsApp(phone?: string) {
+  if (!phone) return null;
+  let p = String(phone).trim().replace(/[^\d+]/g, "");
+
+  // if starts with 0 and looks TR, convert to +90
+  if (p.startsWith("0")) p = "+90" + p.slice(1);
+
+  // if starts without + and length seems like TR mobile, assume +90
+  if (!p.startsWith("+") && p.length === 10) p = "+90" + p;
+
+  // if still no +, add +
+  if (!p.startsWith("+")) p = "+" + p;
+
+  return p.replace("+", ""); // wa.me wants digits only
+}
+
+function waMessageEN(lead: any) {
+  return (
+    `Hi ${lead?.name || ""}! 👋\n` +
+    `This is Smile Design Turkey.\n\n` +
+    `I'm reaching out about your request:\n` +
+    `• Treatment: ${lead?.treatment || "-"}\n` +
+    `• Timeline: ${lead?.timeline || "-"}\n\n` +
+    `To prepare your plan, could you send:\n` +
+    `1) A clear smile photo\n` +
+    `2) A short video (front + side)\n` +
+    `3) Any x-ray if available 😊`
+  );
+}
+
 interface Lead {
   id: string;
   created_at: string;
@@ -608,7 +639,22 @@ export default function AdminLeads() {
                         {lead.email || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {lead.phone || '-'}
+                        <div className="flex items-center gap-2">
+                          <span>{lead.phone || '-'}</span>
+                          {lead.phone && (
+                            <button
+                              className="text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                              onClick={() => {
+                                const wa = normalizePhoneToWhatsApp(lead.phone);
+                                if (!wa) return alert("No phone number for WhatsApp");
+                                const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                window.open(url, "_blank", "noopener,noreferrer");
+                              }}
+                            >
+                              WhatsApp
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
