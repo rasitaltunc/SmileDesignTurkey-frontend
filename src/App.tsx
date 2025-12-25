@@ -124,6 +124,24 @@ export default function App() {
           );
         }
         return <AdminLeads />;
+      case '/employee/leads':
+        if (role !== 'employee') {
+          return (
+            <div className="min-h-screen flex items-center justify-center p-6">
+              <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
+                <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
+                <p className="mt-2 text-gray-600">You don't have permission to access the employee panel.</p>
+                <button
+                  className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
+                  onClick={() => navigate('/')}
+                >
+                  Go back home
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return <AdminLeads />;
       default:
         return <Home />;
     }
