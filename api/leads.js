@@ -56,12 +56,13 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Role RPC failed", details: roleErr.message });
   }
 
-  const role = roleData || "unknown";
+  // ✅ Normalize role (RPC might return "Admin", "ADMIN", with spaces, etc.)
+  const role = String(roleData || "").trim().toLowerCase();
   const isAdmin = role === "admin";
   const isEmployee = role === "employee";
 
-  // Admin client (service role) - used for DB operations (RLS bypass)
-  const supabase = createClient(url, serviceKey, {
+  // DB client (service role) - used for DB operations (RLS bypass)
+  const dbClient = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
@@ -75,7 +76,7 @@ module.exports = async function handler(req, res) {
     const { status } = req.query || {};
     const limit = Math.min(parseInt(req.query?.limit || "200", 10) || 200, 500);
 
-    let q = supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
+    let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
     if (status && status !== "all") q = q.eq("status", status);
 
@@ -131,7 +132,10 @@ module.exports = async function handler(req, res) {
       // 🔒 Only admin can change assignment
       if ("assigned_to" in filtered) {
         if (!isAdmin) {
-          return res.status(403).json({ error: "Only admins can change assigned_to" });
+          return res.status(403).json({
+            error: "Only admins can change assigned_to",
+            debug: { role, uid: user.id, email: user.email }
+          });
         }
 
         // prevent spoofing
@@ -140,7 +144,7 @@ module.exports = async function handler(req, res) {
       }
 
       // ✅ UPDATE query: limit yok, single ile net
-      let q = supabase
+      let q = dbClient
         .from("leads")
         .update(filtered)
         .select("*");
