@@ -187,7 +187,6 @@ export default function AdminLeads() {
         assigned_to: employeeId,
         assigned_at: new Date().toISOString(),
         assigned_by: userData.data.user?.id || null,
-        status: 'contacted', // opsiyonel: ilk assign'da contacted yapma istersen kaldır
       };
 
       const res = await fetch(url, {
