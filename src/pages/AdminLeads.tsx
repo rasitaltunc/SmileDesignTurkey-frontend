@@ -895,7 +895,7 @@ export default function AdminLeads() {
               }}
             >
               {/* MODAL ROOT: fixed height, centered, grid layout */}
-              <div className="bg-white w-[600px] max-w-[95vw] h-[70vh] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto]">
+              <div className="bg-white w-[760px] max-w-[92vw] h-[70vh] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto]">
                 {/* HEADER: asla kaybolmaz */}
                 <div className="flex items-center justify-between px-6 py-4 border-b">
                   <h3 className="text-lg font-semibold">Notes</h3>
