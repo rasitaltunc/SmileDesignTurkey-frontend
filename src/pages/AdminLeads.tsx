@@ -889,13 +889,13 @@ export default function AdminLeads() {
         {notesLeadId &&
           createPortal(
             <div
-              className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center"
+              className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-4"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) handleCloseNotes();
               }}
             >
-              {/* MODAL ROOT: fixed height, centered, grid layout */}
-              <div className="bg-white w-[min(900px,96vw)] h-[70vh] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto]">
+              {/* MODAL ROOT: fixed size, middle width, strict grid with min-h-0 chain */}
+              <div className="bg-white w-[min(820px,94vw)] h-[72dvh] max-h-[calc(100dvh-2rem)] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto] min-h-0 overflow-hidden">
                 {/* HEADER: asla kaybolmaz */}
                 <div className="flex items-center justify-between px-6 py-4 border-b">
                   <h3 className="text-lg font-semibold">Notes</h3>
@@ -909,8 +909,8 @@ export default function AdminLeads() {
                   </button>
                 </div>
 
-                {/* SCROLL BODY: ONLY this scrolls */}
-                <div className="overflow-y-auto px-6 py-4 min-w-0">
+                {/* SCROLL BODY: ONLY this scrolls - MUST have min-h-0 for grid 1fr to work */}
+                <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-4">
                   <div className="space-y-3">
                     {isLoadingNotes ? (
                       <div className="text-gray-500 text-sm">Loading notes…</div>
@@ -939,7 +939,7 @@ export default function AdminLeads() {
                       onChange={(e) => setNewNoteContent(e.target.value)}
                       placeholder="Add a note..."
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <div className="flex justify-between">
                       <button
