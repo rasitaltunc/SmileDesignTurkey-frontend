@@ -889,13 +889,13 @@ export default function AdminLeads() {
         {notesLeadId &&
           createPortal(
             <div
-              className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4 overflow-hidden"
+              className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) handleCloseNotes();
               }}
             >
-              {/* MODAL ROOT: height burada şart */}
-              <div className="bg-white w-[92vw] max-w-2xl h-[80dvh] max-h-[calc(100dvh-2rem)] h-[80svh] max-h-[calc(100svh-2rem)] rounded-xl shadow-xl grid grid-rows-[auto_minmax(0,1fr)_auto] min-h-0 overflow-hidden">
+              {/* MODAL ROOT: fixed height, centered, grid layout */}
+              <div className="bg-white w-[600px] max-w-[95vw] h-[70vh] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto]">
                 {/* HEADER: asla kaybolmaz */}
                 <div className="flex items-center justify-between px-6 py-4 border-b">
                   <h3 className="text-lg font-semibold">Notes</h3>
@@ -909,11 +909,8 @@ export default function AdminLeads() {
                   </button>
                 </div>
 
-                {/* SCROLL BODY: tek scroll burası */}
-                <div
-                  className="min-h-0 overflow-y-auto overscroll-contain px-6 py-4"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
+                {/* SCROLL BODY: ONLY this scrolls */}
+                <div className="overflow-y-auto px-6 py-4">
                   <div className="space-y-3">
                     {isLoadingNotes ? (
                       <div className="text-gray-500 text-sm">Loading notes…</div>
@@ -934,7 +931,7 @@ export default function AdminLeads() {
                   </div>
                 </div>
 
-                {/* FOOTER: her zaman görünür */}
+                {/* FOOTER: Always visible, Add Note always accessible */}
                 <div className="border-t px-6 py-4 bg-white">
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
@@ -944,18 +941,18 @@ export default function AdminLeads() {
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                     />
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-between">
                       <button
                         type="button"
                         onClick={handleCloseNotes}
-                        className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        className="px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 transition-colors"
                       >
                         Close
                       </button>
                       <button
                         type="submit"
                         disabled={!newNoteContent.trim() || isSavingNote}
-                        className="px-4 py-2 rounded-lg transition-colors flex items-center gap-2 bg-black text-white hover:bg-gray-900 disabled:bg-gray-200 disabled:text-gray-600 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                       >
                         {isSavingNote ? (
                           <>
