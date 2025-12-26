@@ -889,13 +889,13 @@ export default function AdminLeads() {
         {notesLeadId &&
           createPortal(
             <div
-              className="fixed inset-0 z-[9999] bg-black/50 flex items-start justify-center p-4 overflow-y-auto overscroll-contain"
+              className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4 overflow-y-auto overscroll-contain"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) handleCloseNotes();
               }}
             >
               {/* MODAL ROOT: height burada şart */}
-              <div className="bg-white w-full max-w-2xl my-8 max-h-[75vh] rounded-xl shadow-xl flex flex-col min-h-0 overflow-hidden">
+              <div className="bg-white w-full max-w-2xl max-h-[70vh] rounded-xl shadow-xl flex flex-col min-h-0 overflow-hidden">
                 {/* HEADER: asla kaybolmaz */}
                 <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
                   <h3 className="text-lg font-semibold">Notes</h3>
