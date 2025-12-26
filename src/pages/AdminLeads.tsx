@@ -895,7 +895,7 @@ export default function AdminLeads() {
               }}
             >
               {/* MODAL ROOT: fixed height, centered, grid layout */}
-              <div className="bg-white w-[760px] max-w-[92vw] h-[70vh] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto]">
+              <div className="bg-white w-[min(900px,96vw)] h-[70vh] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto]">
                 {/* HEADER: asla kaybolmaz */}
                 <div className="flex items-center justify-between px-6 py-4 border-b">
                   <h3 className="text-lg font-semibold">Notes</h3>
@@ -910,7 +910,7 @@ export default function AdminLeads() {
                 </div>
 
                 {/* SCROLL BODY: ONLY this scrolls */}
-                <div className="overflow-y-auto px-6 py-4">
+                <div className="overflow-y-auto px-6 py-4 min-w-0">
                   <div className="space-y-3">
                     {isLoadingNotes ? (
                       <div className="text-gray-500 text-sm">Loading notes…</div>
@@ -918,11 +918,11 @@ export default function AdminLeads() {
                       <div className="text-gray-500 text-sm">No notes yet.</div>
                     ) : (
                       notes.map((n: any) => (
-                        <div key={n.id} className="border border-gray-200 rounded-lg p-3">
+                        <div key={n.id} className="border border-gray-200 rounded-lg p-3 max-w-full overflow-hidden">
                           <div className="text-xs text-gray-500 mb-1">
                             {new Date(n.created_at).toLocaleString()}
                           </div>
-                          <div className="text-sm text-gray-900 whitespace-pre-wrap">
+                          <div className="text-sm text-gray-900 whitespace-pre-wrap break-words" style={{ overflowWrap: 'anywhere' }}>
                             {n.content ?? n.note ?? ""}
                           </div>
                         </div>
