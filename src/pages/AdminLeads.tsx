@@ -885,19 +885,30 @@ export default function AdminLeads() {
           );
         })()}
 
-        {/* Notes Modal (PORTAL - guaranteed scroll) */}
+        {/* Notes Modal (PORTAL - hard-sticky footer + safe scroll) */}
         {notesLeadId &&
           createPortal(
             <div
-              className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-4"
+              className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center overflow-hidden"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) handleCloseNotes();
               }}
             >
-              {/* MODAL ROOT: fixed size, middle width, strict grid with min-h-0 chain */}
-              <div className="bg-white w-[min(820px,94vw)] h-[72dvh] max-h-[calc(100dvh-2rem)] rounded-xl shadow-xl grid grid-rows-[auto_1fr_auto] min-h-0 overflow-hidden">
-                {/* HEADER: asla kaybolmaz */}
-                <div className="flex items-center justify-between px-6 py-4 border-b">
+              {/* MODAL ROOT: medium-wide (blue lines target), fixed height */}
+              <div
+                className="
+                  bg-white
+                  w-[clamp(860px,82vw,1120px)]
+                  max-w-[96vw]
+                  h-[72dvh]
+                  max-h-[calc(100dvh-2rem)]
+                  rounded-xl shadow-xl
+                  flex flex-col
+                  overflow-hidden
+                "
+              >
+                {/* HEADER */}
+                <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
                   <h3 className="text-lg font-semibold">Notes</h3>
                   <button
                     type="button"
@@ -909,8 +920,11 @@ export default function AdminLeads() {
                   </button>
                 </div>
 
-                {/* SCROLL BODY: ONLY this scrolls - MUST have min-h-0 for grid 1fr to work */}
-                <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-4">
+                {/* BODY: only this area scrolls */}
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
                   <div className="space-y-3">
                     {isLoadingNotes ? (
                       <div className="text-gray-500 text-sm">Loading notes…</div>
@@ -922,17 +936,25 @@ export default function AdminLeads() {
                           <div className="text-xs text-gray-500 mb-1">
                             {new Date(n.created_at).toLocaleString()}
                           </div>
-                          <div className="text-sm text-gray-900 whitespace-pre-wrap break-words" style={{ overflowWrap: 'anywhere' }}>
+
+                          {/* CRITICAL: prevent "single endless line" */}
+                          <div
+                            className="text-sm text-gray-900 whitespace-pre-wrap break-all"
+                            style={{ overflowWrap: "anywhere" }}
+                          >
                             {n.content ?? n.note ?? ""}
                           </div>
                         </div>
                       ))
                     )}
                   </div>
+
+                  {/* give body bottom padding so last note never hides behind sticky footer */}
+                  <div className="h-28" />
                 </div>
 
-                {/* FOOTER: Always visible, Add Note always accessible */}
-                <div className="border-t px-6 py-4 bg-white">
+                {/* FOOTER: STICKY + always visible */}
+                <div className="border-t bg-white px-6 py-4 shrink-0 sticky bottom-0">
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
@@ -941,7 +963,7 @@ export default function AdminLeads() {
                       rows={3}
                       className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-2">
                       <button
                         type="button"
                         onClick={handleCloseNotes}
@@ -949,6 +971,7 @@ export default function AdminLeads() {
                       >
                         Close
                       </button>
+
                       <button
                         type="submit"
                         disabled={!newNoteContent.trim() || isSavingNote}
