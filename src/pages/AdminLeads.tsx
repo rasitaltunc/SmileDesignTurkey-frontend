@@ -895,7 +895,7 @@ export default function AdminLeads() {
               }}
             >
               {/* MODAL ROOT: height burada şart */}
-              <div className="bg-white w-[92vw] max-w-2xl h-[80dvh] max-h-[calc(100dvh-2rem)] rounded-xl shadow-xl grid grid-rows-[auto,1fr,auto] min-h-0 overflow-hidden">
+              <div className="bg-white w-[92vw] max-w-2xl h-[80dvh] max-h-[calc(100dvh-2rem)] h-[80svh] max-h-[calc(100svh-2rem)] rounded-xl shadow-xl grid grid-rows-[auto_minmax(0,1fr)_auto] min-h-0 overflow-hidden">
                 {/* HEADER: asla kaybolmaz */}
                 <div className="flex items-center justify-between px-6 py-4 border-b">
                   <h3 className="text-lg font-semibold">Notes</h3>
