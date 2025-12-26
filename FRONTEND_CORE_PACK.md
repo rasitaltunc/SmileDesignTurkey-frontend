@@ -183,6 +183,10 @@ VITE_API_URL=... (optional, defaults to window.location.origin)
 | `src/index.css` | 2483 | ✅ Current | Tailwind v4 compiled |
 | `tailwind.config.*` | - | ❌ Not found | Using Tailwind v4 CSS config |
 | `postcss.config.*` | - | ❌ Not found | Vite built-in PostCSS |
+| `api/leads.js` | 180 | ✅ Current | GET/PATCH, JWT auth, role-based |
+| `api/lead-notes.js` | 107 | ✅ Current | GET/POST, JWT auth, employee checks |
+| `api/employees.js` | 64 | ✅ Current | GET, admin only, RPC role check |
+| `vercel.json` | 32 | ✅ Current | API rewrites + CORS headers |
 
 ---
 
@@ -192,6 +196,99 @@ VITE_API_URL=... (optional, defaults to window.location.origin)
 2. Verify no global CSS overrides in `src/index.css` (body overflow, etc.)
 3. Test in Safari DevTools: `$0.scrollHeight > $0.clientHeight` on notes container
 4. Verify modal portal renders to `document.body` (not nested in other containers)
+
+---
+
+## 🔧 Backend/API Layer
+
+### API Routes
+
+1. **`api/leads.js`** ✅ (180 lines)
+   - **GET** `/api/leads` - List leads (with role-based filtering)
+     - Query params: `status` (optional), `limit` (default 200, max 500)
+     - Response: `{ leads: [...], debug: { roleRaw, role, uid, email } }`
+     - Employee filter: Only shows leads where `assigned_to === user.id`
+   - **PATCH** `/api/leads` - Update lead
+     - Body: `{ id, status?, notes?, assigned_to?, follow_up_at?, ... }`
+     - Response: `{ lead: {...} }`
+     - Role restrictions:
+       - Admin: Can update all fields (including `assigned_to`)
+       - Employee: Can only update `status`, `notes`, `follow_up_at` (NOT `assigned_to`)
+   - **Authentication:** JWT Bearer token (`Authorization: Bearer <token>`)
+   - **Role lookup:** Direct query to `profiles` table using service role client
+   - **Key features:**
+     - Uses `authClient` for JWT validation
+     - Uses `dbClient` (service role) for DB operations (RLS bypass)
+     - Role normalization: `String(role).trim().toLowerCase()`
+     - Auto-sets `assigned_by` and `assigned_at` when admin assigns
+
+2. **`api/lead-notes.js`** ✅ (107 lines)
+   - **GET** `/api/lead-notes?lead_id=...` - List notes for a lead
+     - Response: `{ notes: [...] }`
+     - Employee check: Verifies lead is assigned to employee before access
+   - **POST** `/api/lead-notes` - Create new note
+     - Body: `{ lead_id, note }` (also accepts `content` or `text`)
+     - Response: `{ note: {...} }`
+     - Employee check: Verifies lead is assigned to employee before creating
+   - **Authentication:** JWT Bearer token
+   - **Role-based access:** Admin/Employee only
+   - **Key features:**
+     - Inserts both `note` and `content` fields for compatibility
+     - Employee can only access notes for leads assigned to them
+
+3. **`api/employees.js`** ✅ (64 lines)
+   - **GET** `/api/employees` - List employees (admin only)
+     - Response: `{ employees: [{ id, full_name, role }] }`
+     - Filters: Only returns profiles where `role = 'employee'`
+   - **Authentication:** JWT Bearer token
+   - **Role restriction:** Admin only (uses `get_current_user_role` RPC)
+   - **Key features:**
+     - Uses RPC for role verification (different from `leads.js`)
+     - Service role client for fetching employee list
+
+### Server Configuration
+
+4. **`vercel.json`** ✅ (32 lines)
+   - **Rewrites:**
+     - `/api/(.*)` → `/api/$1` (API routes)
+     - `/(.*)` → `/index.html` (SPA fallback)
+   - **CORS Headers** (for `/api/*`):
+     - `Access-Control-Allow-Origin: *`
+     - `Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS`
+     - `Access-Control-Allow-Headers: Content-Type, Authorization`
+
+### Server Helpers
+
+- ❌ `api/_utils/*` - Not found
+- ❌ `api/lib/*` - Not found
+- ❌ `api/auth.js` - Not found (auth handled in each route)
+
+**Note:** All API routes use CommonJS (`.js`) to avoid ESM/CJS conflicts on Vercel.
+
+### Environment Variables (Vercel)
+
+```env
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=... (server-side only, never exposed)
+SUPABASE_ANON_KEY=... (or VITE_SUPABASE_ANON_KEY)
+```
+
+### API Authentication Flow
+
+1. **Client:** Gets JWT from Supabase session (`supabase.auth.getSession()`)
+2. **Request:** Sends `Authorization: Bearer <token>` header
+3. **Server:** Validates JWT using `authClient.auth.getUser()`
+4. **Role Check:** Queries `profiles` table (or uses RPC) to get user role
+5. **Authorization:** Enforces role-based access (admin/employee)
+6. **DB Operations:** Uses `dbClient` (service role) to bypass RLS
+
+### Common Patterns
+
+- **Token extraction:** `getBearerToken(req)` helper in each file
+- **CORS:** Set in each handler + `vercel.json`
+- **Error handling:** Always returns JSON `{ error: "..." }`
+- **Role normalization:** `String(role).trim().toLowerCase()`
+- **Service role:** Used for all DB operations (RLS bypass)
 
 ---
 
