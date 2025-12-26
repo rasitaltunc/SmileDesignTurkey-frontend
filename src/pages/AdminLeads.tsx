@@ -897,7 +897,7 @@ export default function AdminLeads() {
               {/* MODAL ROOT: height burada şart */}
               <div className="bg-white w-[92vw] max-w-2xl h-[80dvh] max-h-[calc(100dvh-2rem)] rounded-xl shadow-xl grid grid-rows-[auto,1fr,auto] min-h-0 overflow-hidden">
                 {/* HEADER: asla kaybolmaz */}
-                <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+                <div className="flex items-center justify-between px-6 py-4 border-b">
                   <h3 className="text-lg font-semibold">Notes</h3>
                   <button
                     type="button"
@@ -935,7 +935,7 @@ export default function AdminLeads() {
                 </div>
 
                 {/* FOOTER: her zaman görünür */}
-                <div className="border-t px-6 py-4 bg-white flex-shrink-0">
+                <div className="border-t px-6 py-4 bg-white">
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
