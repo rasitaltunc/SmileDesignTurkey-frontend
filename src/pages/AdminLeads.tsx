@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
@@ -68,6 +68,9 @@ interface Lead {
   page_url?: string;
   utm_source?: string;
   device?: string;
+  ai_risk_score?: number | null;
+  ai_summary?: string | null;
+  ai_last_analyzed_at?: string | null;
 }
 
 interface LeadNote {
@@ -166,6 +169,11 @@ export default function AdminLeads() {
   }
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+
+  // AI analysis state
+  const [aiRiskScore, setAiRiskScore] = useState<number | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
 
   // Body scroll lock when notes modal is open
   useEffect(() => {
@@ -574,12 +582,81 @@ export default function AdminLeads() {
     }
   };
 
+  // Load AI analysis for current lead
+  const loadAIAnalysis = (leadId: string) => {
+    const lead = leads.find((l) => l.id === leadId);
+    if (lead) {
+      setAiRiskScore(lead.ai_risk_score ?? null);
+      setAiSummary(lead.ai_summary ?? null);
+    } else {
+      setAiRiskScore(null);
+      setAiSummary(null);
+    }
+  };
+
+  // Run AI analysis
+  const runAIAnalysis = async (leadId: string) => {
+    if (!leadId) return;
+
+    setIsLoadingAI(true);
+    setError(null);
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
+
+      const response = await fetch(`${apiUrl}/api/leads-ai-analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({ lead_id: leadId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to analyze lead' }));
+        throw new Error(errorData.error || 'Failed to analyze lead');
+      }
+
+      const result = await response.json();
+      
+      // Update local state
+      setAiRiskScore(result.ai_risk_score);
+      setAiSummary(result.ai_summary);
+
+      // Update lead in leads array
+      setLeads((prevLeads) =>
+        prevLeads.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                ai_risk_score: result.ai_risk_score,
+                ai_summary: result.ai_summary,
+                ai_last_analyzed_at: new Date().toISOString(),
+              }
+            : lead
+        )
+      );
+
+      // Show success (optional toast)
+      console.log('[AdminLeads] AI analysis completed:', result);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to analyze lead';
+      setError(errorMessage);
+      console.error('[AdminLeads] Error running AI analysis:', err);
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
   // Open notes modal
   const handleOpenNotes = async (leadId: string) => {
     setNotesLeadId(leadId);
     setNotes([]);
     setNewNoteContent('');
     setTimeline([]);
+    loadAIAnalysis(leadId);
     await Promise.all([loadNotes(leadId), loadTimeline(leadId)]);
   };
 
@@ -588,6 +665,8 @@ export default function AdminLeads() {
     setNotesLeadId(null);
     setNotes([]);
     setNewNoteContent('');
+    setAiRiskScore(null);
+    setAiSummary(null);
   };
 
   // Handle add note form submission
