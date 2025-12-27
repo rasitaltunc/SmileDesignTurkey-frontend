@@ -27,6 +27,27 @@ function fingerprint(s) {
   return `${s.length}:${s.slice(0, 2)}...${s.slice(-2)}`;
 }
 
+// Helper: Normalize event type from various Cal.com formats
+function normalizeEventType(raw) {
+  if (!raw) return null;
+
+  const s = String(raw).trim();
+
+  // Cal triggerEvent formatları: BOOKING_CREATED, BOOKING_RESCHEDULED, BOOKING_CANCELLED...
+  const upper = s.toUpperCase();
+
+  if (upper === "BOOKING_CREATED") return "booking.created";
+  if (upper === "BOOKING_RESCHEDULED") return "booking.rescheduled";
+  if (upper === "BOOKING_CANCELLED") return "booking.cancelled";
+
+  // Bazı sistemler: booking.created / booking.rescheduled vs.
+  const lower = s.toLowerCase();
+  if (lower.startsWith("booking.")) return lower;
+
+  // Bazı payloadlarda type alanı: "ping" vs.
+  return lower;
+}
+
 module.exports = async function handler(req, res) {
   setCors(res);
 
@@ -104,17 +125,28 @@ module.exports = async function handler(req, res) {
   const body = req.body || {};
   console.log("[cal-webhook] Received event:", JSON.stringify(body, null, 2));
 
-  // Extract event type and payload
-  const eventType = body.type || body.event || "unknown";
+  // Extract and normalize event type
+  const eventType = normalizeEventType(
+    body.triggerEvent || body.type || body.event || body.eventType
+  );
   const payload = body.payload || body.data || body;
 
-  console.log("[cal-webhook] Event type:", eventType);
+  console.log("[cal-webhook] Event type normalized:", eventType);
   console.log("[cal-webhook] Payload keys:", Object.keys(payload));
 
-  // Only handle booking.created and booking.rescheduled
+  // Handle different event types
+  if (eventType === "ping") {
+    return res.status(200).json({ ok: true, received: true, eventType: "ping" });
+  }
+
   if (eventType !== "booking.created" && eventType !== "booking.rescheduled") {
+    if (eventType === "booking.cancelled") {
+      // TODO: Handle cancellation (update lead status to cancelled)
+      console.log("[cal-webhook] Booking cancelled event (not yet implemented)");
+      return res.status(200).json({ ok: true, received: true, eventType, note: "Cancellation handling not implemented" });
+    }
     console.log(`[cal-webhook] Ignoring event type: ${eventType}`);
-    return res.status(200).json({ ok: true, received: true, eventType, skipped: true });
+    return res.status(200).json({ ok: true, ignored: true, eventType });
   }
 
   // Initialize Supabase client (server-side only, service role)
