@@ -223,15 +223,6 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Recalculate priority if risk score changed
-    if (riskScore >= 70) {
-      priority = "Immediate";
-    } else if (riskScore >= 40) {
-      priority = "24 hours";
-    } else {
-      priority = "Standard";
-    }
-
     // Clamp to 0-100 (final)
     riskScore = Math.max(0, Math.min(100, riskScore));
 

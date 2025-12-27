@@ -67,7 +67,11 @@ module.exports = async function handler(req, res) {
 
       if (eventsError) {
         console.error("[leads-contact-events] Error fetching events:", eventsError);
-        return res.status(500).json({ error: "Failed to fetch contact events" });
+        return res.status(500).json({ 
+          error: "Failed to fetch contact events",
+          details: eventsError.message,
+          hint: eventsError.message.includes("relation") ? "Table 'lead_contact_events' may not exist. Run migration: supabase/migration_lead_contact_events.sql" : eventsError.message
+        });
       }
 
       return res.status(200).json({ ok: true, events: events || [] });
