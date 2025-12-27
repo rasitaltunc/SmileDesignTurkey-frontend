@@ -15,6 +15,18 @@ function setCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-cal-secret, x-webhook-secret, x-cal-webhook-secret");
 }
 
+// Helper: Normalize secret (trim, remove newlines)
+function normalizeSecret(s) {
+  return String(s ?? "").trim().replace(/\r?\n/g, "");
+}
+
+// Helper: Create fingerprint for logging (safe, never full secret)
+function fingerprint(s) {
+  if (!s || s.length === 0) return "0:empty";
+  if (s.length < 4) return `${s.length}:${s}`;
+  return `${s.length}:${s.slice(0, 2)}...${s.slice(-2)}`;
+}
+
 module.exports = async function handler(req, res) {
   setCors(res);
 
@@ -32,45 +44,61 @@ module.exports = async function handler(req, res) {
   console.log("[cal-webhook] got x-cal-secret?", !!req.headers["x-cal-secret"]);
   console.log("[cal-webhook] got x-webhook-secret?", !!req.headers["x-webhook-secret"]);
   console.log("[cal-webhook] got x-cal-webhook-secret?", !!req.headers["x-cal-webhook-secret"]);
-  console.log("[cal-webhook] got query secret?", !!req.query?.secret);
+
+  // Read query param from URL (Vercel provides req.query, but also check URL directly)
+  let querySecret = null;
+  if (req.query?.secret) {
+    querySecret = req.query.secret;
+  } else if (req.url) {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      querySecret = url.searchParams.get("secret");
+    } catch (e) {
+      // Ignore URL parse errors
+    }
+  }
+  console.log("[cal-webhook] got query secret?", !!querySecret);
 
   // Verify secret from multiple sources (header tolerant)
-  // Try multiple header names and query param
-  // Vercel/Node.js lowercases headers, so check both
+  // Node.js/Vercel lowercases headers automatically
   const providedSecretRaw =
     req.headers["x-cal-secret"] ||
     req.headers["x-webhook-secret"] ||
     req.headers["x-cal-webhook-secret"] ||
-    req.query?.secret;
+    querySecret;
 
-  // Convert to string and trim (handle arrays, whitespace, etc.)
-  const providedSecret = providedSecretRaw
-    ? String(providedSecretRaw).trim()
-    : null;
+  // Normalize provided secret
+  const providedSecretNormalized = providedSecretRaw ? normalizeSecret(providedSecretRaw) : null;
 
   // Log which header was used (for debugging, but not the secret value)
-  let usedHeader = "none";
-  if (req.headers["x-cal-secret"]) usedHeader = "x-cal-secret";
-  else if (req.headers["x-webhook-secret"]) usedHeader = "x-webhook-secret";
-  else if (req.headers["x-cal-webhook-secret"]) usedHeader = "x-cal-webhook-secret";
-  else if (req.query?.secret) usedHeader = "query param (secret)";
+  let source = "none";
+  if (req.headers["x-cal-secret"]) source = "x-cal-secret";
+  else if (req.headers["x-webhook-secret"]) source = "x-webhook-secret";
+  else if (req.headers["x-cal-webhook-secret"]) source = "x-cal-webhook-secret";
+  else if (querySecret) source = "query param (secret)";
 
-  const expectedSecret = process.env.CAL_WEBHOOK_SECRET;
+  const expectedSecretRaw = process.env.CAL_WEBHOOK_SECRET;
 
-  if (!expectedSecret) {
+  if (!expectedSecretRaw) {
     console.error("[cal-webhook] CAL_WEBHOOK_SECRET not configured in environment");
     return res.status(500).json({ error: "Webhook secret not configured" });
   }
 
-  // Debug: Log lengths and first/last chars (never full secret)
-  console.log(`[cal-webhook] Secret check: providedLength=${providedSecret?.length || 0}, expectedLength=${expectedSecret.length}, header=${usedHeader}`);
+  // Normalize expected secret
+  const expectedSecretNormalized = normalizeSecret(expectedSecretRaw);
 
-  if (!providedSecret || providedSecret !== expectedSecret) {
-    console.warn(`[cal-webhook] Unauthorized: Invalid or missing secret (checked header: ${usedHeader}, providedLength=${providedSecret?.length || 0}, expectedLength=${expectedSecret.length})`);
+  // Debug: Log fingerprints (safe, never full secret)
+  const expectedFP = fingerprint(expectedSecretNormalized);
+  const providedFP = fingerprint(providedSecretNormalized || "");
+  console.log(`[cal-webhook] Secret check: expectedFP=${expectedFP}, providedFP=${providedFP}, source=${source}`);
+
+  // Compare normalized secrets
+  if (!providedSecretNormalized || providedSecretNormalized !== expectedSecretNormalized) {
+    console.warn(`[cal-webhook] Unauthorized: Secret mismatch (expectedFP=${expectedFP}, providedFP=${providedFP}, source=${source})`);
     return res.status(401).json({ error: "unauthorized" });
   }
 
-  console.log(`[cal-webhook] Secret verified (source: ${usedHeader})`);
+  console.log(`[cal-webhook] Secret verified (source: ${source})`);
 
   // Log incoming body for debugging
   const body = req.body || {};
