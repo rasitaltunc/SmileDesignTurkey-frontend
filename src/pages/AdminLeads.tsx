@@ -557,6 +557,68 @@ export default function AdminLeads() {
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
+  // Load patient intakes (admin only)
+  const loadIntakes = async () => {
+    if (!isAdmin || !isAuthenticated || !user) return;
+
+    setIsLoadingIntakes(true);
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Supabase client not configured.');
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/patient-intake?status=pending&limit=20`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) throw new Error('Failed to load intakes');
+      const result = await response.json();
+      setIntakes(result.intakes || []);
+    } catch (err) {
+      console.error('[AdminLeads] Error loading intakes:', err);
+    } finally {
+      setIsLoadingIntakes(false);
+    }
+  };
+
+  // Convert intake to lead (admin only)
+  const convertIntakeToLead = async (intakeId: string) => {
+    if (!isAdmin || !isAuthenticated || !user) return;
+
+    setConvertingIntakeId(intakeId);
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) throw new Error('Supabase client not configured.');
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('No session token');
+
+      // Call the RPC function via Supabase client
+      const { data, error } = await supabase.rpc('convert_intake_to_lead', {
+        intake_id: intakeId,
+      });
+
+      if (error) throw error;
+
+      // Reload intakes and leads
+      await Promise.all([loadIntakes(), loadLeads()]);
+      
+      alert(`Intake converted to lead successfully! Lead ID: ${data}`);
+    } catch (err) {
+      console.error('[AdminLeads] Error converting intake:', err);
+      alert(err instanceof Error ? err.message : 'Failed to convert intake');
+    } finally {
+      setConvertingIntakeId(null);
+    }
+  };
+
   // Auto-load when authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -568,6 +630,13 @@ export default function AdminLeads() {
     loadEmployees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
+
+  useEffect(() => {
+    if (isAdmin && isAuthenticated) {
+      loadIntakes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, isAuthenticated]);
 
   // Show nothing while checking auth or redirecting
   if (!isAuthenticated) {
