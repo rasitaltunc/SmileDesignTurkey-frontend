@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
@@ -150,6 +150,22 @@ export default function AdminLeads() {
   const [newNoteContent, setNewNoteContent] = useState<string>('');
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
+
+  // Timeline state
+  interface TimelineEvent {
+    eventId: number;
+    receivedAt: string;
+    eventType: string;
+    triggerEvent: string | null;
+    calBookingUid: string | null;
+    calBookingId: string | null;
+    startTime: string | null;
+    endTime: string | null;
+    title: string | null;
+    additionalNotes: string | null;
+  }
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
 
   // Body scroll lock when notes modal is open
   useEffect(() => {
@@ -524,12 +540,47 @@ export default function AdminLeads() {
     }
   };
 
+  // Load timeline events
+  const loadTimeline = async (leadId: string) => {
+    if (!isAuthenticated || !user) return;
+
+    setIsLoadingTimeline(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
+
+      const response = await fetch(`${apiUrl}/api/leads-timeline?lead_id=${encodeURIComponent(leadId)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to load timeline' }));
+        throw new Error(errorData.error || 'Failed to load timeline');
+      }
+
+      const result = await response.json();
+      setTimeline(result.timeline || []);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load timeline';
+      console.error('[AdminLeads] Error loading timeline:', err);
+      // Don't set error state for timeline, just log
+      setTimeline([]);
+    } finally {
+      setIsLoadingTimeline(false);
+    }
+  };
+
   // Open notes modal
   const handleOpenNotes = async (leadId: string) => {
     setNotesLeadId(leadId);
     setNotes([]);
     setNewNoteContent('');
-    await loadNotes(leadId);
+    setTimeline([]);
+    await Promise.all([loadNotes(leadId), loadTimeline(leadId)]);
   };
 
   // Close notes modal
@@ -1102,28 +1153,133 @@ export default function AdminLeads() {
                   className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
-                  <div className="space-y-3">
-                    {isLoadingNotes ? (
-                      <div className="text-gray-500 text-sm">Loading notes…</div>
-                    ) : notes.length === 0 ? (
-                      <div className="text-gray-500 text-sm">No notes yet.</div>
-                    ) : (
-                      notes.map((n: any) => (
-                        <div key={n.id} className="border border-gray-200 rounded-lg p-3 max-w-full overflow-hidden">
-                          <div className="text-xs text-gray-500 mb-1">
-                            {new Date(n.created_at).toLocaleString()}
-                          </div>
+                  <div className="space-y-6">
+                    {/* Timeline Section */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Timeline</h4>
+                      {isLoadingTimeline ? (
+                        <div className="text-gray-500 text-sm">Loading timeline…</div>
+                      ) : timeline.length === 0 ? (
+                        <div className="text-gray-500 text-sm">No timeline events yet.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {timeline.map((event) => {
+                            const date = new Date(event.receivedAt);
+                            const formattedDate = date.toLocaleString('tr-TR', {
+                              timeZone: 'Europe/Istanbul',
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            });
 
-                          {/* CRITICAL: prevent "single endless line" */}
-                          <div
-                            className="text-sm text-gray-900 whitespace-pre-wrap break-all"
-                            style={{ overflowWrap: "anywhere" }}
-                          >
-                            {n.content ?? n.note ?? ""}
-                          </div>
+                            const getEventIcon = () => {
+                              if (event.eventType === 'booking.created') {
+                                return <CheckCircle2 className="w-4 h-4 text-green-600" />;
+                              } else if (event.eventType === 'booking.rescheduled') {
+                                return <RotateCcw className="w-4 h-4 text-blue-600" />;
+                              } else if (event.eventType === 'booking.cancelled') {
+                                return <XCircle className="w-4 h-4 text-red-600" />;
+                              }
+                              return <Clock className="w-4 h-4 text-gray-600" />;
+                            };
+
+                            const getEventLabel = () => {
+                              if (event.eventType === 'booking.created') return 'Booked';
+                              if (event.eventType === 'booking.rescheduled') return 'Rescheduled';
+                              if (event.eventType === 'booking.cancelled') return 'Cancelled';
+                              return event.eventType;
+                            };
+
+                            const formatTime = (timeStr: string | null) => {
+                              if (!timeStr) return null;
+                              try {
+                                const time = new Date(timeStr);
+                                return time.toLocaleTimeString('tr-TR', {
+                                  timeZone: 'Europe/Istanbul',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                });
+                              } catch {
+                                return timeStr;
+                              }
+                            };
+
+                            const startTimeFormatted = formatTime(event.startTime);
+                            const endTimeFormatted = formatTime(event.endTime);
+                            const timeRange = startTimeFormatted && endTimeFormatted
+                              ? `${startTimeFormatted} → ${endTimeFormatted}`
+                              : startTimeFormatted || endTimeFormatted || null;
+
+                            return (
+                              <div
+                                key={event.eventId}
+                                className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors group"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="mt-0.5">{getEventIcon()}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium text-sm text-gray-900">
+                                        {getEventLabel()}
+                                      </span>
+                                      <span className="text-xs text-gray-500">—</span>
+                                      <span className="text-xs text-gray-500">{formattedDate}</span>
+                                      {timeRange && (
+                                        <>
+                                          <span className="text-xs text-gray-500">—</span>
+                                          <span className="text-xs text-gray-600">{timeRange}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    {(event.title || event.additionalNotes) && (
+                                      <div className="mt-2 text-xs text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {event.title && (
+                                          <div className="font-medium mb-1">{event.title}</div>
+                                        )}
+                                        {event.additionalNotes && (
+                                          <div className="whitespace-pre-wrap break-words">
+                                            {event.additionalNotes}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))
-                    )}
+                      )}
+                    </div>
+
+                    {/* Notes Section */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Notes</h4>
+                      <div className="space-y-3">
+                        {isLoadingNotes ? (
+                          <div className="text-gray-500 text-sm">Loading notes…</div>
+                        ) : notes.length === 0 ? (
+                          <div className="text-gray-500 text-sm">No notes yet.</div>
+                        ) : (
+                          notes.map((n: any) => (
+                            <div key={n.id} className="border border-gray-200 rounded-lg p-3 max-w-full overflow-hidden">
+                              <div className="text-xs text-gray-500 mb-1">
+                                {new Date(n.created_at).toLocaleString()}
+                              </div>
+
+                              {/* CRITICAL: prevent "single endless line" */}
+                              <div
+                                className="text-sm text-gray-900 whitespace-pre-wrap break-all"
+                                style={{ overflowWrap: "anywhere" }}
+                              >
+                                {n.content ?? n.note ?? ""}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* give body bottom padding so last note never hides behind sticky footer */}
