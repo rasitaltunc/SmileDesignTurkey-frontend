@@ -12,7 +12,7 @@ const { createClient } = require("@supabase/supabase-js");
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-cal-secret");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-cal-secret, x-webhook-secret, x-cal-webhook-secret");
 }
 
 module.exports = async function handler(req, res) {
@@ -79,4 +79,3 @@ module.exports = async function handler(req, res) {
   // For now, just acknowledge receipt
   return res.status(200).json({ ok: true, received: true, eventType });
 };
-
