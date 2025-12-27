@@ -1493,32 +1493,31 @@ export default function AdminLeads() {
           );
         })()}
 
-        {/* Notes Modal (PORTAL - hard-sticky footer + safe scroll) */}
+        {/* Notes Modal (PORTAL - correct scroll architecture) */}
         {notesLeadId &&
           createPortal(
             <div
-              className="fixed inset-0 z-[9999] bg-black/40 flex items-start justify-center p-4 sm:p-6 overflow-y-auto"
+              className="fixed inset-0 z-[99999] bg-black/40 overflow-y-auto"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) handleCloseNotes();
               }}
             >
-              {/* MODAL ROOT: medium-wide (blue lines target), viewport-safe height */}
-              <div
-                className="
-                  bg-white
-                  w-[clamp(860px,82vw,1120px)]
-                  max-w-[96vw]
-                  max-h-[calc(100vh-3rem)]
-                  h-auto
-                  min-h-[min(720px,calc(100vh-3rem))]
-                  rounded-xl shadow-xl
-                  flex flex-col
-                  overflow-hidden
-                "
-              >
-                {/* STICKY ACTION BAR HEADER */}
-                <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shrink-0">
-                  <div className="px-6 py-4">
+              <div className="min-h-[100vh] flex items-start justify-center p-4 sm:p-6">
+                {/* MODAL ROOT: medium-wide, viewport-safe height */}
+                <div
+                  className="
+                    bg-white
+                    w-[clamp(860px,82vw,1120px)]
+                    max-w-[96vw]
+                    max-h-[calc(100vh-2rem)]
+                    rounded-2xl shadow-2xl border
+                    flex flex-col
+                    overflow-hidden
+                  "
+                >
+                {/* HEADER (sticky) */}
+                <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-200 shrink-0">
+                  <div className="px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <h3 className="text-base font-semibold text-gray-900">Notes</h3>
@@ -1591,9 +1590,9 @@ export default function AdminLeads() {
                   </div>
                 </div>
 
-                {/* BODY: only this area scrolls */}
+                {/* BODY (only scroll area) */}
                 <div
-                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4"
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   <div className="space-y-6">
@@ -1945,12 +1944,12 @@ export default function AdminLeads() {
                     </div>
                   </div>
 
-                  {/* give body bottom padding so last note never hides behind sticky footer */}
-                  <div className="h-28" />
+                  {/* Bottom padding for footer clearance */}
+                  <div className="h-4" />
                 </div>
 
-                {/* FOOTER: STICKY + always visible */}
-                <div className="border-t bg-white px-6 py-4 shrink-0 sticky bottom-0">
+                {/* FOOTER (sticky) */}
+                <div className="sticky bottom-0 z-10 bg-white/95 backdrop-blur border-t border-gray-200 shrink-0 px-4 py-3">
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
@@ -1996,6 +1995,7 @@ export default function AdminLeads() {
                     </div>
                   </form>
                 </div>
+              </div>
               </div>
             </div>,
             document.body
