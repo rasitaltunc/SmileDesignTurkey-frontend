@@ -1240,7 +1240,7 @@ export default function AdminLeads() {
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                           <Brain className="w-4 h-4" />
-                          AI Analysis
+                          Call Intelligence Brief
                         </h4>
                         <button
                           type="button"
@@ -1251,23 +1251,26 @@ export default function AdminLeads() {
                           {isLoadingAI ? (
                             <>
                               <RefreshCw className="w-3 h-3 animate-spin" />
-                              Analyzing...
+                              Generating...
                             </>
                           ) : (
                             <>
                               <Brain className="w-3 h-3" />
-                              Analyze
+                              Generate Brief
                             </>
                           )}
                         </button>
                       </div>
 
                       {isLoadingAI ? (
-                        <div className="text-gray-500 text-sm">Running AI analysis...</div>
+                        <div className="text-gray-500 text-sm flex items-center gap-2">
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          Generating call briefing...
+                        </div>
                       ) : aiRiskScore !== null || aiSummary ? (
                         <div className="space-y-3">
                           {aiRiskScore !== null && (
-                            <div className="border border-gray-200 rounded-lg p-3">
+                            <div className="border border-gray-200 rounded-lg p-3 bg-gradient-to-r from-gray-50 to-white">
                               <div className="flex items-center gap-2 mb-2">
                                 <AlertTriangle className={`w-4 h-4 ${
                                   aiRiskScore >= 70 ? 'text-red-600' :
@@ -1275,35 +1278,41 @@ export default function AdminLeads() {
                                   aiRiskScore >= 20 ? 'text-yellow-600' :
                                   'text-green-600'
                                 }`} />
-                                <span className="text-sm font-medium text-gray-900">
+                                <span className="text-sm font-semibold text-gray-900">
                                   Risk Score: {aiRiskScore}/100
                                 </span>
-                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${
                                   aiRiskScore >= 70 ? 'bg-red-100 text-red-800' :
                                   aiRiskScore >= 40 ? 'bg-orange-100 text-orange-800' :
                                   aiRiskScore >= 20 ? 'bg-yellow-100 text-yellow-800' :
                                   'bg-green-100 text-green-800'
                                 }`}>
-                                  {aiRiskScore >= 70 ? 'High Risk' :
-                                   aiRiskScore >= 40 ? 'Medium Risk' :
-                                   aiRiskScore >= 20 ? 'Low Risk' :
-                                   'Very Low Risk'}
+                                  {aiRiskScore >= 70 ? '🔴 High Risk' :
+                                   aiRiskScore >= 40 ? '🟠 Medium Risk' :
+                                   aiRiskScore >= 20 ? '🟡 Low Risk' :
+                                   '🟢 Very Low Risk'}
                                 </span>
+                                {aiRiskScore >= 70 && (
+                                  <span className="text-xs text-red-600 font-medium ml-auto">
+                                    ⚠️ Immediate action recommended
+                                  </span>
+                                )}
                               </div>
                             </div>
                           )}
 
                           {aiSummary && (
-                            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                              <div className="text-sm text-gray-900 whitespace-pre-wrap break-words">
+                            <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                              <div className="text-xs font-mono text-gray-900 whitespace-pre-wrap break-words leading-relaxed">
                                 {aiSummary}
                               </div>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <div className="text-gray-500 text-sm">
-                          No AI analysis yet. Click "Analyze" to generate risk score and call briefing.
+                        <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
+                          <p className="mb-1">No call brief yet.</p>
+                          <p className="text-xs">Click "Generate Brief" to see risk assessment, talking points, and call preparation guidance.</p>
                         </div>
                       )}
                     </div>
