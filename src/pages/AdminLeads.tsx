@@ -1515,61 +1515,55 @@ export default function AdminLeads() {
                   overflow-hidden
                 "
               >
-                {/* HEADER */}
-                <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
-                  <h3 className="text-lg font-semibold">Notes</h3>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => notesLeadId && markContacted(notesLeadId)}
-                      disabled={isMarkingContacted || !notesLeadId}
-                      className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-                      title="Mark as contacted (Call/WhatsApp/Email)"
-                    >
-                      {isMarkingContacted ? (
-                        <>
-                          <RefreshCw className="w-3 h-3 animate-spin" />
-                          Marking...
-                        </>
-                      ) : (
-                        <>
-                          <Phone className="w-3 h-3" />
-                          Mark Contacted
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCloseNotes}
-                      className="text-gray-500 hover:text-gray-700 text-xl leading-none"
-                      aria-label="Close"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-
-                {/* BODY: only this area scrolls */}
-                <div
-                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
-                  <div className="space-y-6">
-                    {/* AI Analysis Section */}
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                            <Brain className="w-4 h-4 text-purple-600" />
-                            AI Call Brief
-                          </h4>
-                          <p className="text-xs text-gray-500">Get AI-powered insights before your call</p>
-                        </div>
+                {/* STICKY ACTION BAR HEADER */}
+                <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shrink-0">
+                  <div className="px-6 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-gray-900">Notes</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Lead actions & call prep</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => notesLeadId && markContacted(notesLeadId)}
+                          disabled={isMarkingContacted || !notesLeadId}
+                          className={[
+                            "inline-flex items-center justify-center gap-2",
+                            "px-3 py-2 rounded-md text-sm font-semibold",
+                            "border transition-all duration-200 min-w-[140px]",
+                            isMarkingContacted || !notesLeadId
+                              ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-green-600 text-white border-green-600 hover:bg-green-700 hover:border-green-700 shadow-sm hover:shadow"
+                          ].join(" ")}
+                          title={!notesLeadId ? "Select a lead first" : "Mark as contacted (Call/WhatsApp/Email)"}
+                        >
+                          {isMarkingContacted ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Marking...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Phone className="w-4 h-4" />
+                              <span>Mark Contacted</span>
+                            </>
+                          )}
+                        </button>
                         <button
                           type="button"
                           onClick={() => notesLeadId && runAIAnalysis(notesLeadId)}
                           disabled={isLoadingAI || !notesLeadId}
-                          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 shadow-sm hover:shadow-md"
+                          className={[
+                            "inline-flex items-center justify-center gap-2",
+                            "px-4 py-2 rounded-lg text-sm font-semibold",
+                            "border transition-all duration-200 min-w-[180px]",
+                            "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2",
+                            isLoadingAI || !notesLeadId
+                              ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-gradient-to-r from-blue-600 to-purple-600 text-white border-transparent hover:from-blue-700 hover:to-purple-700 shadow-sm hover:shadow-md"
+                          ].join(" ")}
+                          title={!notesLeadId ? "Select a lead first" : "Generate AI-powered call briefing"}
                         >
                           {isLoadingAI ? (
                             <>
@@ -1583,6 +1577,33 @@ export default function AdminLeads() {
                             </>
                           )}
                         </button>
+                        <button
+                          type="button"
+                          onClick={handleCloseNotes}
+                          className="ml-2 text-gray-500 hover:text-gray-700 text-xl leading-none p-1 rounded hover:bg-gray-100 transition-colors"
+                          aria-label="Close"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* BODY: only this area scrolls */}
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <div className="space-y-6">
+                    {/* AI Analysis Section */}
+                    <div>
+                      <div className="mb-3">
+                        <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
+                          <Brain className="w-4 h-4 text-purple-600" />
+                          AI Call Brief
+                        </h4>
+                        <p className="text-xs text-gray-500">AI-powered insights for your call preparation</p>
                       </div>
 
                       {isLoadingAI ? (
@@ -1791,18 +1812,26 @@ export default function AdminLeads() {
                             />
                             <button
                               type="submit"
-                              disabled={isAddingContact || !newContactChannel}
-                              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                              disabled={isAddingContact || !newContactChannel || !newContactNote.trim()}
+                              className={[
+                                "inline-flex items-center justify-center gap-2",
+                                "px-3 py-2 rounded-md text-sm font-semibold",
+                                "border transition-all duration-200 min-w-[100px]",
+                                isAddingContact || !newContactChannel || !newContactNote.trim()
+                                  ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
+                                  : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
+                              ].join(" ")}
+                              title={!newContactNote.trim() ? "Type a note to enable" : "Add contact attempt"}
                             >
                               {isAddingContact ? (
                                 <>
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                  Adding...
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  <span>Adding...</span>
                                 </>
                               ) : (
                                 <>
-                                  <Phone className="w-3 h-3" />
-                                  Add
+                                  <Phone className="w-4 h-4" />
+                                  <span>Add</span>
                                 </>
                               )}
                             </button>
@@ -1941,17 +1970,25 @@ export default function AdminLeads() {
                       <button
                         type="submit"
                         disabled={!newNoteContent.trim() || isSavingNote}
-                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        className={[
+                          "inline-flex items-center justify-center gap-2",
+                          "px-4 py-2 rounded-md text-sm font-semibold",
+                          "border transition-all duration-200 min-w-[120px]",
+                          !newNoteContent.trim() || isSavingNote
+                            ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
+                            : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
+                        ].join(" ")}
+                        title={!newNoteContent.trim() ? "Type a note to enable" : "Add note to lead"}
                       >
                         {isSavingNote ? (
                           <>
                             <RefreshCw className="w-4 h-4 animate-spin" />
-                            Saving...
+                            <span>Saving...</span>
                           </>
                         ) : (
                           <>
                             <MessageSquare className="w-4 h-4" />
-                            Add Note
+                            <span>Add Note</span>
                           </>
                         )}
                       </button>
