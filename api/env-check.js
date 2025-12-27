@@ -24,11 +24,18 @@ module.exports = async function handler(req, res) {
   const baseUrl = process.env.CAL_BASE_URL || null;
   const hasBaseUrl = !!baseUrl;
 
+  // Check ADMIN_TOKEN (for debugging token issues)
+  const adminToken = process.env.ADMIN_TOKEN;
+  const hasAdminToken = !!adminToken;
+  const adminTokenLength = adminToken ? adminToken.length : 0;
+
   return res.status(200).json({
     hasSecret,
     secretLength,
     hasBaseUrl,
     baseUrl,
+    hasAdminToken,
+    adminTokenLength,
   });
 };
 
