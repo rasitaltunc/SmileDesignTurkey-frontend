@@ -107,11 +107,19 @@ CREATE POLICY "Only admin can delete leads"
   );
 
 -- ============================================
--- 3. Verify: Check existing policies
+-- 3. Verification Query
 -- ============================================
--- Run this to see all active policies:
--- SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
--- FROM pg_policies
--- WHERE tablename IN ('leads', 'patient_portal_links', 'patient_intakes', 'lead_notes')
--- ORDER BY tablename, policyname;
+-- Run this to see all active policies for key tables:
+SELECT 
+  schemaname,
+  tablename,
+  policyname,
+  permissive,
+  roles,
+  cmd,
+  qual,
+  with_check
+FROM pg_policies
+WHERE tablename IN ('profiles', 'leads', 'lead_notes', 'patient_portal_links', 'patient_intakes')
+ORDER BY tablename, policyname;
 
