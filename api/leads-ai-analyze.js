@@ -326,6 +326,50 @@ module.exports = async function handler(req, res) {
       whatToSay.push("Be warm and professional — focus on understanding their needs");
     }
 
+    // Calculate staleness (days since last contact)
+    let lastContactedText = "Never contacted";
+    let followUpSuggestion = "";
+    if (lead.last_contacted_at) {
+      const lastContacted = new Date(lead.last_contacted_at);
+      const daysSinceContact = Math.floor((Date.now() - lastContacted.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysSinceContact === 0) {
+        lastContactedText = "Contacted today";
+        followUpSuggestion = "Recent contact — follow up if needed";
+      } else if (daysSinceContact === 1) {
+        lastContactedText = "Contacted yesterday";
+        followUpSuggestion = "Recent contact — standard follow-up";
+      } else if (daysSinceContact < 7) {
+        lastContactedText = `Contacted ${daysSinceContact} days ago`;
+        followUpSuggestion = "Moderate staleness — consider follow-up";
+      } else if (daysSinceContact < 30) {
+        lastContactedText = `Contacted ${daysSinceContact} days ago`;
+        followUpSuggestion = "⚠️ Stale contact — prioritize follow-up";
+        // Increase risk for staleness
+        riskScore = Math.min(100, riskScore + 15);
+      } else {
+        lastContactedText = `Contacted ${daysSinceContact} days ago`;
+        followUpSuggestion = "⚠️ Very stale — high priority follow-up";
+        // Significant risk increase
+        riskScore = Math.min(100, riskScore + 25);
+      }
+    } else {
+      // Never contacted + has booking = should contact
+      if (hasBookingCreated) {
+        followUpSuggestion = "⚠️ Never contacted — immediate follow-up recommended";
+        riskScore = Math.min(100, riskScore + 20);
+      }
+    }
+
+    // Recalculate priority if risk score changed
+    if (riskScore >= 70) {
+      priority = "Immediate";
+    } else if (riskScore >= 40) {
+      priority = "24 hours";
+    } else {
+      priority = "Standard";
+    }
+
     // Format enhanced "Call Intelligence Brief"
     const riskLevel = riskScore >= 70 ? "High" : riskScore >= 40 ? "Medium" : riskScore >= 20 ? "Low" : "Very Low";
     
@@ -333,6 +377,8 @@ module.exports = async function handler(req, res) {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Risk Level: ${riskLevel} (${Math.round(riskScore)}/100)
 Priority: ${priority}
+Last Contacted: ${lastContactedText}
+${followUpSuggestion ? `Follow-up: ${followUpSuggestion}` : ''}
 
 WHAT HAPPENED
 ${whatHappened.slice(0, 3).map((b) => `• ${b}`).join("\n")}

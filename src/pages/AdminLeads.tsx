@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
@@ -71,6 +71,7 @@ interface Lead {
   ai_risk_score?: number | null;
   ai_summary?: string | null;
   ai_last_analyzed_at?: string | null;
+  last_contacted_at?: string | null;
 }
 
 interface LeadNote {
@@ -176,6 +177,10 @@ export default function AdminLeads() {
   const [aiRiskScore, setAiRiskScore] = useState<number | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  
+  // Contact tracking state
+  const [lastContactedAt, setLastContactedAt] = useState<string | null>(null);
+  const [isMarkingContacted, setIsMarkingContacted] = useState(false);
 
   // Body scroll lock when notes modal is open
   useEffect(() => {
@@ -590,9 +595,63 @@ export default function AdminLeads() {
     if (lead) {
       setAiRiskScore(lead.ai_risk_score ?? null);
       setAiSummary(lead.ai_summary ?? null);
+      setLastContactedAt(lead.last_contacted_at ?? null);
     } else {
       setAiRiskScore(null);
       setAiSummary(null);
+      setLastContactedAt(null);
+    }
+  };
+
+  // Mark lead as contacted
+  const markContacted = async (leadId: string) => {
+    if (!leadId) return;
+
+    setIsMarkingContacted(true);
+    setError(null);
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
+
+      const response = await fetch(`${apiUrl}/api/leads-mark-contacted`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({ lead_id: leadId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to mark as contacted' }));
+        throw new Error(errorData.error || 'Failed to mark as contacted');
+      }
+
+      const result = await response.json();
+      
+      // Update local state
+      setLastContactedAt(result.last_contacted_at);
+
+      // Update lead in leads array
+      setLeads((prevLeads) =>
+        prevLeads.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                last_contacted_at: result.last_contacted_at,
+              }
+            : lead
+        )
+      );
+
+      console.log('[AdminLeads] Lead marked as contacted:', result);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to mark as contacted';
+      setError(errorMessage);
+      console.error('[AdminLeads] Error marking as contacted:', err);
+    } finally {
+      setIsMarkingContacted(false);
     }
   };
 
@@ -669,6 +728,7 @@ export default function AdminLeads() {
     setNewNoteContent('');
     setAiRiskScore(null);
     setAiSummary(null);
+    setLastContactedAt(null);
   };
 
   // Handle add note form submission
@@ -1219,14 +1279,35 @@ export default function AdminLeads() {
                 {/* HEADER */}
                 <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
                   <h3 className="text-lg font-semibold">Notes</h3>
-                  <button
-                    type="button"
-                    onClick={handleCloseNotes}
-                    className="text-gray-500 hover:text-gray-700 text-xl leading-none"
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => notesLeadId && markContacted(notesLeadId)}
+                      disabled={isMarkingContacted || !notesLeadId}
+                      className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                      title="Mark as contacted (Call/WhatsApp/Email)"
+                    >
+                      {isMarkingContacted ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          Marking...
+                        </>
+                      ) : (
+                        <>
+                          <Phone className="w-3 h-3" />
+                          Mark Contacted
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCloseNotes}
+                      className="text-gray-500 hover:text-gray-700 text-xl leading-none"
+                      aria-label="Close"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
 
                 {/* BODY: only this area scrolls */}
