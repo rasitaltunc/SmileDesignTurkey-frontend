@@ -1055,7 +1055,7 @@ export default function AdminLeads() {
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Patient Intakes</h2>
                 <p className="text-gray-600 text-sm mt-1">
-                  {isLoadingIntakes ? 'Loading...' : `${intakes.length} pending intakes`}
+                  {isLoadingIntakes ? 'Loading...' : `${intakes?.length || 0} pending intakes`}
                 </p>
               </div>
               <button
