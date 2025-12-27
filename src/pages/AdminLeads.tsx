@@ -286,26 +286,8 @@ export default function AdminLeads() {
   const [newContactNote, setNewContactNote] = useState<string>("");
   const [isAddingContact, setIsAddingContact] = useState(false);
 
-  // Body scroll lock when notes modal is open
-  useEffect(() => {
-    if (!notesLeadId) return;
-
-    const prevOverflow = document.body.style.overflow;
-    const prevPaddingRight = document.body.style.paddingRight;
-
-    // Scrollbar width to prevent layout shift
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.paddingRight = prevPaddingRight;
-    };
-  }, [notesLeadId]);
+  // Note: Body scroll lock removed - overlay handles scrolling now
+  // Modal uses overlay scroll architecture, so body scroll lock is not needed
 
   // Employee assignment state
   const [employees, setEmployees] = useState<Array<{ id: string; full_name: string | null }>>([]);
