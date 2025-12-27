@@ -4,6 +4,95 @@ import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCi
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
+// Component to format AI Brief output for better readability
+function FormattedAIBrief({ content }: { content: string }) {
+  // Parse the AI brief format and render it nicely
+  const lines = content.split('\n');
+  const sections: { title?: string; items: string[] }[] = [];
+  let currentSection: { title?: string; items: string[] } = { items: [] };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Detect section headers (uppercase, no bullet)
+    if (trimmed.match(/^[A-Z\s]+$/) && !trimmed.startsWith('•') && trimmed.length > 3 && trimmed.length < 50) {
+      if (currentSection.items.length > 0) {
+        sections.push(currentSection);
+      }
+      currentSection = { title: trimmed, items: [] };
+    } else if (trimmed.startsWith('•')) {
+      currentSection.items.push(trimmed.substring(1).trim());
+    } else if (trimmed.includes(':')) {
+      // Key-value pairs (Risk Level, Priority, etc.)
+      currentSection.items.push(trimmed);
+    } else {
+      currentSection.items.push(trimmed);
+    }
+  }
+  if (currentSection.items.length > 0) {
+    sections.push(currentSection);
+  }
+
+  // If parsing failed, just show the raw content
+  if (sections.length === 0) {
+    return (
+      <div className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 text-sm">
+      {sections.map((section, idx) => {
+        // First section is usually the header
+        if (idx === 0 && !section.title) {
+          return (
+            <div key={idx} className="space-y-2">
+              {section.items.map((item, itemIdx) => {
+                if (item.includes(':')) {
+                  const [key, ...valueParts] = item.split(':');
+                  const value = valueParts.join(':').trim();
+                  return (
+                    <div key={itemIdx} className="flex gap-2">
+                      <span className="font-semibold text-gray-700 min-w-[120px]">{key}:</span>
+                      <span className="text-gray-600">{value}</span>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={itemIdx} className="text-gray-600">
+                    {item}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+
+        return (
+          <div key={idx} className="border-l-2 border-blue-200 pl-3">
+            {section.title && (
+              <h5 className="font-semibold text-gray-800 mb-2 text-base">
+                {section.title}
+              </h5>
+            )}
+            <ul className="space-y-1.5">
+              {section.items.map((item, itemIdx) => (
+                <li key={itemIdx} className="text-gray-700 flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">•</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Status options - CRM MVP Pipeline (3C: Appointment → Deposit)
 const LEAD_STATUSES = [
   { value: 'new', label: 'New' },
@@ -1536,10 +1625,8 @@ export default function AdminLeads() {
                           )}
 
                           {aiSummary && (
-                            <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                              <div className="text-xs font-mono text-gray-900 whitespace-pre-wrap break-words leading-relaxed">
-                                {aiSummary}
-                              </div>
+                            <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-blue-50/30">
+                              <FormattedAIBrief content={aiSummary} />
                             </div>
                           )}
                         </div>
