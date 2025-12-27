@@ -203,6 +203,8 @@ module.exports = async function handler(req, res) {
     result = await supabase.from("leads").insert(leadData).select().single();
   }
 
+  const { data, error } = result;
+
   if (error) {
     console.error("[cal-webhook] Upsert lead failed:", error.message);
     return res.status(200).json({
