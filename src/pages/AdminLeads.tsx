@@ -1068,7 +1068,7 @@ export default function AdminLeads() {
               </button>
             </div>
 
-            {intakes.length === 0 ? (
+            {!intakes || intakes.length === 0 ? (
               <p className="text-gray-500 text-sm">No pending intakes.</p>
             ) : (
               <div className="space-y-3">
