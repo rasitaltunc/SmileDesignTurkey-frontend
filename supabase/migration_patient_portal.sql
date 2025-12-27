@@ -92,14 +92,14 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Policy: Patient can INSERT (upload) files only under their own path
 -- Path format: patient/<patient_id>/<filename>
+-- Using LIKE to match path pattern: patient/<auth.uid()>/
 CREATE POLICY "Patients can upload files to their own folder"
   ON storage.objects
   FOR INSERT
   TO authenticated
   WITH CHECK (
     bucket_id = 'patient_uploads'
-    AND (string_to_array(name, '/'))[1] = 'patient'
-    AND (string_to_array(name, '/'))[2] = auth.uid()::text
+    AND name LIKE 'patient/' || auth.uid()::text || '/%'
   );
 
 -- Policy: Patient can SELECT (download/view) files only from their own folder
@@ -109,8 +109,7 @@ CREATE POLICY "Patients can view their own files"
   TO authenticated
   USING (
     bucket_id = 'patient_uploads'
-    AND (string_to_array(name, '/'))[1] = 'patient'
-    AND (string_to_array(name, '/'))[2] = auth.uid()::text
+    AND name LIKE 'patient/' || auth.uid()::text || '/%'
   );
 
 -- Policy: Patient can UPDATE (metadata) files only in their own folder
@@ -120,13 +119,11 @@ CREATE POLICY "Patients can update their own files"
   TO authenticated
   USING (
     bucket_id = 'patient_uploads'
-    AND (string_to_array(name, '/'))[1] = 'patient'
-    AND (string_to_array(name, '/'))[2] = auth.uid()::text
+    AND name LIKE 'patient/' || auth.uid()::text || '/%'
   )
   WITH CHECK (
     bucket_id = 'patient_uploads'
-    AND (string_to_array(name, '/'))[1] = 'patient'
-    AND (string_to_array(name, '/'))[2] = auth.uid()::text
+    AND name LIKE 'patient/' || auth.uid()::text || '/%'
   );
 
 -- Policy: Patient can DELETE files only from their own folder
@@ -136,8 +133,7 @@ CREATE POLICY "Patients can delete their own files"
   TO authenticated
   USING (
     bucket_id = 'patient_uploads'
-    AND (string_to_array(name, '/'))[1] = 'patient'
-    AND (string_to_array(name, '/'))[2] = auth.uid()::text
+    AND name LIKE 'patient/' || auth.uid()::text || '/%'
   );
 
 -- Policy: Admin/Employee can SELECT all files (for management)
