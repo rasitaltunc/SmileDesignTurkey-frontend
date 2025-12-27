@@ -76,7 +76,37 @@ export default function App() {
     );
   }
 
-  if (!isAuthenticated && currentPath !== '/') {
+  // Public routes that don't require authentication
+  const PUBLIC_ROUTES = new Set([
+    '/',
+    '/treatments',
+    '/treatment-detail',
+    '/pricing',
+    '/process',
+    '/reviews',
+    '/faq',
+    '/contact',
+    '/upload-center',
+    '/onboarding',
+    '/intake',
+  ]);
+
+  // Private routes that require authentication
+  const PRIVATE_ROUTES = new Set([
+    '/admin',
+    '/admin/leads',
+    '/employee',
+    '/employee/leads',
+    '/patient/portal',
+    '/doctor/portal',
+    '/plan-dashboard',
+  ]);
+
+  const isPublicRoute = PUBLIC_ROUTES.has(currentPath);
+  const isPrivateRoute = PRIVATE_ROUTES.has(currentPath) || currentPath.startsWith('/admin/') || currentPath.startsWith('/employee/');
+
+  // Only require auth for private routes
+  if (!isAuthenticated && isPrivateRoute) {
     return <Login />;
   }
 

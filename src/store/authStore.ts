@@ -149,6 +149,9 @@ export const useAuthStore = create<AuthState>()(
             error: null,
             role: null,
           });
+          // Navigate to home after logout
+          window.history.pushState({}, '', '/');
+          window.dispatchEvent(new PopStateEvent('popstate'));
         }
       },
 
