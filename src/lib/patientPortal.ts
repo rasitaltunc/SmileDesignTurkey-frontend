@@ -112,10 +112,10 @@ export async function getPatientFiles(): Promise<PatientFile[]> {
 /**
  * Upload a file to patient's folder
  * Returns the public URL (or signed URL if bucket is private)
+ * Note: Supabase JS client doesn't support upload progress callbacks
  */
 export async function uploadPatientFile(
-  file: File,
-  onProgress?: (progress: number) => void
+  file: File
 ): Promise<{ path: string; publicUrl: string }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
@@ -132,7 +132,7 @@ export async function uploadPatientFile(
   const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const filePath = `patient/${userId}/${timestamp}_${sanitizedName}`;
 
-  // Upload file with progress tracking
+  // Upload file
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
     .upload(filePath, file, {

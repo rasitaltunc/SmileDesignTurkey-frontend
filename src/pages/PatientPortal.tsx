@@ -87,11 +87,21 @@ export default function PatientPortal() {
     // Upload each file
     for (const upload of newUploads) {
       try {
-        await uploadPatientFile(upload.file, (progress) => {
+        // Simulate progress (Supabase doesn't provide progress callbacks)
+        const progressInterval = setInterval(() => {
           setUploadQueue((prev) =>
-            prev.map((u) => (u.file === upload.file ? { ...u, progress } : u))
+            prev.map((u) => {
+              if (u.file === upload.file && u.progress < 90) {
+                return { ...u, progress: u.progress + 10 };
+              }
+              return u;
+            })
           );
-        });
+        }, 200);
+
+        await uploadPatientFile(upload.file);
+        clearInterval(progressInterval);
+        
         setUploadQueue((prev) =>
           prev.map((u) => (u.file === upload.file ? { ...u, status: 'success' as const, progress: 100 } : u))
         );
