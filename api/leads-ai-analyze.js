@@ -188,10 +188,54 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Clamp to 0-100
+    // 5) Calculate staleness (days since last contact) and adjust risk
+    let lastContactedText = "Never contacted";
+    let followUpSuggestion = "";
+    if (lead.last_contacted_at) {
+      const lastContacted = new Date(lead.last_contacted_at);
+      const daysSinceContact = Math.floor((Date.now() - lastContacted.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysSinceContact === 0) {
+        lastContactedText = "Contacted today";
+        followUpSuggestion = "Recent contact — follow up if needed";
+      } else if (daysSinceContact === 1) {
+        lastContactedText = "Contacted yesterday";
+        followUpSuggestion = "Recent contact — standard follow-up";
+      } else if (daysSinceContact < 7) {
+        lastContactedText = `Contacted ${daysSinceContact} days ago`;
+        followUpSuggestion = "Moderate staleness — consider follow-up";
+      } else if (daysSinceContact < 30) {
+        lastContactedText = `Contacted ${daysSinceContact} days ago`;
+        followUpSuggestion = "⚠️ Stale contact — prioritize follow-up";
+        // Increase risk for staleness
+        riskScore = Math.min(100, riskScore + 15);
+      } else {
+        lastContactedText = `Contacted ${daysSinceContact} days ago`;
+        followUpSuggestion = "⚠️ Very stale — high priority follow-up";
+        // Significant risk increase
+        riskScore = Math.min(100, riskScore + 25);
+      }
+    } else {
+      // Never contacted + has booking = should contact
+      if (hasBookingCreated) {
+        followUpSuggestion = "⚠️ Never contacted — immediate follow-up recommended";
+        riskScore = Math.min(100, riskScore + 20);
+      }
+    }
+
+    // Recalculate priority if risk score changed
+    if (riskScore >= 70) {
+      priority = "Immediate";
+    } else if (riskScore >= 40) {
+      priority = "24 hours";
+    } else {
+      priority = "Standard";
+    }
+
+    // Clamp to 0-100 (final)
     riskScore = Math.max(0, Math.min(100, riskScore));
 
-    // 5) Generate enhanced "Call Intelligence Brief"
+    // 6) Generate enhanced "Call Intelligence Brief"
     const whatHappened = [];
     const riskFactors = [];
     const whatToSay = [];
@@ -324,50 +368,6 @@ module.exports = async function handler(req, res) {
     // Ensure 3 bullets
     while (whatToSay.length < 3) {
       whatToSay.push("Be warm and professional — focus on understanding their needs");
-    }
-
-    // Calculate staleness (days since last contact)
-    let lastContactedText = "Never contacted";
-    let followUpSuggestion = "";
-    if (lead.last_contacted_at) {
-      const lastContacted = new Date(lead.last_contacted_at);
-      const daysSinceContact = Math.floor((Date.now() - lastContacted.getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (daysSinceContact === 0) {
-        lastContactedText = "Contacted today";
-        followUpSuggestion = "Recent contact — follow up if needed";
-      } else if (daysSinceContact === 1) {
-        lastContactedText = "Contacted yesterday";
-        followUpSuggestion = "Recent contact — standard follow-up";
-      } else if (daysSinceContact < 7) {
-        lastContactedText = `Contacted ${daysSinceContact} days ago`;
-        followUpSuggestion = "Moderate staleness — consider follow-up";
-      } else if (daysSinceContact < 30) {
-        lastContactedText = `Contacted ${daysSinceContact} days ago`;
-        followUpSuggestion = "⚠️ Stale contact — prioritize follow-up";
-        // Increase risk for staleness
-        riskScore = Math.min(100, riskScore + 15);
-      } else {
-        lastContactedText = `Contacted ${daysSinceContact} days ago`;
-        followUpSuggestion = "⚠️ Very stale — high priority follow-up";
-        // Significant risk increase
-        riskScore = Math.min(100, riskScore + 25);
-      }
-    } else {
-      // Never contacted + has booking = should contact
-      if (hasBookingCreated) {
-        followUpSuggestion = "⚠️ Never contacted — immediate follow-up recommended";
-        riskScore = Math.min(100, riskScore + 20);
-      }
-    }
-
-    // Recalculate priority if risk score changed
-    if (riskScore >= 70) {
-      priority = "Immediate";
-    } else if (riskScore >= 40) {
-      priority = "24 hours";
-    } else {
-      priority = "Standard";
     }
 
     // Format enhanced "Call Intelligence Brief"
