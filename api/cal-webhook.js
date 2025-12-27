@@ -126,13 +126,47 @@ module.exports = async function handler(req, res) {
   console.log("[cal-webhook] Received event:", JSON.stringify(body, null, 2));
 
   // Extract and normalize event type
-  const eventType = normalizeEventType(
-    body.triggerEvent || body.type || body.event || body.eventType
-  );
+  const rawTriggerEvent = body.triggerEvent || body.type || body.event || body.eventType;
+  const eventType = normalizeEventType(rawTriggerEvent);
   const payload = body.payload || body.data || body;
 
   console.log("[cal-webhook] Event type normalized:", eventType);
   console.log("[cal-webhook] Payload keys:", Object.keys(payload));
+
+  // Initialize Supabase client (server-side only, service role)
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("[cal-webhook] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    return res.status(500).json({ error: "Database configuration missing" });
+  }
+
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // Extract booking identifiers early (for event history)
+  const calBookingUid = payload?.uid || payload?.id || null;
+  const calBookingId = payload?.bookingId || payload?.id || null;
+
+  // Insert event history (before lead upsert, leadId will be null initially)
+  try {
+    await supabaseAdmin.from("cal_webhook_events").insert([
+      {
+        event_type: eventType,
+        trigger_event: rawTriggerEvent || null,
+        cal_booking_uid: calBookingUid || null,
+        cal_booking_id: calBookingId ? String(calBookingId) : null,
+        lead_id: null, // Will be updated after lead upsert
+        payload: payload || {},
+      },
+    ]);
+    console.log("[cal-webhook] Event history inserted");
+  } catch (err) {
+    // Log but don't fail the webhook if event history insert fails
+    console.warn("[cal-webhook] Failed to insert event history:", err.message);
+  }
 
   // Handle different event types
   if (eventType === "ping") {
@@ -149,22 +183,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ ok: true, ignored: true, eventType });
   }
 
-  // Initialize Supabase client (server-side only, service role)
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    console.error("[cal-webhook] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-    return res.status(500).json({ error: "Database configuration missing" });
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
   // Extract booking data from payload
-  const calBookingUid = payload.uid || payload.id || null;
-  const calBookingId = payload.bookingId || payload.id || null;
   const startTime = payload.startTime || payload.start || null;
   const endTime = payload.endTime || payload.end || null;
   const attendees = payload.attendees || [];
@@ -210,7 +229,7 @@ module.exports = async function handler(req, res) {
   console.log(`[cal-webhook] Upserting lead with cal_booking_uid=${calBookingUid}`);
 
   // First, try to find existing lead by cal_booking_uid
-  const { data: existingLead } = await supabase
+  const { data: existingLead } = await supabaseAdmin
     .from("leads")
     .select("id")
     .eq("cal_booking_uid", calBookingUid)
@@ -220,7 +239,7 @@ module.exports = async function handler(req, res) {
   if (existingLead?.id) {
     // Update existing lead
     console.log(`[cal-webhook] Updating existing lead id=${existingLead.id}`);
-    result = await supabase
+    result = await supabaseAdmin
       .from("leads")
       .update(leadData)
       .eq("id", existingLead.id)
@@ -232,7 +251,7 @@ module.exports = async function handler(req, res) {
       leadData.id = `cal_${calBookingUid}_${Date.now()}`;
     }
     console.log(`[cal-webhook] Inserting new lead id=${leadData.id}`);
-    result = await supabase.from("leads").insert(leadData).select().single();
+    result = await supabaseAdmin.from("leads").insert(leadData).select().single();
   }
 
   const { data, error } = result;
@@ -247,8 +266,26 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  console.log("[cal-webhook] Upsert lead ok:", data?.id || "created/updated");
+  const leadId = data?.id || null;
+  console.log("[cal-webhook] Upsert lead ok:", leadId || "created/updated");
+
+  // Update event history with leadId (if we have one)
+  if (leadId && calBookingUid) {
+    try {
+      await supabaseAdmin
+        .from("cal_webhook_events")
+        .update({ lead_id: leadId })
+        .eq("cal_booking_uid", calBookingUid)
+        .eq("event_type", eventType)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      console.log("[cal-webhook] Event history updated with leadId");
+    } catch (err) {
+      // Log but don't fail
+      console.warn("[cal-webhook] Failed to update event history with leadId:", err.message);
+    }
+  }
 
   // Return success
-  return res.status(200).json({ ok: true, received: true, eventType, leadId: data?.id });
+  return res.status(200).json({ ok: true, received: true, eventType, leadId });
 };
