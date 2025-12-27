@@ -151,18 +151,29 @@ module.exports = async function handler(req, res) {
   const calBookingId = payload?.bookingId || payload?.id || null;
 
   // Insert event history (before lead upsert, leadId will be null initially)
+  let eventHistoryId = null;
   try {
-    await supabaseAdmin.from("cal_webhook_events").insert([
-      {
-        event_type: eventType,
-        trigger_event: rawTriggerEvent || null,
-        cal_booking_uid: calBookingUid || null,
-        cal_booking_id: calBookingId ? String(calBookingId) : null,
-        lead_id: null, // Will be updated after lead upsert
-        payload: payload || {},
-      },
-    ]);
-    console.log("[cal-webhook] Event history inserted");
+    const { data: inserted, error: insertError } = await supabaseAdmin
+      .from("cal_webhook_events")
+      .insert([
+        {
+          event_type: eventType,
+          trigger_event: rawTriggerEvent || null,
+          cal_booking_uid: calBookingUid || null,
+          cal_booking_id: calBookingId ? String(calBookingId) : null,
+          lead_id: null, // Will be updated after lead upsert
+          payload: payload || {},
+        },
+      ])
+      .select("id")
+      .single();
+
+    if (insertError) {
+      console.warn("[cal-webhook] Failed to insert event history:", insertError.message);
+    } else {
+      eventHistoryId = inserted?.id || null;
+      console.log("[cal-webhook] Event history inserted, id:", eventHistoryId);
+    }
   } catch (err) {
     // Log but don't fail the webhook if event history insert fails
     console.warn("[cal-webhook] Failed to insert event history:", err.message);
@@ -269,17 +280,14 @@ module.exports = async function handler(req, res) {
   const leadId = data?.id || null;
   console.log("[cal-webhook] Upsert lead ok:", leadId || "created/updated");
 
-  // Update event history with leadId (if we have one)
-  if (leadId && calBookingUid) {
+  // Update event history with leadId (using the exact event history record ID)
+  if (leadId && eventHistoryId) {
     try {
       await supabaseAdmin
         .from("cal_webhook_events")
         .update({ lead_id: leadId })
-        .eq("cal_booking_uid", calBookingUid)
-        .eq("event_type", eventType)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      console.log("[cal-webhook] Event history updated with leadId");
+        .eq("id", eventHistoryId);
+      console.log("[cal-webhook] Event history updated with leadId:", leadId);
     } catch (err) {
       // Log but don't fail
       console.warn("[cal-webhook] Failed to update event history with leadId:", err.message);
