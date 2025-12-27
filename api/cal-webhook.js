@@ -27,6 +27,13 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
 
+  // Debug: Log header presence (before secret check)
+  console.log("[cal-webhook] headers keys:", Object.keys(req.headers));
+  console.log("[cal-webhook] got x-cal-secret?", !!req.headers["x-cal-secret"]);
+  console.log("[cal-webhook] got x-webhook-secret?", !!req.headers["x-webhook-secret"]);
+  console.log("[cal-webhook] got x-cal-webhook-secret?", !!req.headers["x-cal-webhook-secret"]);
+  console.log("[cal-webhook] got query secret?", !!req.query?.secret);
+
   // Verify secret from multiple sources (header tolerant)
   // Try multiple header names and query param
   // Vercel/Node.js lowercases headers, so check both
