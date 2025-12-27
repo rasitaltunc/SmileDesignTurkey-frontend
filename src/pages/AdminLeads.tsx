@@ -800,9 +800,14 @@ export default function AdminLeads() {
 
       const result = await response.json();
       
-      // Update local state
-      setAiRiskScore(result.ai_risk_score);
-      setAiSummary(result.ai_summary);
+      // Debug: Log response structure
+      console.log('[AdminLeads] AI analysis response:', result);
+      console.log('[AdminLeads] ai_summary field:', result.ai_summary);
+      console.log('[AdminLeads] ai_risk_score field:', result.ai_risk_score);
+      
+      // Update local state (with null safety)
+      setAiRiskScore(result.ai_risk_score ?? null);
+      setAiSummary(result.ai_summary ?? null);
 
       // Update lead in leads array
       setLeads((prevLeads) =>
@@ -810,8 +815,8 @@ export default function AdminLeads() {
           lead.id === leadId
             ? {
                 ...lead,
-                ai_risk_score: result.ai_risk_score,
-                ai_summary: result.ai_summary,
+                ai_risk_score: result.ai_risk_score ?? null,
+                ai_summary: result.ai_summary ?? null,
                 ai_last_analyzed_at: new Date().toISOString(),
               }
             : lead
@@ -819,7 +824,11 @@ export default function AdminLeads() {
       );
 
       // Show success (optional toast)
-      console.log('[AdminLeads] AI analysis completed:', result);
+      console.log('[AdminLeads] AI analysis completed. State updated:', {
+        aiRiskScore: result.ai_risk_score ?? null,
+        aiSummary: result.ai_summary ?? null,
+        hasSummary: !!(result.ai_summary),
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to analyze lead';
       setError(errorMessage);
