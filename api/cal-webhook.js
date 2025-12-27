@@ -27,8 +27,24 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
 
-  // Verify secret header
-  const providedSecret = req.headers["x-cal-secret"] || req.headers["X-Cal-Secret"];
+  // Verify secret from multiple sources (header tolerant)
+  // Try multiple header names and query param
+  const providedSecret =
+    req.headers["x-cal-secret"] ||
+    req.headers["X-Cal-Secret"] ||
+    req.headers["x-webhook-secret"] ||
+    req.headers["X-Webhook-Secret"] ||
+    req.headers["x-cal-webhook-secret"] ||
+    req.headers["X-Cal-Webhook-Secret"] ||
+    req.query?.secret;
+
+  // Log which header was used (for debugging, but not the secret value)
+  let usedHeader = "none";
+  if (req.headers["x-cal-secret"] || req.headers["X-Cal-Secret"]) usedHeader = "x-cal-secret";
+  else if (req.headers["x-webhook-secret"] || req.headers["X-Webhook-Secret"]) usedHeader = "x-webhook-secret";
+  else if (req.headers["x-cal-webhook-secret"] || req.headers["X-Cal-Webhook-Secret"]) usedHeader = "x-cal-webhook-secret";
+  else if (req.query?.secret) usedHeader = "query param (secret)";
+
   const expectedSecret = process.env.CAL_WEBHOOK_SECRET;
 
   if (!expectedSecret) {
@@ -37,9 +53,11 @@ module.exports = async function handler(req, res) {
   }
 
   if (!providedSecret || providedSecret !== expectedSecret) {
-    console.warn("[cal-webhook] Unauthorized: Invalid or missing x-cal-secret header");
+    console.warn(`[cal-webhook] Unauthorized: Invalid or missing secret (checked header: ${usedHeader})`);
     return res.status(401).json({ error: "unauthorized" });
   }
+
+  console.log(`[cal-webhook] Secret verified (source: ${usedHeader})`);
 
   // Log incoming body for debugging
   const body = req.body || {};
