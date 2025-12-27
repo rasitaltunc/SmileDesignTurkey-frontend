@@ -1233,6 +1233,79 @@ export default function AdminLeads() {
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   <div className="space-y-6">
+                    {/* AI Analysis Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                          <Brain className="w-4 h-4" />
+                          AI Analysis
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => notesLeadId && runAIAnalysis(notesLeadId)}
+                          disabled={isLoadingAI || !notesLeadId}
+                          className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                        >
+                          {isLoadingAI ? (
+                            <>
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="w-3 h-3" />
+                              Analyze
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {isLoadingAI ? (
+                        <div className="text-gray-500 text-sm">Running AI analysis...</div>
+                      ) : aiRiskScore !== null || aiSummary ? (
+                        <div className="space-y-3">
+                          {aiRiskScore !== null && (
+                            <div className="border border-gray-200 rounded-lg p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className={`w-4 h-4 ${
+                                  aiRiskScore >= 70 ? 'text-red-600' :
+                                  aiRiskScore >= 40 ? 'text-orange-600' :
+                                  aiRiskScore >= 20 ? 'text-yellow-600' :
+                                  'text-green-600'
+                                }`} />
+                                <span className="text-sm font-medium text-gray-900">
+                                  Risk Score: {aiRiskScore}/100
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  aiRiskScore >= 70 ? 'bg-red-100 text-red-800' :
+                                  aiRiskScore >= 40 ? 'bg-orange-100 text-orange-800' :
+                                  aiRiskScore >= 20 ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-green-100 text-green-800'
+                                }`}>
+                                  {aiRiskScore >= 70 ? 'High Risk' :
+                                   aiRiskScore >= 40 ? 'Medium Risk' :
+                                   aiRiskScore >= 20 ? 'Low Risk' :
+                                   'Very Low Risk'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {aiSummary && (
+                            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                              <div className="text-sm text-gray-900 whitespace-pre-wrap break-words">
+                                {aiSummary}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-gray-500 text-sm">
+                          No AI analysis yet. Click "Analyze" to generate risk score and call briefing.
+                        </div>
+                      )}
+                    </div>
+
                     {/* Timeline Section */}
                     <div>
                       <h4 className="text-sm font-semibold text-gray-700 mb-3">Timeline</h4>
