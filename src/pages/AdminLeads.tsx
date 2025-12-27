@@ -1497,19 +1497,20 @@ export default function AdminLeads() {
         {notesLeadId &&
           createPortal(
             <div
-              className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center overflow-hidden"
+              className="fixed inset-0 z-[9999] bg-black/40 flex items-start justify-center p-4 sm:p-6 overflow-y-auto"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) handleCloseNotes();
               }}
             >
-              {/* MODAL ROOT: medium-wide (blue lines target), fixed height */}
+              {/* MODAL ROOT: medium-wide (blue lines target), viewport-safe height */}
               <div
                 className="
                   bg-white
                   w-[clamp(860px,82vw,1120px)]
                   max-w-[96vw]
-                  h-[72dvh]
-                  max-h-[calc(100dvh-2rem)]
+                  max-h-[calc(100vh-3rem)]
+                  h-auto
+                  min-h-[min(720px,calc(100vh-3rem))]
                   rounded-xl shadow-xl
                   flex flex-col
                   overflow-hidden
@@ -1533,8 +1534,8 @@ export default function AdminLeads() {
                             "px-3 py-2 rounded-md text-sm font-semibold",
                             "border transition-all duration-200 min-w-[140px]",
                             isMarkingContacted || !notesLeadId
-                              ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-green-600 text-white border-green-600 hover:bg-green-700 hover:border-green-700 shadow-sm hover:shadow"
+                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-green-600 !text-white border-green-600 hover:bg-green-700 hover:border-green-700 shadow-sm hover:shadow"
                           ].join(" ")}
                           title={!notesLeadId ? "Select a lead first" : "Mark as contacted (Call/WhatsApp/Email)"}
                         >
@@ -1560,8 +1561,8 @@ export default function AdminLeads() {
                             "border transition-all duration-200 min-w-[180px]",
                             "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2",
                             isLoadingAI || !notesLeadId
-                              ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-gradient-to-r from-blue-600 to-purple-600 text-white border-transparent hover:from-blue-700 hover:to-purple-700 shadow-sm hover:shadow-md"
+                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-gradient-to-r from-blue-600 to-purple-600 !text-white border-transparent hover:from-blue-700 hover:to-purple-700 shadow-sm hover:shadow-md"
                           ].join(" ")}
                           title={!notesLeadId ? "Select a lead first" : "Generate AI-powered call briefing"}
                         >
@@ -1818,8 +1819,8 @@ export default function AdminLeads() {
                                 "px-3 py-2 rounded-md text-sm font-semibold",
                                 "border transition-all duration-200 min-w-[100px]",
                                 isAddingContact || !newContactChannel || !newContactNote.trim()
-                                  ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
-                                  : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
+                                  ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                                  : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
                               ].join(" ")}
                               title={!newContactNote.trim() ? "Type a note to enable" : "Add contact attempt"}
                             >
@@ -1975,8 +1976,8 @@ export default function AdminLeads() {
                           "px-4 py-2 rounded-md text-sm font-semibold",
                           "border transition-all duration-200 min-w-[120px]",
                           !newNoteContent.trim() || isSavingNote
-                            ? "bg-gray-100 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed"
-                            : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
+                            ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                            : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
                         ].join(" ")}
                         title={!newNoteContent.trim() ? "Type a note to enable" : "Add note to lead"}
                       >
