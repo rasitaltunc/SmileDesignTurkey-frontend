@@ -361,26 +361,28 @@ module.exports = async function handler(req, res) {
       whatToSay.push("Be warm and professional — focus on understanding their needs");
     }
 
-    // Format enhanced "Call Intelligence Brief"
+    // Format enhanced "Call Intelligence Brief" - Human-readable format
     const riskLevel = riskScore >= 70 ? "High" : riskScore >= 40 ? "Medium" : riskScore >= 20 ? "Low" : "Very Low";
+    const riskEmoji = riskScore >= 70 ? "🔴" : riskScore >= 40 ? "🟠" : riskScore >= 20 ? "🟡" : "🟢";
     
-    const aiSummary = `CALL INTELLIGENCE BRIEF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Risk Level: ${riskLevel} (${Math.round(riskScore)}/100)
+    // Build suggested opening (first talking point, formatted as a quote)
+    const suggestedOpening = whatToSay.length > 0 ? whatToSay[0] : "Be warm and professional — focus on understanding their needs";
+    
+    const aiSummary = `Risk Level: ${riskEmoji} ${riskLevel} (${Math.round(riskScore)}/100)
 Priority: ${priority}
 Last Contacted: ${lastContactedText}
 ${followUpSuggestion ? `Follow-up: ${followUpSuggestion}` : ''}
 
-WHAT HAPPENED
+Why
 ${whatHappened.slice(0, 3).map((b) => `• ${b}`).join("\n")}
 
-RISK ASSESSMENT
-${riskFactors.slice(0, 3).map((b) => `• ${b}`).join("\n")}
-
-WHAT TO SAY ON THE CALL
+What to say
 ${whatToSay.slice(0, 3).map((b) => `• ${b}`).join("\n")}
 
-CONTEXT
+Suggested opening
+"${suggestedOpening}"
+
+Context
 Source: ${lead.source || "unknown"} | Last activity: ${timelineEvents.length > 0 ? "Recent" : "None"} | ${hasPhone ? "Has phone" : "No phone"} | ${hasNotes ? "Has notes" : "No notes"}`;
 
     // 6) Update lead with AI analysis
