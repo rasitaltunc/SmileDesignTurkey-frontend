@@ -12,6 +12,7 @@ import UploadCenter from './pages/UploadCenter';
 import Onboarding from './pages/Onboarding';
 import PlanDashboard from './pages/PlanDashboard';
 import AdminLeads from './pages/AdminLeads';
+import Intake from './pages/Intake';
 import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
@@ -109,6 +110,8 @@ export default function App() {
         return <Onboarding />;
       case '/plan-dashboard':
         return <PlanDashboard />;
+      case '/intake':
+        return <Intake />;
       case '/admin':
         // Redirect /admin to /admin/leads
         navigate('/admin/leads', { replace: true });

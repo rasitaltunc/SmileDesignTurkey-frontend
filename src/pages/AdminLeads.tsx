@@ -177,6 +177,22 @@ export default function AdminLeads() {
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [selectedEmployeeByLead, setSelectedEmployeeByLead] = useState<Record<string, string>>({});
 
+  // Patient intakes state (admin only)
+  const [intakes, setIntakes] = useState<Array<{
+    id: string;
+    created_at: string;
+    full_name: string;
+    phone?: string;
+    email?: string;
+    country?: string;
+    treatment_type?: string;
+    notes?: string;
+    lead_id?: string;
+    status: string;
+  }>>([]);
+  const [isLoadingIntakes, setIsLoadingIntakes] = useState(false);
+  const [convertingIntakeId, setConvertingIntakeId] = useState<string | null>(null);
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
