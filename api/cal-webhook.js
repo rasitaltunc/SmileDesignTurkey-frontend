@@ -29,20 +29,23 @@ module.exports = async function handler(req, res) {
 
   // Verify secret from multiple sources (header tolerant)
   // Try multiple header names and query param
-  const providedSecret =
+  // Vercel/Node.js lowercases headers, so check both
+  const providedSecretRaw =
     req.headers["x-cal-secret"] ||
-    req.headers["X-Cal-Secret"] ||
     req.headers["x-webhook-secret"] ||
-    req.headers["X-Webhook-Secret"] ||
     req.headers["x-cal-webhook-secret"] ||
-    req.headers["X-Cal-Webhook-Secret"] ||
     req.query?.secret;
+
+  // Convert to string and trim (handle arrays, whitespace, etc.)
+  const providedSecret = providedSecretRaw
+    ? String(providedSecretRaw).trim()
+    : null;
 
   // Log which header was used (for debugging, but not the secret value)
   let usedHeader = "none";
-  if (req.headers["x-cal-secret"] || req.headers["X-Cal-Secret"]) usedHeader = "x-cal-secret";
-  else if (req.headers["x-webhook-secret"] || req.headers["X-Webhook-Secret"]) usedHeader = "x-webhook-secret";
-  else if (req.headers["x-cal-webhook-secret"] || req.headers["X-Cal-Webhook-Secret"]) usedHeader = "x-cal-webhook-secret";
+  if (req.headers["x-cal-secret"]) usedHeader = "x-cal-secret";
+  else if (req.headers["x-webhook-secret"]) usedHeader = "x-webhook-secret";
+  else if (req.headers["x-cal-webhook-secret"]) usedHeader = "x-cal-webhook-secret";
   else if (req.query?.secret) usedHeader = "query param (secret)";
 
   const expectedSecret = process.env.CAL_WEBHOOK_SECRET;
@@ -52,8 +55,11 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "Webhook secret not configured" });
   }
 
+  // Debug: Log lengths and first/last chars (never full secret)
+  console.log(`[cal-webhook] Secret check: providedLength=${providedSecret?.length || 0}, expectedLength=${expectedSecret.length}, header=${usedHeader}`);
+
   if (!providedSecret || providedSecret !== expectedSecret) {
-    console.warn(`[cal-webhook] Unauthorized: Invalid or missing secret (checked header: ${usedHeader})`);
+    console.warn(`[cal-webhook] Unauthorized: Invalid or missing secret (checked header: ${usedHeader}, providedLength=${providedSecret?.length || 0}, expectedLength=${expectedSecret.length})`);
     return res.status(401).json({ error: "unauthorized" });
   }
 
