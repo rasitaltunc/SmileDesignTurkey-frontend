@@ -34,11 +34,18 @@ export default function Login() {
       const role = result?.role;
       if (!role) return;
 
+      // Redirect based on role
       if (role === 'admin') {
         window.history.pushState({}, '', '/admin/leads');
         window.dispatchEvent(new PopStateEvent('popstate'));
       } else if (role === 'employee') {
         window.history.pushState({}, '', '/employee/leads');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } else if (role === 'patient') {
+        window.history.pushState({}, '', '/patient/portal');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } else if (role === 'doctor') {
+        window.history.pushState({}, '', '/doctor/portal');
         window.dispatchEvent(new PopStateEvent('popstate'));
       } else {
         window.history.pushState({}, '', '/');

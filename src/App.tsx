@@ -13,6 +13,8 @@ import Onboarding from './pages/Onboarding';
 import PlanDashboard from './pages/PlanDashboard';
 import AdminLeads from './pages/AdminLeads';
 import Intake from './pages/Intake';
+import PatientPortal from './pages/PatientPortal';
+import DoctorPortal from './pages/DoctorPortal';
 import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
@@ -112,6 +114,44 @@ export default function App() {
         return <PlanDashboard />;
       case '/intake':
         return <Intake />;
+      case '/patient/portal':
+        // Role check: only patient can access
+        if (role && role !== 'patient') {
+          return (
+            <div className="min-h-screen flex items-center justify-center p-6">
+              <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
+                <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
+                <p className="mt-2 text-gray-600">You don't have permission to access the patient portal.</p>
+                <button
+                  className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
+                  onClick={() => navigate('/')}
+                >
+                  Go back home
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return <PatientPortal />;
+      case '/doctor/portal':
+        // Role check: only doctor can access
+        if (role && role !== 'doctor') {
+          return (
+            <div className="min-h-screen flex items-center justify-center p-6">
+              <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
+                <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
+                <p className="mt-2 text-gray-600">You don't have permission to access the doctor portal.</p>
+                <button
+                  className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
+                  onClick={() => navigate('/')}
+                >
+                  Go back home
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return <DoctorPortal />;
       case '/admin':
         // Redirect /admin to /admin/leads
         navigate('/admin/leads', { replace: true });
