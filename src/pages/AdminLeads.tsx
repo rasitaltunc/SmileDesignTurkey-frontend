@@ -884,16 +884,27 @@ export default function AdminLeads() {
 
   // Load patient intakes (admin only)
   const loadIntakes = async () => {
-    if (!isAdmin || !isAuthenticated || !user) return;
+    if (!isAdmin || !isAuthenticated || !user) {
+      setIntakes([]);
+      return;
+    }
 
     setIsLoadingIntakes(true);
     try {
       const supabase = getSupabaseClient();
-      if (!supabase) throw new Error('Supabase client not configured.');
+      if (!supabase) {
+        console.warn('[AdminLeads] Supabase client not configured, skipping intakes load');
+        setIntakes([]);
+        return;
+      }
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
-      if (!token) return;
+      if (!token) {
+        console.warn('[AdminLeads] No session token, skipping intakes load');
+        setIntakes([]);
+        return;
+      }
 
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const response = await fetch(`${apiUrl}/api/patient-intake?status=pending&limit=20`, {
@@ -902,11 +913,17 @@ export default function AdminLeads() {
         },
       });
 
-      if (!response.ok) throw new Error('Failed to load intakes');
-      const result = await response.json();
-      setIntakes(result.intakes || []);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to load intakes: ${response.status} ${errorText}`);
+      }
+      
+      const result = await response.json().catch(() => ({ intakes: [] }));
+      setIntakes(Array.isArray(result.intakes) ? result.intakes : []);
     } catch (err) {
       console.error('[AdminLeads] Error loading intakes:', err);
+      // Set empty array on error to prevent crashes
+      setIntakes([]);
     } finally {
       setIsLoadingIntakes(false);
     }
