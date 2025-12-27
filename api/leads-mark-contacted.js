@@ -61,6 +61,36 @@ module.exports = async function handler(req, res) {
   });
 
   try {
+    // Parse optional channel from body (default: phone)
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    const channel = (body.channel || "phone").toString().toLowerCase();
+    const note = (body.note || "").toString().trim() || null;
+
+    // Validate channel
+    const validChannels = ["phone", "whatsapp", "email", "sms", "other"];
+    if (!validChannels.includes(channel)) {
+      return res.status(400).json({ error: `Invalid channel. Must be one of: ${validChannels.join(", ")}` });
+    }
+
+    // Insert contact event first (audit trail)
+    const { data: contactEvent, error: eventError } = await supabase
+      .from("lead_contact_events")
+      .insert([
+        {
+          lead_id: leadId,
+          channel: channel,
+          note: note,
+          created_by: null, // Service role insert, no user context
+        },
+      ])
+      .select("*")
+      .single();
+
+    if (eventError) {
+      console.error("[leads-mark-contacted] Error creating contact event:", eventError);
+      // Continue anyway - update lead even if event insert fails
+    }
+
     // Update last_contacted_at to now()
     const { data: updatedLead, error: updateError } = await supabase
       .from("leads")
@@ -84,6 +114,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       leadId: updatedLead.id,
       last_contacted_at: updatedLead.last_contacted_at,
+      contact_event: contactEvent || null,
     });
   } catch (error) {
     console.error("[leads-mark-contacted] Unhandled error:", error);

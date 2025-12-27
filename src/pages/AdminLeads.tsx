@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
@@ -181,6 +181,21 @@ export default function AdminLeads() {
   // Contact tracking state
   const [lastContactedAt, setLastContactedAt] = useState<string | null>(null);
   const [isMarkingContacted, setIsMarkingContacted] = useState(false);
+  
+  // Contact events state
+  interface ContactEvent {
+    id: number;
+    lead_id: string;
+    channel: string;
+    note: string | null;
+    created_at: string;
+    created_by: string | null;
+  }
+  const [contactEvents, setContactEvents] = useState<ContactEvent[]>([]);
+  const [isLoadingContactEvents, setIsLoadingContactEvents] = useState(false);
+  const [newContactChannel, setNewContactChannel] = useState<string>("phone");
+  const [newContactNote, setNewContactNote] = useState<string>("");
+  const [isAddingContact, setIsAddingContact] = useState(false);
 
   // Body scroll lock when notes modal is open
   useEffect(() => {
@@ -603,6 +618,98 @@ export default function AdminLeads() {
     }
   };
 
+  // Load contact events for a lead
+  const loadContactEvents = async (leadId: string) => {
+    if (!leadId) return;
+
+    setIsLoadingContactEvents(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
+
+      const response = await fetch(`${apiUrl}/api/leads-contact-events?lead_id=${leadId}&limit=5`, {
+        headers: {
+          'x-admin-token': adminToken,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load contact events');
+      }
+
+      const result = await response.json();
+      setContactEvents(result.events || []);
+    } catch (err) {
+      console.error('[AdminLeads] Error loading contact events:', err);
+      setContactEvents([]);
+    } finally {
+      setIsLoadingContactEvents(false);
+    }
+  };
+
+  // Add new contact event (quick add)
+  const addContactEvent = async (leadId: string) => {
+    if (!leadId || !newContactChannel) return;
+
+    setIsAddingContact(true);
+    setError(null);
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
+
+      const response = await fetch(`${apiUrl}/api/leads-contact-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          lead_id: leadId,
+          channel: newContactChannel,
+          note: newContactNote.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to add contact event' }));
+        throw new Error(errorData.error || 'Failed to add contact event');
+      }
+
+      const result = await response.json();
+      
+      // Add to local state (prepend to list)
+      setContactEvents((prev) => [result.event, ...prev].slice(0, 5));
+      
+      // Update last_contacted_at
+      setLastContactedAt(result.event.created_at);
+
+      // Update lead in leads array
+      setLeads((prevLeads) =>
+        prevLeads.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                last_contacted_at: result.event.created_at,
+              }
+            : lead
+        )
+      );
+
+      // Reset form
+      setNewContactChannel('phone');
+      setNewContactNote('');
+
+      console.log('[AdminLeads] Contact event added:', result);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add contact event';
+      setError(errorMessage);
+      console.error('[AdminLeads] Error adding contact event:', err);
+    } finally {
+      setIsAddingContact(false);
+    }
+  };
+
   // Mark lead as contacted
   const markContacted = async (leadId: string) => {
     if (!leadId) return;
@@ -620,7 +727,10 @@ export default function AdminLeads() {
           'Content-Type': 'application/json',
           'x-admin-token': adminToken,
         },
-        body: JSON.stringify({ lead_id: leadId }),
+        body: JSON.stringify({ 
+          lead_id: leadId,
+          channel: 'phone', // Default channel
+        }),
       });
 
       if (!response.ok) {
@@ -632,6 +742,14 @@ export default function AdminLeads() {
       
       // Update local state
       setLastContactedAt(result.last_contacted_at);
+
+      // Add contact event to local state if returned
+      if (result.contact_event) {
+        setContactEvents((prev) => [result.contact_event, ...prev].slice(0, 5));
+      } else {
+        // Reload contact events to get the new one
+        await loadContactEvents(leadId);
+      }
 
       // Update lead in leads array
       setLeads((prevLeads) =>
@@ -717,8 +835,11 @@ export default function AdminLeads() {
     setNotes([]);
     setNewNoteContent('');
     setTimeline([]);
+    setContactEvents([]);
+    setNewContactChannel('phone');
+    setNewContactNote('');
     loadAIAnalysis(leadId);
-    await Promise.all([loadNotes(leadId), loadTimeline(leadId)]);
+    await Promise.all([loadNotes(leadId), loadTimeline(leadId), loadContactEvents(leadId)]);
   };
 
   // Close notes modal
@@ -729,6 +850,9 @@ export default function AdminLeads() {
     setAiRiskScore(null);
     setAiSummary(null);
     setLastContactedAt(null);
+    setContactEvents([]);
+    setNewContactChannel('phone');
+    setNewContactNote('');
   };
 
   // Handle add note form submission
@@ -1499,6 +1623,142 @@ export default function AdminLeads() {
                                             {event.additionalNotes}
                                           </div>
                                         )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contact Events Section */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <Phone className="w-4 h-4" />
+                        Contact Attempts
+                      </h4>
+                      
+                      {/* Quick Add Form */}
+                      <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            if (notesLeadId) {
+                              addContactEvent(notesLeadId);
+                            }
+                          }}
+                          className="space-y-2"
+                        >
+                          <div className="flex gap-2">
+                            <select
+                              value={newContactChannel}
+                              onChange={(e) => setNewContactChannel(e.target.value)}
+                              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              disabled={isAddingContact}
+                            >
+                              <option value="phone">Phone</option>
+                              <option value="whatsapp">WhatsApp</option>
+                              <option value="email">Email</option>
+                              <option value="sms">SMS</option>
+                              <option value="other">Other</option>
+                            </select>
+                            <input
+                              type="text"
+                              value={newContactNote}
+                              onChange={(e) => setNewContactNote(e.target.value)}
+                              placeholder="Quick note (optional)..."
+                              className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              disabled={isAddingContact}
+                            />
+                            <button
+                              type="submit"
+                              disabled={isAddingContact || !newContactChannel}
+                              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                            >
+                              {isAddingContact ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  Adding...
+                                </>
+                              ) : (
+                                <>
+                                  <Phone className="w-3 h-3" />
+                                  Add
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+
+                      {/* Contact Events List */}
+                      {isLoadingContactEvents ? (
+                        <div className="text-gray-500 text-sm">Loading contact events…</div>
+                      ) : contactEvents.length === 0 ? (
+                        <div className="text-gray-500 text-sm">No contact attempts yet.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {contactEvents.map((event) => {
+                            const date = new Date(event.created_at);
+                            const formattedDate = date.toLocaleString('tr-TR', {
+                              timeZone: 'Europe/Istanbul',
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            });
+
+                            const getChannelIcon = () => {
+                              switch (event.channel) {
+                                case 'phone':
+                                  return <Phone className="w-4 h-4 text-blue-600" />;
+                                case 'whatsapp':
+                                  return <MessageCircle className="w-4 h-4 text-green-600" />;
+                                case 'email':
+                                  return <Mail className="w-4 h-4 text-purple-600" />;
+                                case 'sms':
+                                  return <MessageSquare className="w-4 h-4 text-orange-600" />;
+                                default:
+                                  return <Phone className="w-4 h-4 text-gray-600" />;
+                              }
+                            };
+
+                            const getChannelLabel = () => {
+                              switch (event.channel) {
+                                case 'phone':
+                                  return 'Phone';
+                                case 'whatsapp':
+                                  return 'WhatsApp';
+                                case 'email':
+                                  return 'Email';
+                                case 'sms':
+                                  return 'SMS';
+                                default:
+                                  return event.channel.charAt(0).toUpperCase() + event.channel.slice(1);
+                              }
+                            };
+
+                            return (
+                              <div
+                                key={event.id}
+                                className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="mt-0.5">{getChannelIcon()}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium text-sm text-gray-900">
+                                        {getChannelLabel()}
+                                      </span>
+                                      <span className="text-xs text-gray-500">—</span>
+                                      <span className="text-xs text-gray-500">{formattedDate}</span>
+                                    </div>
+                                    {event.note && (
+                                      <div className="mt-2 text-xs text-gray-600 whitespace-pre-wrap break-words">
+                                        {event.note}
                                       </div>
                                     )}
                                   </div>
