@@ -637,6 +637,98 @@ export default function AdminLeads() {
           </div>
         </div>
 
+        {/* Patient Intakes Section (Admin Only) */}
+        {isAdmin && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Patient Intakes</h2>
+                <p className="text-gray-600 text-sm mt-1">
+                  {isLoadingIntakes ? 'Loading...' : `${intakes.length} pending intakes`}
+                </p>
+              </div>
+              <button
+                onClick={loadIntakes}
+                disabled={isLoadingIntakes}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingIntakes ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+
+            {intakes.length === 0 ? (
+              <p className="text-gray-500 text-sm">No pending intakes.</p>
+            ) : (
+              <div className="space-y-3">
+                {intakes.map((intake) => (
+                  <div
+                    key={intake.id}
+                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-semibold text-gray-900">{intake.full_name}</h3>
+                          <span className="text-xs text-gray-500">
+                            {new Date(intake.created_at).toLocaleString()}
+                          </span>
+                          {intake.lead_id && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                              Converted
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                          {intake.phone && (
+                            <div>
+                              <span className="font-medium">Phone:</span> {intake.phone}
+                            </div>
+                          )}
+                          {intake.email && (
+                            <div>
+                              <span className="font-medium">Email:</span> {intake.email}
+                            </div>
+                          )}
+                          {intake.country && (
+                            <div>
+                              <span className="font-medium">Country:</span> {intake.country}
+                            </div>
+                          )}
+                          {intake.treatment_type && (
+                            <div>
+                              <span className="font-medium">Treatment:</span> {intake.treatment_type}
+                            </div>
+                          )}
+                        </div>
+                        {intake.notes && (
+                          <p className="text-sm text-gray-600 mt-2">{intake.notes}</p>
+                        )}
+                      </div>
+                      {!intake.lead_id && (
+                        <button
+                          onClick={() => convertIntakeToLead(intake.id)}
+                          disabled={convertingIntakeId === intake.id}
+                          className="ml-4 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
+                        >
+                          {convertingIntakeId === intake.id ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              Converting...
+                            </>
+                          ) : (
+                            'Convert to Lead'
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Error Banner */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
