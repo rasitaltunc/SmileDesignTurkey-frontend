@@ -111,12 +111,110 @@ module.exports = async function handler(req, res) {
   console.log("[cal-webhook] Event type:", eventType);
   console.log("[cal-webhook] Payload keys:", Object.keys(payload));
 
-  // TODO: Process the event
-  // Examples:
-  // - booking.created: Create/update lead with appointment info
-  // - booking.cancelled: Update lead status
-  // - booking.rescheduled: Update appointment time
+  // Only handle booking.created and booking.rescheduled
+  if (eventType !== "booking.created" && eventType !== "booking.rescheduled") {
+    console.log(`[cal-webhook] Ignoring event type: ${eventType}`);
+    return res.status(200).json({ ok: true, received: true, eventType, skipped: true });
+  }
 
-  // For now, just acknowledge receipt
-  return res.status(200).json({ ok: true, received: true, eventType });
+  // Initialize Supabase client (server-side only, service role)
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("[cal-webhook] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    return res.status(500).json({ error: "Database configuration missing" });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // Extract booking data from payload
+  const calBookingUid = payload.uid || payload.id || null;
+  const calBookingId = payload.bookingId || payload.id || null;
+  const startTime = payload.startTime || payload.start || null;
+  const endTime = payload.endTime || payload.end || null;
+  const attendees = payload.attendees || [];
+  const patientEmail = attendees[0]?.email || payload.email || null;
+  const patientName =
+    attendees[0]?.name ||
+    payload.name ||
+    payload.title ||
+    payload.bookerUrl ||
+    null;
+  const notes = payload.additionalNotes || payload.notes || payload.description || null;
+  const calStatus = payload.status || "confirmed";
+
+  console.log(`[cal-webhook] Extracted: uid=${calBookingUid}, email=${patientEmail}, name=${patientName}`);
+
+  // Validate required fields
+  if (!calBookingUid) {
+    console.warn("[cal-webhook] Missing cal_booking_uid, cannot upsert lead");
+    return res.status(200).json({ ok: true, received: true, eventType, warning: "Missing booking UID" });
+  }
+
+  // Prepare lead data
+  const leadData = {
+    cal_booking_uid: calBookingUid,
+    cal_booking_id: calBookingId,
+    source: "cal.com",
+    status: eventType === "booking.rescheduled" ? "booked" : "booked",
+    email: patientEmail || null,
+    name: patientName || null,
+    meeting_start: startTime || null,
+    meeting_end: endTime || null,
+    notes: notes || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Remove null/undefined fields to avoid overwriting existing data with null
+  Object.keys(leadData).forEach((key) => {
+    if (leadData[key] === null || leadData[key] === undefined) {
+      delete leadData[key];
+    }
+  });
+
+  console.log(`[cal-webhook] Upserting lead with cal_booking_uid=${calBookingUid}`);
+
+  // First, try to find existing lead by cal_booking_uid
+  const { data: existingLead } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("cal_booking_uid", calBookingUid)
+    .single();
+
+  let result;
+  if (existingLead?.id) {
+    // Update existing lead
+    console.log(`[cal-webhook] Updating existing lead id=${existingLead.id}`);
+    result = await supabase
+      .from("leads")
+      .update(leadData)
+      .eq("id", existingLead.id)
+      .select()
+      .single();
+  } else {
+    // Insert new lead (generate ID if not provided)
+    if (!leadData.id) {
+      leadData.id = `cal_${calBookingUid}_${Date.now()}`;
+    }
+    console.log(`[cal-webhook] Inserting new lead id=${leadData.id}`);
+    result = await supabase.from("leads").insert(leadData).select().single();
+  }
+
+  if (error) {
+    console.error("[cal-webhook] Upsert lead failed:", error.message);
+    return res.status(200).json({
+      ok: true,
+      received: true,
+      eventType,
+      error: error.message,
+    });
+  }
+
+  console.log("[cal-webhook] Upsert lead ok:", data?.id || "created/updated");
+
+  // Return success
+  return res.status(200).json({ ok: true, received: true, eventType, leadId: data?.id });
 };
