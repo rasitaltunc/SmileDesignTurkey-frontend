@@ -150,6 +150,36 @@ module.exports = async function handler(req, res) {
   const calBookingUid = payload?.uid || payload?.id || null;
   const calBookingId = payload?.bookingId || payload?.id || null;
 
+  // For booking.rescheduled, read current lead values before updating
+  let previousMeetingStart = null;
+  let previousMeetingEnd = null;
+  
+  if (eventType === "booking.rescheduled" && calBookingUid) {
+    try {
+      const { data: existingLead } = await supabaseAdmin
+        .from("leads")
+        .select("meeting_start, meeting_end")
+        .eq("cal_booking_uid", calBookingUid)
+        .single();
+
+      if (existingLead) {
+        previousMeetingStart = existingLead.meeting_start || null;
+        previousMeetingEnd = existingLead.meeting_end || null;
+        console.log(`[cal-webhook] Found previous meeting times: ${previousMeetingStart} -> ${previousMeetingEnd}`);
+      }
+    } catch (err) {
+      // Lead might not exist yet, that's okay
+      console.log("[cal-webhook] No existing lead found for reschedule, will create new");
+    }
+  }
+
+  // Prepare enhanced payload with previous meeting times for rescheduled events
+  const enhancedPayload = { ...(payload || {}) };
+  if (eventType === "booking.rescheduled") {
+    enhancedPayload.previousMeetingStart = previousMeetingStart;
+    enhancedPayload.previousMeetingEnd = previousMeetingEnd;
+  }
+
   // Insert event history (before lead upsert, leadId will be null initially)
   let eventHistoryId = null;
   try {
@@ -162,7 +192,7 @@ module.exports = async function handler(req, res) {
           cal_booking_uid: calBookingUid || null,
           cal_booking_id: calBookingId ? String(calBookingId) : null,
           lead_id: null, // Will be updated after lead upsert
-          payload: payload || {},
+          payload: enhancedPayload,
         },
       ])
       .select("id")

@@ -164,6 +164,8 @@ export default function AdminLeads() {
     calBookingId: string | null;
     startTime: string | null;
     endTime: string | null;
+    previousMeetingStart: string | null;
+    previousMeetingEnd: string | null;
     title: string | null;
     additionalNotes: string | null;
   }
@@ -1359,9 +1361,22 @@ export default function AdminLeads() {
 
                             const startTimeFormatted = formatTime(event.startTime);
                             const endTimeFormatted = formatTime(event.endTime);
-                            const timeRange = startTimeFormatted && endTimeFormatted
-                              ? `${startTimeFormatted} → ${endTimeFormatted}`
-                              : startTimeFormatted || endTimeFormatted || null;
+                            const previousStartFormatted = formatTime(event.previousMeetingStart);
+                            const previousEndFormatted = formatTime(event.previousMeetingEnd);
+                            
+                            // For rescheduled events, show "from -> to" format
+                            let timeRange: string | null = null;
+                            if (event.eventType === 'booking.rescheduled' && previousStartFormatted && startTimeFormatted) {
+                              // Show "from -> to" for rescheduled
+                              const fromTime = previousStartFormatted + (previousEndFormatted ? ` → ${previousEndFormatted}` : '');
+                              const toTime = startTimeFormatted + (endTimeFormatted ? ` → ${endTimeFormatted}` : '');
+                              timeRange = `${fromTime} → ${toTime}`;
+                            } else if (startTimeFormatted && endTimeFormatted) {
+                              // Regular time range
+                              timeRange = `${startTimeFormatted} → ${endTimeFormatted}`;
+                            } else {
+                              timeRange = startTimeFormatted || endTimeFormatted || null;
+                            }
 
                             return (
                               <div

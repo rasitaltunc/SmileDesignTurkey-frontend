@@ -100,6 +100,8 @@ module.exports = async function handler(req, res) {
         calBookingId: event.cal_booking_id,
         startTime: payload.startTime || payload.start || null,
         endTime: payload.endTime || payload.end || null,
+        previousMeetingStart: payload.previousMeetingStart || null,
+        previousMeetingEnd: payload.previousMeetingEnd || null,
         title: payload.title || payload.name || null,
         additionalNotes: payload.additionalNotes || payload.notes || payload.description || null,
       };
