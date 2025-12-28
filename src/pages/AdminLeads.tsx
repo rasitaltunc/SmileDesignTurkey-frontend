@@ -1508,6 +1508,14 @@ export default function AdminLeads() {
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
             }}
+            onWheelCapture={(e) => {
+              // SADECE backdrop'ta engelle → modal içi scroll bozulmaz
+              if (e.target === e.currentTarget) e.preventDefault();
+            }}
+            onTouchMoveCapture={(e) => {
+              // SADECE backdrop'ta engelle → modal içi scroll bozulmaz
+              if (e.target === e.currentTarget) e.preventDefault();
+            }}
           >
               <div
                 className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
@@ -1598,12 +1606,11 @@ export default function AdminLeads() {
                     WebkitOverflowScrolling: "touch",
                     overscrollBehavior: "contain",
                   }}
-                  onWheelCapture={(e) => {
-                    // wheel event modal dışına kaçmasın
+                  onWheel={(e) => {
+                    // event yukarı çıkmasın, sayfaya akmasın
                     e.stopPropagation();
                   }}
-                  onTouchMoveCapture={(e) => {
-                    // iOS/Safari touch scroll kaçmasın (capture daha sağlam)
+                  onTouchMove={(e) => {
                     e.stopPropagation();
                   }}
                 >
