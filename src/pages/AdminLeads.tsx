@@ -1629,8 +1629,8 @@ export default function AdminLeads() {
                     // wheel event modal dışına kaçmasın
                     e.stopPropagation();
                   }}
-                  onTouchMove={(e) => {
-                    // iOS/Safari touch scroll kaçmasın
+                  onTouchMoveCapture={(e) => {
+                    // iOS/Safari touch scroll kaçmasın (capture daha sağlam)
                     e.stopPropagation();
                   }}
                 >
