@@ -1508,14 +1508,6 @@ export default function AdminLeads() {
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
             }}
-            onWheelCapture={(e) => {
-              // sadece backdrop'ta wheel olursa engelle
-              if (e.target === e.currentTarget) e.preventDefault();
-            }}
-            onTouchMoveCapture={(e) => {
-              // sadece backdrop'ta touch olursa engelle (capture daha sağlam)
-              if (e.target === e.currentTarget) e.preventDefault();
-            }}
           >
               <div
                 className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
