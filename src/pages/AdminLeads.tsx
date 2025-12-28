@@ -269,79 +269,6 @@ export default function AdminLeads() {
     };
   }, [notesLeadId]);
 
-  // Document-level wheel handler (Safari wheel routing bypass)
-  useEffect(() => {
-    if (!notesLeadId) return;
-
-    const opts: AddEventListenerOptions = { passive: false, capture: true };
-
-    const handler = (e: WheelEvent) => {
-      console.log("wheel fired");
-      const el = modalScrollRef.current;
-      if (!el) return;
-
-      // (opsiyonel ama iyi) sadece modal açıkken ve event MODAL içinde olunca çalışsın:
-      // Eğer "her yerde scroll modal olsun" istiyorsan bu if'i kaldır.
-      const target = e.target as Element | null;
-      const insideModal = !!target?.closest?.('[data-modal-root="true"]');
-      if (!insideModal) return;
-
-      // deltaMode normalize (Safari bazen line mode)
-      const delta =
-        e.deltaMode === 1 ? e.deltaY * 16 :   // line -> px
-        e.deltaMode === 2 ? e.deltaY * window.innerHeight : // page -> px
-        e.deltaY;
-
-      const before = {
-        top: el.scrollTop,
-        h: el.scrollHeight,
-        ch: el.clientHeight,
-      };
-      el.scrollTop += delta;
-      const after = {
-        top: el.scrollTop,
-        h: el.scrollHeight,
-        ch: el.clientHeight,
-      };
-      console.log("scroll stats", { before, after, delta });
-      e.preventDefault();
-    };
-
-    // Safari bazen mousewheel gönderiyor (legacy)
-    const mousewheelHandler = (e: any) => {
-      console.log("mousewheel fired");
-      const el = modalScrollRef.current;
-      if (!el) return;
-
-      const target = e.target as Element | null;
-      const insideModal = !!target?.closest?.('[data-modal-root="true"]');
-      if (!insideModal) return;
-
-      // wheelDelta genelde ters işaretli gelebilir
-      const delta = -(e.wheelDelta ?? 0);
-      const before = {
-        top: el.scrollTop,
-        h: el.scrollHeight,
-        ch: el.clientHeight,
-      };
-      el.scrollTop += delta;
-      const after = {
-        top: el.scrollTop,
-        h: el.scrollHeight,
-        ch: el.clientHeight,
-      };
-      console.log("scroll stats", { before, after, delta });
-      e.preventDefault?.();
-    };
-
-    window.addEventListener("wheel", handler, opts);
-    window.addEventListener("mousewheel", mousewheelHandler, opts as any);
-
-    return () => {
-      window.removeEventListener("wheel", handler, opts);
-      window.removeEventListener("mousewheel", mousewheelHandler, opts as any);
-    };
-  }, [notesLeadId]);
 
   // Timeline state
   interface TimelineEvent {
@@ -1666,15 +1593,12 @@ export default function AdminLeads() {
                 </div>
               </div>
 
-                {/* BODY */}
+                {/* BODY - TEK SCROLL ALANI */}
                 <div
                   ref={modalScrollRef}
-                  data-modal-scroll="true"
-                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4 pb-24 overscroll-contain"
+                  className="flex-1 overflow-y-scroll px-5 py-4"
                   style={{
                     WebkitOverflowScrolling: "touch",
-                    overscrollBehavior: "contain",
-                    touchAction: "pan-y",
                   }}
                 >
                   <div className="space-y-6">
