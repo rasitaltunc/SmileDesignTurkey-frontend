@@ -1596,7 +1596,7 @@ export default function AdminLeads() {
                 {/* BODY - TEK SCROLL ALANI */}
                 <div
                   ref={modalScrollRef}
-                  className="flex-1 overflow-y-scroll px-5 py-4"
+                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4"
                   style={{
                     WebkitOverflowScrolling: "touch",
                   }}
