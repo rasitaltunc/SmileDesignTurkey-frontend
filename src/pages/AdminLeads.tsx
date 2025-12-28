@@ -1513,7 +1513,7 @@ export default function AdminLeads() {
           >
               <div
                 data-modal-root="true"
-                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 grid grid-rows-[auto,1fr,auto] overflow-hidden"
+                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 grid grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden"
                 style={{
                   width: "min(92vw, 720px)",
                   height: "min(80vh, 720px)",
