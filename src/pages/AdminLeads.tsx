@@ -269,10 +269,25 @@ export default function AdminLeads() {
     };
   }, [notesLeadId]);
 
-  // Modal açılınca scroll alanına focus (wheel routing iyileşiyor)
+  // Document-level wheel handler (Safari wheel routing bypass)
   useEffect(() => {
     if (!notesLeadId) return;
-    setTimeout(() => modalScrollRef.current?.focus(), 0);
+
+    const onWheel = (e: WheelEvent) => {
+      const el = modalScrollRef.current;
+      if (!el) return;
+
+      // modal açıkken wheel HER ZAMAN modal body'yi scroll etsin
+      el.scrollTop += e.deltaY;
+      e.preventDefault();
+    };
+
+    // Safari için: capture + passive:false şart
+    document.addEventListener("wheel", onWheel, { passive: false, capture: true });
+
+    return () => {
+      document.removeEventListener("wheel", onWheel, { capture: true } as any);
+    };
   }, [notesLeadId]);
 
   // Timeline state
@@ -1600,19 +1615,12 @@ export default function AdminLeads() {
                 {/* BODY */}
                 <div
                   ref={modalScrollRef}
-                  tabIndex={0}
                   data-modal-scroll="true"
-                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4 pb-24 overscroll-contain focus:outline-none"
+                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4 pb-24 overscroll-contain"
                   style={{
                     WebkitOverflowScrolling: "touch",
                     overscrollBehavior: "contain",
                     touchAction: "pan-y",
-                  }}
-                  onWheel={(e) => {
-                    // SAFARI FIX: wheel eventini manuel scrolla çevir
-                    const el = e.currentTarget;
-                    el.scrollTop += e.deltaY;
-                    e.preventDefault();
                   }}
                 >
                   <div className="space-y-6">
