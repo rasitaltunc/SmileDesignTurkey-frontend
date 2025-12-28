@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
@@ -243,6 +243,7 @@ export default function AdminLeads() {
   const [newNoteContent, setNewNoteContent] = useState<string>('');
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const modalScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Lock body scroll when modal is open (position: fixed yöntemi - Safari-proof, modal scroll'a dokunmaz)
   useEffect(() => {
@@ -266,6 +267,12 @@ export default function AdminLeads() {
       body.style.width = "";
       window.scrollTo(0, scrollY);
     };
+  }, [notesLeadId]);
+
+  // Modal açılınca scroll alanına focus (wheel routing iyileşiyor)
+  useEffect(() => {
+    if (!notesLeadId) return;
+    setTimeout(() => modalScrollRef.current?.focus(), 0);
   }, [notesLeadId]);
 
   // Timeline state
@@ -1592,11 +1599,20 @@ export default function AdminLeads() {
 
                 {/* BODY */}
                 <div
+                  ref={modalScrollRef}
+                  tabIndex={0}
                   data-modal-scroll="true"
-                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4 pb-24 overscroll-contain"
+                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4 pb-24 overscroll-contain focus:outline-none"
                   style={{
                     WebkitOverflowScrolling: "touch",
                     overscrollBehavior: "contain",
+                    touchAction: "pan-y",
+                  }}
+                  onWheel={(e) => {
+                    // SAFARI FIX: wheel eventini manuel scrolla çevir
+                    const el = e.currentTarget;
+                    el.scrollTop += e.deltaY;
+                    e.preventDefault();
                   }}
                 >
                   <div className="space-y-6">
