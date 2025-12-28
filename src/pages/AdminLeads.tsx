@@ -261,9 +261,10 @@ export default function AdminLeads() {
 
     // Safari's "passive" touch/wheel saçmalığı için document seviyesinde lock
     const allowScrollInside = (target: EventTarget | null) => {
-      if (!(target instanceof HTMLElement)) return false;
+      const el = target as Element | null;
       // modal body'ye data-modal-scroll="true" attribute'u koyduk
-      return !!target.closest('[data-modal-scroll="true"]');
+      // SVGPathElement vs. durumları için Element kontrolü (HTMLElement değil)
+      return !!el?.closest?.('[data-modal-scroll="true"]');
     };
 
     const onWheel = (e: WheelEvent) => {
@@ -1532,7 +1533,8 @@ export default function AdminLeads() {
               // sadece backdrop'ta wheel olursa engelle
               if (e.target === e.currentTarget) e.preventDefault();
             }}
-            onTouchMove={(e) => {
+            onTouchMoveCapture={(e) => {
+              // sadece backdrop'ta touch olursa engelle (capture daha sağlam)
               if (e.target === e.currentTarget) e.preventDefault();
             }}
           >
