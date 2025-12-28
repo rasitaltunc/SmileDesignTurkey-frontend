@@ -1525,8 +1525,10 @@ export default function AdminLeads() {
                 data-modal-root="true"
                 className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 grid grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden"
                 style={{
-                  width: "min(92vw, 720px)",
-                  height: "min(80vh, 720px)",
+                  width: "92vw",
+                  maxWidth: "720px",
+                  height: "80vh",
+                  maxHeight: "720px",
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
               >
@@ -1609,7 +1611,7 @@ export default function AdminLeads() {
                   tabIndex={0}
                   role="region"
                   aria-label="Notes content"
-                  className="min-h-0 overflow-y-scroll px-5 py-4 focus:outline-none"
+                  className="min-h-0 overflow-y-auto px-5 py-4 focus:outline-none"
                   style={{
                     WebkitOverflowScrolling: "touch",
                   }}
