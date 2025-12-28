@@ -273,20 +273,49 @@ export default function AdminLeads() {
   useEffect(() => {
     if (!notesLeadId) return;
 
-    const onWheel = (e: WheelEvent) => {
+    const opts: AddEventListenerOptions = { passive: false, capture: true };
+
+    const handler = (e: WheelEvent) => {
       const el = modalScrollRef.current;
       if (!el) return;
 
-      // modal açıkken wheel HER ZAMAN modal body'yi scroll etsin
-      el.scrollTop += e.deltaY;
+      // (opsiyonel ama iyi) sadece modal açıkken ve event MODAL içinde olunca çalışsın:
+      // Eğer "her yerde scroll modal olsun" istiyorsan bu if'i kaldır.
+      const target = e.target as Element | null;
+      const insideModal = !!target?.closest?.('[data-modal-root="true"]');
+      if (!insideModal) return;
+
+      // deltaMode normalize (Safari bazen line mode)
+      const delta =
+        e.deltaMode === 1 ? e.deltaY * 16 :   // line -> px
+        e.deltaMode === 2 ? e.deltaY * window.innerHeight : // page -> px
+        e.deltaY;
+
+      el.scrollTop += delta;
       e.preventDefault();
     };
 
-    // Safari için: capture + passive:false şart
-    document.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    // Safari bazen mousewheel gönderiyor (legacy)
+    const mousewheelHandler = (e: any) => {
+      const el = modalScrollRef.current;
+      if (!el) return;
+
+      const target = e.target as Element | null;
+      const insideModal = !!target?.closest?.('[data-modal-root="true"]');
+      if (!insideModal) return;
+
+      // wheelDelta genelde ters işaretli gelebilir
+      const delta = -(e.wheelDelta ?? 0);
+      el.scrollTop += delta;
+      e.preventDefault?.();
+    };
+
+    window.addEventListener("wheel", handler, opts);
+    window.addEventListener("mousewheel", mousewheelHandler, opts as any);
 
     return () => {
-      document.removeEventListener("wheel", onWheel, { capture: true } as any);
+      window.removeEventListener("wheel", handler, opts);
+      window.removeEventListener("mousewheel", mousewheelHandler, opts as any);
     };
   }, [notesLeadId]);
 
@@ -1532,6 +1561,7 @@ export default function AdminLeads() {
             }}
           >
               <div
+                data-modal-root="true"
                 className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
                 style={{
                   width: "min(92vw, 720px)",
