@@ -1508,14 +1508,6 @@ export default function AdminLeads() {
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
             }}
-            onWheelCapture={(e) => {
-              // SADECE backdrop'ta engelle → modal içi scroll bozulmaz
-              if (e.target === e.currentTarget) e.preventDefault();
-            }}
-            onTouchMoveCapture={(e) => {
-              // SADECE backdrop'ta engelle → modal içi scroll bozulmaz
-              if (e.target === e.currentTarget) e.preventDefault();
-            }}
           >
               <div
                 className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
@@ -1601,17 +1593,10 @@ export default function AdminLeads() {
                 {/* BODY */}
                 <div
                   data-modal-scroll="true"
-                  className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-24 overscroll-contain"
+                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4 pb-24 overscroll-contain"
                   style={{
                     WebkitOverflowScrolling: "touch",
                     overscrollBehavior: "contain",
-                  }}
-                  onWheel={(e) => {
-                    // event yukarı çıkmasın, sayfaya akmasın
-                    e.stopPropagation();
-                  }}
-                  onTouchMove={(e) => {
-                    e.stopPropagation();
                   }}
                 >
                   <div className="space-y-6">
