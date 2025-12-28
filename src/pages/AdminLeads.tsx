@@ -1516,18 +1516,18 @@ export default function AdminLeads() {
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 bg-black/40 z-[99999] flex items-center justify-center p-4"
+            className="fixed inset-0 z-[2147483647] bg-black/40 flex items-center justify-center p-4"
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
             }}
           >
-              <div
-                data-modal-root="true"
-                className="w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl bg-white shadow-xl border flex flex-col"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
+            <div
+              data-modal-root="true"
+              className="w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl bg-white shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
                 {/* HEADER */}
-                <div className="shrink-0 px-5 py-4 border-b">
+                <div className="shrink-0 border-b border-gray-200 px-5 py-3 bg-white">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">Notes</h3>
@@ -1979,7 +1979,7 @@ export default function AdminLeads() {
               </div>
 
                 {/* FOOTER */}
-                <div className="shrink-0 px-5 py-3 border-t bg-white">
+                <div className="shrink-0 border-t border-gray-200 px-5 py-3 bg-gray-50">
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
