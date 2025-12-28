@@ -1596,9 +1596,30 @@ export default function AdminLeads() {
                 {/* BODY - TEK SCROLL ALANI */}
                 <div
                   ref={modalScrollRef}
-                  className="min-h-0 overflow-y-auto px-5 py-4"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Notes content"
+                  className="min-h-0 overflow-y-scroll px-5 py-4 focus:outline-none"
                   style={{
                     WebkitOverflowScrolling: "touch",
+                  }}
+                  onKeyDown={(e) => {
+                    const el = modalScrollRef.current;
+                    if (!el) return;
+
+                    const line = 48; // key scroll step
+                    const page = Math.max(200, el.clientHeight * 0.9);
+
+                    if (e.key === "ArrowDown") { el.scrollTop += line; e.preventDefault(); }
+                    if (e.key === "ArrowUp")   { el.scrollTop -= line; e.preventDefault(); }
+                    if (e.key === "PageDown")  { el.scrollTop += page; e.preventDefault(); }
+                    if (e.key === "PageUp")    { el.scrollTop -= page; e.preventDefault(); }
+                    if (e.key === "Home")      { el.scrollTop = 0; e.preventDefault(); }
+                    if (e.key === "End")       { el.scrollTop = el.scrollHeight; e.preventDefault(); }
+                    if (e.key === " ")         { // space
+                      el.scrollTop += (e.shiftKey ? -page : page);
+                      e.preventDefault();
+                    }
                   }}
                 >
                   <div className="space-y-6">
