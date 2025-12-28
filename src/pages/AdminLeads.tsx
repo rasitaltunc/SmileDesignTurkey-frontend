@@ -1990,7 +1990,6 @@ export default function AdminLeads() {
                   </form>
                 </div>
               </div>
-            </div>
           </div>,
           document.body
         )}
