@@ -1597,9 +1597,20 @@ export default function AdminLeads() {
 
                 {/* BODY */}
                 <div
+                  data-modal-scroll="true"
                   className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-24 overscroll-contain"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                  onWheel={(e) => e.stopPropagation()}
+                  style={{
+                    WebkitOverflowScrolling: "touch",
+                    overscrollBehavior: "contain",
+                  }}
+                  onWheelCapture={(e) => {
+                    // wheel event modal dışına kaçmasın
+                    e.stopPropagation();
+                  }}
+                  onTouchMove={(e) => {
+                    // iOS/Safari touch scroll kaçmasın
+                    e.stopPropagation();
+                  }}
                 >
                   <div className="space-y-6">
                     {/* AI Analysis Section */}
