@@ -244,6 +244,30 @@ export default function AdminLeads() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
 
+  // Lock body scroll when modal is open (Safari-proof)
+  useEffect(() => {
+    if (!notesLeadId) return;
+
+    const scrollY = window.scrollY;
+    const body = document.body;
+
+    // lock body scroll (Safari-proof)
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+
+    return () => {
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [notesLeadId]);
+
   // Timeline state
   interface TimelineEvent {
     eventId: number;
@@ -1480,14 +1504,13 @@ export default function AdminLeads() {
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 bg-black/60 z-[2147483647]"
+            className="fixed inset-0 bg-black/40 z-[99999] flex items-center justify-center p-4"
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
             }}
           >
-            <div className="fixed inset-0 flex items-center justify-center p-4">
               <div
-                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
+                className="bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
                 style={{
                   width: "min(92vw, 720px)",
                   height: "min(80vh, 720px)",
@@ -1568,7 +1591,7 @@ export default function AdminLeads() {
               </div>
 
                 {/* BODY */}
-                <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-24" style={{ WebkitOverflowScrolling: "touch" }}>
+                <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-24 overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
                   <div className="space-y-6">
                     {/* AI Analysis Section */}
                     <div>
