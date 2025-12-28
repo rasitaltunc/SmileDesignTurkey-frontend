@@ -276,6 +276,7 @@ export default function AdminLeads() {
     const opts: AddEventListenerOptions = { passive: false, capture: true };
 
     const handler = (e: WheelEvent) => {
+      console.log("wheel fired");
       const el = modalScrollRef.current;
       if (!el) return;
 
@@ -297,6 +298,7 @@ export default function AdminLeads() {
 
     // Safari bazen mousewheel gönderiyor (legacy)
     const mousewheelHandler = (e: any) => {
+      console.log("mousewheel fired");
       const el = modalScrollRef.current;
       if (!el) return;
 
