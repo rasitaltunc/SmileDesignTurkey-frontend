@@ -1523,17 +1523,11 @@ export default function AdminLeads() {
           >
               <div
                 data-modal-root="true"
-                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 grid grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden"
-                style={{
-                  width: "92vw",
-                  maxWidth: "720px",
-                  height: "80vh",
-                  maxHeight: "720px",
-                }}
+                className="w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl bg-white shadow-xl border flex flex-col"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 {/* HEADER */}
-                <div className="shrink-0 border-b border-gray-200 px-5 py-3 bg-white">
+                <div className="shrink-0 px-5 py-4 border-b">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">Notes</h3>
@@ -1611,7 +1605,7 @@ export default function AdminLeads() {
                   tabIndex={0}
                   role="region"
                   aria-label="Notes content"
-                  className="min-h-0 overflow-y-auto px-5 py-4 focus:outline-none"
+                  className="flex-1 min-h-0 overflow-y-auto px-5 py-4 focus:outline-none"
                   style={{
                     WebkitOverflowScrolling: "touch",
                   }}
@@ -1985,7 +1979,7 @@ export default function AdminLeads() {
               </div>
 
                 {/* FOOTER */}
-                <div className="shrink-0 border-t border-gray-200 px-5 py-3 bg-gray-50">
+                <div className="shrink-0 px-5 py-3 border-t bg-white">
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
