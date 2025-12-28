@@ -269,6 +269,16 @@ export default function AdminLeads() {
     };
   }, [notesLeadId]);
 
+  // Modal açılınca body'ye focus ver
+  useEffect(() => {
+    if (!notesLeadId) return;
+
+    // modal açılınca scroll container'a focus ver
+    requestAnimationFrame(() => {
+      modalScrollRef.current?.focus();
+    });
+  }, [notesLeadId]);
+
 
   // Timeline state
   interface TimelineEvent {
