@@ -1914,8 +1914,8 @@ export default function AdminLeads() {
               </div>
 
                 {/* FOOTER */}
-                <div className="shrink-0 border-t border-gray-200 px-6 py-3 bg-gray-50 flex justify-between">
-                  <form onSubmit={handleAddNote} className="w-full space-y-3">
+                <div className="shrink-0 border-t border-gray-200 px-6 py-3 bg-gray-50">
+                  <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
                       onChange={(e) => setNewNoteContent(e.target.value)}
