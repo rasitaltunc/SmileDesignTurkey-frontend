@@ -1513,7 +1513,7 @@ export default function AdminLeads() {
           >
               <div
                 data-modal-root="true"
-                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
+                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 grid grid-rows-[auto,1fr,auto] overflow-hidden"
                 style={{
                   width: "min(92vw, 720px)",
                   height: "min(80vh, 720px)",
@@ -1596,7 +1596,7 @@ export default function AdminLeads() {
                 {/* BODY - TEK SCROLL ALANI */}
                 <div
                   ref={modalScrollRef}
-                  className="flex-1 min-h-0 overflow-y-scroll px-5 py-4"
+                  className="min-h-0 overflow-y-auto px-5 py-4"
                   style={{
                     WebkitOverflowScrolling: "touch",
                   }}
