@@ -292,7 +292,18 @@ export default function AdminLeads() {
         e.deltaMode === 2 ? e.deltaY * window.innerHeight : // page -> px
         e.deltaY;
 
+      const before = {
+        top: el.scrollTop,
+        h: el.scrollHeight,
+        ch: el.clientHeight,
+      };
       el.scrollTop += delta;
+      const after = {
+        top: el.scrollTop,
+        h: el.scrollHeight,
+        ch: el.clientHeight,
+      };
+      console.log("scroll stats", { before, after, delta });
       e.preventDefault();
     };
 
@@ -308,7 +319,18 @@ export default function AdminLeads() {
 
       // wheelDelta genelde ters işaretli gelebilir
       const delta = -(e.wheelDelta ?? 0);
+      const before = {
+        top: el.scrollTop,
+        h: el.scrollHeight,
+        ch: el.clientHeight,
+      };
       el.scrollTop += delta;
+      const after = {
+        top: el.scrollTop,
+        h: el.scrollHeight,
+        ch: el.clientHeight,
+      };
+      console.log("scroll stats", { before, after, delta });
       e.preventDefault?.();
     };
 
