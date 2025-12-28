@@ -1919,7 +1919,7 @@ export default function AdminLeads() {
                 </div>
 
                 {/* FOOTER (always visible) */}
-                <div className="shrink-0 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3 flex items-center justify-between gap-3">
+                <div className="shrink-0 border-t border-gray-200 bg-white/95 backdrop-blur px-4 py-3">
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
