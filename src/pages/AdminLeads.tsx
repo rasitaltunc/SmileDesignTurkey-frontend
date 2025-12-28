@@ -244,48 +244,27 @@ export default function AdminLeads() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
 
-  // Lock body scroll when modal is open (Safari-proof)
+  // Lock body scroll when modal is open (position: fixed yöntemi - Safari-proof, modal scroll'a dokunmaz)
   useEffect(() => {
     if (!notesLeadId) return;
 
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevPaddingRight = document.body.style.paddingRight;
+    const scrollY = window.scrollY;
+    const body = document.body;
 
-    // scrollbar width compensation (layout kaymasın)
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
-
-    // Safari's "passive" touch/wheel saçmalığı için document seviyesinde lock
-    const allowScrollInside = (target: EventTarget | null) => {
-      const el = target as Element | null;
-      // modal body'ye data-modal-scroll="true" attribute'u koyduk
-      // SVGPathElement vs. durumları için Element kontrolü (HTMLElement değil)
-      return !!el?.closest?.('[data-modal-scroll="true"]');
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      if (allowScrollInside(e.target)) return;
-      e.preventDefault();
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (allowScrollInside(e.target)) return;
-      e.preventDefault();
-    };
-
-    document.addEventListener("wheel", onWheel, { passive: false });
-    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    // position: fixed yöntemi (Safari-proof, modal scroll'a dokunmaz)
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
 
     return () => {
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.overflow = prevBodyOverflow;
-      document.body.style.paddingRight = prevPaddingRight;
-      document.removeEventListener("wheel", onWheel as any);
-      document.removeEventListener("touchmove", onTouchMove as any);
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      window.scrollTo(0, scrollY);
     };
   }, [notesLeadId]);
 
