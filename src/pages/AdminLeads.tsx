@@ -259,10 +259,32 @@ export default function AdminLeads() {
     document.body.style.overflow = "hidden";
     if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
 
+    // Safari's "passive" touch/wheel saçmalığı için document seviyesinde lock
+    const allowScrollInside = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      // modal body'ye data-modal-scroll="true" attribute'u koyduk
+      return !!target.closest('[data-modal-scroll="true"]');
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (allowScrollInside(e.target)) return;
+      e.preventDefault();
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (allowScrollInside(e.target)) return;
+      e.preventDefault();
+    };
+
+    document.addEventListener("wheel", onWheel, { passive: false });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+
     return () => {
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.body.style.overflow = prevBodyOverflow;
       document.body.style.paddingRight = prevPaddingRight;
+      document.removeEventListener("wheel", onWheel as any);
+      document.removeEventListener("touchmove", onTouchMove as any);
     };
   }, [notesLeadId]);
 
