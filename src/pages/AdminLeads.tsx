@@ -1529,11 +1529,11 @@ export default function AdminLeads() {
               if (e.target === e.currentTarget) handleCloseNotes();
             }}
             onWheelCapture={(e) => {
-              // modal dışındaki wheel -> sayfaya akmasın
-              e.preventDefault();
+              // sadece backdrop'ta wheel olursa engelle
+              if (e.target === e.currentTarget) e.preventDefault();
             }}
             onTouchMove={(e) => {
-              e.preventDefault();
+              if (e.target === e.currentTarget) e.preventDefault();
             }}
           >
               <div
