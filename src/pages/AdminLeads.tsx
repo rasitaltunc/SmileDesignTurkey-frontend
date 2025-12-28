@@ -1487,7 +1487,7 @@ export default function AdminLeads() {
           >
             <div className="fixed inset-0 flex items-center justify-center p-4">
               <div
-                className="bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden"
+                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
                 style={{
                   width: "min(92vw, 720px)",
                   height: "min(80vh, 720px)",
@@ -1568,7 +1568,7 @@ export default function AdminLeads() {
               </div>
 
                 {/* BODY */}
-                <div className="flex-1 overflow-y-auto px-5 py-4">
+                <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-24" style={{ WebkitOverflowScrolling: "touch" }}>
                   <div className="space-y-6">
                     {/* AI Analysis Section */}
                     <div>
