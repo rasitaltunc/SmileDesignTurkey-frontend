@@ -1480,15 +1480,16 @@ export default function AdminLeads() {
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 bg-black/60 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-[1px]"
             style={{ zIndex: 2147483647 }}
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
             }}
           >
-            <div className="w-full max-w-[clamp(860px,82vw,1120px)] max-h-[calc(100dvh-2rem)] bg-white rounded-xl shadow-xl overflow-hidden flex flex-col">
-              {/* HEADER */}
-              <div className="shrink-0 border-b border-gray-200 bg-white/95 px-4 py-3">
+            <div className="fixed inset-0 flex items-center justify-center p-6">
+              <div className="w-full max-w-[900px] max-h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
+                {/* HEADER */}
+                <div className="shrink-0 border-b border-gray-200 px-6 py-4 bg-white">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">Notes</h3>
@@ -1560,11 +1561,8 @@ export default function AdminLeads() {
                 </div>
               </div>
 
-              {/* BODY */}
-                <div
-                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 pb-28"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
+                {/* BODY */}
+                <div className="flex-1 overflow-y-auto px-6 py-4">
                   <div className="space-y-6">
                     {/* AI Analysis Section */}
                     <div>
@@ -1915,9 +1913,9 @@ export default function AdminLeads() {
                   </div>
               </div>
 
-              {/* FOOTER */}
-              <div className="shrink-0 border-t border-gray-200 bg-white/95 px-4 py-3">
-                  <form onSubmit={handleAddNote} className="space-y-3">
+                {/* FOOTER */}
+                <div className="shrink-0 border-t border-gray-200 px-6 py-3 bg-gray-50 flex justify-between">
+                  <form onSubmit={handleAddNote} className="w-full space-y-3">
                     <textarea
                       value={newNoteContent}
                       onChange={(e) => setNewNoteContent(e.target.value)}
@@ -1961,6 +1959,7 @@ export default function AdminLeads() {
                       </button>
                     </div>
                   </form>
+                </div>
               </div>
             </div>
           </div>,
