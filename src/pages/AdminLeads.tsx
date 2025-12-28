@@ -248,23 +248,21 @@ export default function AdminLeads() {
   useEffect(() => {
     if (!notesLeadId) return;
 
-    const scrollY = window.scrollY;
-    const body = document.body;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
 
-    // lock body scroll (Safari-proof)
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
+    // scrollbar width compensation (layout kaymasın)
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
 
     return () => {
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.width = "";
-      window.scrollTo(0, scrollY);
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
     };
   }, [notesLeadId]);
 
@@ -1510,7 +1508,7 @@ export default function AdminLeads() {
             }}
           >
               <div
-                className="bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+                className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 flex flex-col overflow-hidden"
                 style={{
                   width: "min(92vw, 720px)",
                   height: "min(80vh, 720px)",
@@ -1591,7 +1589,11 @@ export default function AdminLeads() {
               </div>
 
                 {/* BODY */}
-                <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-24 overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-24 overscroll-contain"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                  onWheel={(e) => e.stopPropagation()}
+                >
                   <div className="space-y-6">
                     {/* AI Analysis Section */}
                     <div>
