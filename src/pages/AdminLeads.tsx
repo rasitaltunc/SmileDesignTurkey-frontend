@@ -234,6 +234,75 @@ function getDaysSinceActivity(lastContactedAt: string | null, createdAt: string)
   return Math.floor(diffTime / (1000 * 60 * 60 * 24));
 }
 
+// Timeline Intelligence Summary
+function getTimelineSummary(
+  lastContactedAt: string | null,
+  contactEvents: any[],
+  hasPhone: boolean,
+  priorityScore: number,
+  daysSinceActivity: number
+): string {
+  if (!lastContactedAt && contactEvents.length === 0) {
+    return "This lead has never been contacted";
+  }
+  
+  if (daysSinceActivity >= 3) {
+    return `Last activity was ${daysSinceActivity} day${daysSinceActivity > 1 ? 's' : ''} ago`;
+  }
+  
+  if (priorityScore >= 70 && !hasPhone) {
+    return "High priority lead with no phone number";
+  }
+  
+  if (priorityScore >= 70) {
+    return "High priority lead - consider contacting within 24h";
+  }
+  
+  return "Lead journey summary";
+}
+
+// Action Reasoning Helper
+function getActionReasoning(
+  action: string,
+  hasPhone: boolean,
+  hasEmail: boolean,
+  hasBrief: boolean,
+  hasNotes: boolean,
+  lastContactedAt: string | null,
+  priorityScore: number
+): string {
+  if (action === 'call') {
+    if (!lastContactedAt) {
+      return "Recommended because the lead is new and has no contact attempts yet.";
+    }
+    return "Recommended because phone contact is the fastest way to connect.";
+  }
+  
+  if (action === 'whatsapp') {
+    return "Recommended because WhatsApp is preferred for international leads.";
+  }
+  
+  if (action === 'email') {
+    if (!hasPhone) {
+      return "Recommended because phone number is not available.";
+    }
+    return "Recommended for detailed communication and documentation.";
+  }
+  
+  if (action === 'brief') {
+    if (priorityScore >= 70) {
+      return "Recommended because this is a high-priority lead and needs preparation.";
+    }
+    return "Recommended to generate AI-powered insights before contacting.";
+  }
+  
+  if (action === 'note') {
+    return "Recommended to document initial observations about this lead.";
+  }
+  
+  return "Recommended based on lead status and priority.";
+}
+
 // WhatsApp helper functions
 function normalizePhoneToWhatsApp(phone?: string) {
   if (!phone) return null;
@@ -1253,7 +1322,21 @@ export default function AdminLeads() {
     setNewNoteContent('');
     setTimeline([]);
     setContactEvents([]);
-    setNewContactChannel('phone');
+    
+    // Smart default: Set contact channel based on lead's contact info
+    const lead = leads.find(l => l.id === leadId);
+    if (lead) {
+      if (lead.phone) {
+        setNewContactChannel('phone');
+      } else if (lead.email) {
+        setNewContactChannel('email');
+      } else {
+        setNewContactChannel('phone'); // fallback
+      }
+    } else {
+      setNewContactChannel('phone');
+    }
+    
     setNewContactNote('');
     loadAIAnalysis(leadId);
     await Promise.all([loadNotes(leadId), loadTimeline(leadId), loadContactEvents(leadId)]);
@@ -2084,35 +2167,48 @@ export default function AdminLeads() {
                       className={`${activeLeadId === lead.id ? "bg-blue-50/20" : "bg-gray-50/50"} border-t border-gray-100`}
                     >
                       <td colSpan={11} className="px-6 py-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <span className="font-medium">Next:</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (nextAction.action === 'call' && lead.phone) {
-                                window.location.href = `tel:${lead.phone}`;
-                              } else if (nextAction.action === 'whatsapp' && lead.phone) {
-                                const wa = normalizePhoneToWhatsApp(lead.phone);
-                                if (wa) {
-                                  const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                  window.open(url, "_blank", "noopener,noreferrer");
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 text-xs text-gray-600">
+                            <span className="font-medium">Next:</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (nextAction.action === 'call' && lead.phone) {
+                                  window.location.href = `tel:${lead.phone}`;
+                                } else if (nextAction.action === 'whatsapp' && lead.phone) {
+                                  const wa = normalizePhoneToWhatsApp(lead.phone);
+                                  if (wa) {
+                                    const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                    window.open(url, "_blank", "noopener,noreferrer");
+                                  }
+                                } else if (nextAction.action === 'email' && lead.email) {
+                                  window.location.href = `mailto:${lead.email}`;
+                                } else if (nextAction.action === 'brief') {
+                                  handleOpenNotes(lead.id);
+                                  setTimeout(() => {
+                                    if (lead.id) runAIAnalysis(lead.id);
+                                  }, 500);
+                                } else if (nextAction.action === 'note') {
+                                  handleOpenNotes(lead.id);
                                 }
-                              } else if (nextAction.action === 'email' && lead.email) {
-                                window.location.href = `mailto:${lead.email}`;
-                              } else if (nextAction.action === 'brief') {
-                                handleOpenNotes(lead.id);
-                                setTimeout(() => {
-                                  if (lead.id) runAIAnalysis(lead.id);
-                                }, 500);
-                              } else if (nextAction.action === 'note') {
-                                handleOpenNotes(lead.id);
-                              }
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-                          >
-                            <span>{nextAction.icon}</span>
-                            <span>{nextAction.label}</span>
-                          </button>
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                            >
+                              <span>{nextAction.icon}</span>
+                              <span>{nextAction.label}</span>
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 italic ml-12">
+                            {getActionReasoning(
+                              nextAction.action,
+                              hasPhone,
+                              hasEmail,
+                              hasBrief,
+                              hasNotes,
+                              lead.last_contacted_at ?? null,
+                              priorityScore
+                            )}
+                          </p>
                         </div>
                       </td>
                     </tr>
@@ -2158,9 +2254,29 @@ export default function AdminLeads() {
                 {/* HEADER */}
                 <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="flex-1">
                     <h3 id="notes-modal-title" className="text-base font-semibold text-gray-900">Notes</h3>
                     <p className="text-xs text-gray-500 mt-0.5">Lead actions & call prep</p>
+                    {notesLeadId && (() => {
+                      const currentLead = leads.find(l => l.id === notesLeadId);
+                      const leadPriority = currentLead ? computePriority(
+                        currentLead,
+                        currentLead.ai_risk_score ?? null,
+                        currentLead.last_contacted_at ?? null,
+                        timeline,
+                        notes,
+                        contactEvents
+                      ) : 0;
+                      if (leadPriority >= 70) {
+                        return (
+                          <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            High-priority lead – consider contacting within 24h
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                         <button
@@ -2204,7 +2320,7 @@ export default function AdminLeads() {
                               ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
                               : "bg-gradient-to-r from-blue-600 to-purple-600 !text-white border-transparent hover:from-blue-700 hover:to-purple-700 shadow-sm hover:shadow-md"
                           ].join(" ")}
-                          title={!notesLeadId ? "Select a lead first" : "Generate AI-powered call briefing"}
+                          title={!notesLeadId ? "Select a lead first" : aiSummary ? "Update AI-powered call briefing" : "Generate AI-powered call briefing"}
                         >
                           {isLoadingAI ? (
                             <>
@@ -2214,7 +2330,7 @@ export default function AdminLeads() {
                           ) : (
                             <>
                               <span>✨</span>
-                              <span>Generate AI Brief</span>
+                              <span>{aiSummary ? "Update Brief" : "Generate AI Brief"}</span>
                             </>
                           )}
                         </button>
@@ -2350,7 +2466,24 @@ export default function AdminLeads() {
 
                     {/* Timeline Section */}
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Timeline</h4>
+                      <div className="mb-3">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-1">Timeline</h4>
+                        {!isLoadingTimeline && notesLeadId && (() => {
+                          const currentLead = leads.find(l => l.id === notesLeadId);
+                          if (!currentLead) return null;
+                          return (
+                            <p className="text-xs text-gray-500 italic">
+                              {getTimelineSummary(
+                                lastContactedAt,
+                                contactEvents,
+                                !!currentLead.phone,
+                                aiRiskScore ?? 0,
+                                lastContactedAt ? getDaysSinceActivity(lastContactedAt, currentLead.created_at) : getDaysSinceActivity(null, currentLead.created_at)
+                              )}
+                            </p>
+                          );
+                        })()}
+                      </div>
                       {isLoadingTimeline ? (
                         <div className="text-gray-500 text-sm">Loading timeline…</div>
                       ) : timeline.length === 0 ? (
@@ -2514,7 +2647,13 @@ export default function AdminLeads() {
                                   ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
                                   : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
                               ].join(" ")}
-                              title={!newContactNote.trim() ? "Type a note to enable" : "Add contact attempt"}
+                              title={
+                                isAddingContact 
+                                  ? "Adding contact attempt..." 
+                                  : !newContactNote.trim() 
+                                    ? "Type a note to enable" 
+                                    : "Add contact attempt"
+                              }
                             >
                               {isAddingContact ? (
                                 <>
@@ -2666,7 +2805,13 @@ export default function AdminLeads() {
                         }
                       }}
                       readOnly={isSavingNote}
-                      placeholder="Add a note... (Cmd/Ctrl+Enter to submit)"
+                      placeholder={(() => {
+                        const currentLead = notesLeadId ? leads.find(l => l.id === notesLeadId) : null;
+                        if (currentLead && !currentLead.last_contacted_at) {
+                          return "Called but no answer... (Cmd/Ctrl+Enter to submit)";
+                        }
+                        return "Add a note... (Cmd/Ctrl+Enter to submit)";
+                      })()}
                       rows={3}
                       className={`w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto bg-white leading-relaxed placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                         isSavingNote ? 'opacity-60 cursor-not-allowed' : ''
@@ -2757,7 +2902,13 @@ export default function AdminLeads() {
                               ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
                               : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
                           ].join(" ")}
-                          title={!newNoteContent.trim() ? "Type a note to enable" : "Add note to lead"}
+                          title={
+                            isSavingNote 
+                              ? "Saving note..." 
+                              : !newNoteContent.trim() 
+                                ? "Type a note to enable" 
+                                : "Add note to lead"
+                          }
                         >
                           {isSavingNote ? (
                             <>
