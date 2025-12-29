@@ -9,6 +9,9 @@ import { findLatestCanonical, type CanonicalAny } from '@/lib/ai/canonicalNote';
 import { diffCanonical, safeMergeCanonical } from '@/lib/ai/canonicalDiff';
 import type { CanonicalV11 } from '@/lib/ai/canonicalTypes';
 import { emitAIAudit } from '@/lib/ai/aiAudit';
+import { buildMemoryFromCanonical, toMemorySystemNote, findLatestMemory, buildContextPack, type MemoryV1, type MemoryScope } from '@/lib/ai/memoryVault';
+import { emitAIMemorySync } from '@/lib/ai/aiMemoryAudit';
+import { getRoleScope, type AIRole } from '@/lib/ai/aiRoles';
 
 // Copy to clipboard helper
 const copyText = async (text: string) => {
@@ -461,7 +464,17 @@ export default function AdminLeads() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isNormalizing, setIsNormalizing] = useState(false);
+  const [isSyncingMemory, setIsSyncingMemory] = useState(false);
   const [canonicalNote, setCanonicalNote] = useState<CanonicalAny | null>(null);
+  const [memoryVault, setMemoryVault] = useState<{
+    patient: MemoryV1 | null;
+    doctor: MemoryV1 | null;
+    internal: MemoryV1 | null;
+  }>({
+    patient: null,
+    doctor: null,
+    internal: null,
+  });
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
   const [notesScroll, setNotesScroll] = useState({ atTop: true, atBottom: false });
   const lastActiveElRef = useRef<HTMLElement | null>(null);
@@ -2701,6 +2714,47 @@ export default function AdminLeads() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => notesLeadId && handleSyncMemory(notesLeadId)}
+                          disabled={
+                            isSyncingMemory || 
+                            isNormalizing || 
+                            isClosing || 
+                            !notesLeadId || 
+                            !canonicalNote || 
+                            (canonicalNote as any).version !== '1.1' ||
+                            ((canonicalNote as CanonicalV11).review_required === true)
+                          }
+                          className={[
+                            "inline-flex items-center justify-center gap-2 h-10",
+                            "px-4 rounded-lg text-sm font-semibold",
+                            "border transition-all duration-200 min-w-[140px]",
+                            "focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2",
+                            "active:scale-[0.99] motion-reduce:active:scale-100",
+                            (isSyncingMemory || isNormalizing || isClosing || !notesLeadId || !canonicalNote || (canonicalNote as any).version !== '1.1' || ((canonicalNote as CanonicalV11).review_required === true))
+                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-gradient-to-r from-indigo-600 to-blue-600 !text-white border-transparent hover:from-indigo-700 hover:to-blue-700 shadow-sm hover:shadow-md"
+                          ].join(" ")}
+                          title={
+                            !notesLeadId ? "Select a lead first" :
+                            !canonicalNote ? "Normalize notes first" :
+                            (canonicalNote as CanonicalV11).review_required ? "Review required before syncing" :
+                            "Sync memory vault for all scopes"
+                          }
+                        >
+                          {isSyncingMemory ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Syncing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="w-4 h-4" />
+                              <span>Sync Memory</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleCloseNotes}
                           className="ml-2 h-10 w-10 text-gray-500 hover:text-gray-700 text-xl leading-none rounded hover:bg-gray-100 transition-colors active:scale-[0.99] motion-reduce:active:scale-100 flex items-center justify-center"
                           aria-label="Close"
@@ -2752,6 +2806,89 @@ export default function AdminLeads() {
                     }`}
                   />
                   <div className="space-y-6">
+                    {/* Memory Vault Section */}
+                    {(memoryVault.patient || memoryVault.doctor || memoryVault.internal) ? (
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-blue-50/20">
+                        <div className="mb-3">
+                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
+                            <Brain className="w-4 h-4 text-blue-600" />
+                            Memory Vault
+                          </h4>
+                          <p className="text-xs text-gray-500">Role-scoped memory for AI context</p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {/* Status */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-gray-600">
+                              Synced • {(() => {
+                                const latest = memoryVault.internal || memoryVault.doctor || memoryVault.patient;
+                                return latest ? new Date(latest.updated_at).toLocaleString() : '';
+                              })()}
+                            </span>
+                          </div>
+
+                          {/* Scope chips */}
+                          <div className="flex flex-wrap gap-1.5">
+                            {memoryVault.patient && (
+                              <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded">
+                                Patient
+                              </span>
+                            )}
+                            {memoryVault.doctor && (
+                              <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                                Doctor
+                              </span>
+                            )}
+                            {memoryVault.internal && (
+                              <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded">
+                                Internal
+                              </span>
+                            )}
+                          </div>
+
+                          {/* PII safety */}
+                          {memoryVault.patient && (
+                            <p className="text-xs text-green-700 font-medium">
+                              ✓ PII safe: patient scope
+                            </p>
+                          )}
+
+                          {/* Copy context button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Get current user role (default to admin for now)
+                              const currentRole: AIRole = 'admin'; // TODO: get from auth
+                              const contextPack = buildContextPack(
+                                currentRole,
+                                canonicalNote as CanonicalV11 | null,
+                                memoryVault.patient,
+                                memoryVault.doctor,
+                                memoryVault.internal
+                              );
+                              copyText(contextPack);
+                              toast.success('Context pack copied to clipboard');
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                          >
+                            <Copy className="w-3 h-3" />
+                            Copy context
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <div className="mb-2">
+                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
+                            <Brain className="w-4 h-4 text-blue-600" />
+                            Memory Vault
+                          </h4>
+                        </div>
+                        <p className="text-xs text-gray-500">Not synced yet. Click "Sync Memory" after normalizing notes.</p>
+                      </div>
+                    )}
+
                     {/* AI Snapshot Section */}
                     {canonicalNote ? (
                       <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-purple-50/20">
