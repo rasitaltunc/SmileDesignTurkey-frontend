@@ -283,6 +283,9 @@ export default function AdminLeads() {
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
   const [notesScroll, setNotesScroll] = useState({ atTop: true, atBottom: false });
   const lastActiveElRef = useRef<HTMLElement | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
+  const firstFocusableRef = useRef<HTMLElement | null>(null);
 
   // Lock body scroll when modal is open (position: fixed + overflow hidden - Safari-proof)
   useEffect(() => {
@@ -317,16 +320,58 @@ export default function AdminLeads() {
     };
   }, [notesLeadId]);
 
-  // Modal açılınca body'ye focus ver + focus trap + restore focus on close
+  // Inert background + pointer blocking when modal is open
+  useEffect(() => {
+    if (!notesLeadId) return;
+
+    const root = document.getElementById("root");
+    if (!root) return;
+
+    // Set inert (if supported)
+    try {
+      (root as any).inert = true;
+    } catch (e) {
+      // Fallback if inert not supported
+    }
+
+    // Set aria-hidden and pointer-events-none
+    root.setAttribute("aria-hidden", "true");
+    root.classList.add("pointer-events-none");
+
+    return () => {
+      try {
+        (root as any).inert = false;
+      } catch (e) {
+        // Fallback
+      }
+      root.removeAttribute("aria-hidden");
+      root.classList.remove("pointer-events-none");
+    };
+  }, [notesLeadId]);
+
+  // Modal açılınca focus trap + restore focus on close (hardened)
   useEffect(() => {
     if (!notesLeadId) return;
 
     // Modal açılmadan önce active element'i sakla
     lastActiveElRef.current = document.activeElement as HTMLElement;
 
-    // modal açılınca scroll container'a focus ver + ilk scroll ölçümü
+    // Find first focusable element in modal header (Mark Contacted button or fallback to scroll container)
+    const getFirstFocusable = (): HTMLElement | null => {
+      const modal = document.querySelector('[data-modal-root="true"]');
+      if (!modal) return null;
+      
+      const focusableElements = modal.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      return (focusableElements[0] as HTMLElement) || modalScrollRef.current;
+    };
+
+    // Focus first focusable element
     requestAnimationFrame(() => {
-      modalScrollRef.current?.focus();
+      const firstFocusable = getFirstFocusable();
+      firstFocusableRef.current = firstFocusable;
+      firstFocusable?.focus();
       handleNotesScroll();
     });
 
@@ -336,11 +381,14 @@ export default function AdminLeads() {
       const modal = document.querySelector('[data-modal-root="true"]');
       if (!modal) return;
       
-      const focusableElements = modal.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      const firstElement = focusableElements[0] as HTMLElement;
-      const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+      const focusableElements = Array.from(modal.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )) as HTMLElement[];
+      
+      if (focusableElements.length === 0) return;
+      
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
 
       if (e.shiftKey && document.activeElement === firstElement) {
         e.preventDefault();
@@ -351,13 +399,56 @@ export default function AdminLeads() {
       }
     };
 
+    // Document-level focusin listener: prevent focus leaving modal
+    const handleFocusIn = (e: FocusEvent) => {
+      const modal = document.querySelector('[data-modal-root="true"]');
+      if (!modal) return;
+      
+      const target = e.target as HTMLElement;
+      if (!modal.contains(target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const firstFocusable = getFirstFocusable();
+        firstFocusable?.focus();
+      }
+    };
+
     document.addEventListener("keydown", handleTab);
+    document.addEventListener("focusin", handleFocusIn, true);
+    
     return () => {
       document.removeEventListener("keydown", handleTab);
-      // Modal kapanınca eski elemana geri focus ver
-      lastActiveElRef.current?.focus?.();
+      document.removeEventListener("focusin", handleFocusIn, true);
+      
+      // Modal kapanınca eski elemana geri focus ver (guard if element removed)
+      requestAnimationFrame(() => {
+        if (lastActiveElRef.current && document.body.contains(lastActiveElRef.current)) {
+          lastActiveElRef.current.focus?.();
+        }
+      });
     };
   }, [notesLeadId]);
+
+  // ESC safety: prevent closing while typing/composing
+  useEffect(() => {
+    if (!notesLeadId) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      
+      const target = e.target as HTMLElement;
+      const isTyping = target?.tagName === "TEXTAREA" || 
+                       target?.tagName === "INPUT" || 
+                       target?.isContentEditable;
+      
+      if (isTyping || isComposing) return;
+      
+      handleCloseNotes();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [notesLeadId, isComposing]);
 
   // Scroll handler for shadow/fade effects
   const handleNotesScroll = () => {
@@ -1056,17 +1147,24 @@ export default function AdminLeads() {
     await Promise.all([loadNotes(leadId), loadTimeline(leadId), loadContactEvents(leadId)]);
   };
 
-  // Close notes modal
+  // Close notes modal with animation
   const handleCloseNotes = () => {
-    setNotesLeadId(null);
-    setNotes([]);
-    setNewNoteContent('');
-    setAiRiskScore(null);
-    setAiSummary(null);
-    setLastContactedAt(null);
-    setContactEvents([]);
-    setNewContactChannel('phone');
-    setNewContactNote('');
+    if (isClosing) return;
+    setIsClosing(true);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        setIsClosing(false);
+        setNotesLeadId(null);
+        setNotes([]);
+        setNewNoteContent('');
+        setAiRiskScore(null);
+        setAiSummary(null);
+        setLastContactedAt(null);
+        setContactEvents([]);
+        setNewContactChannel('phone');
+        setNewContactNote('');
+      }, 180);
+    });
   };
 
   // Handle add note form submission
@@ -1609,11 +1707,15 @@ export default function AdminLeads() {
         })()}
 
         {/* Notes Modal (PORTAL - single-scroll architecture) */}
-        {notesLeadId && createPortal(
+        {(notesLeadId || isClosing) && createPortal(
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 transition-opacity duration-200 motion-reduce:transition-none"
+            aria-labelledby="notes-modal-title"
+            aria-describedby="notes-modal-desc"
+            className={`fixed inset-0 bg-black/40 flex items-center justify-center p-4 transition-opacity duration-200 motion-reduce:transition-none ${
+              isClosing ? "opacity-0" : "opacity-100"
+            }`}
             style={{ zIndex: 2147483647 }}
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
@@ -1621,7 +1723,9 @@ export default function AdminLeads() {
           >
             <div
               data-modal-root="true"
-              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-transform duration-200 will-change-transform motion-reduce:transition-none motion-reduce:transform-none"
+              className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-all duration-200 will-change-transform motion-reduce:transition-none motion-reduce:transform-none ${
+                isClosing ? "opacity-0 scale-[0.98]" : "opacity-100 scale-100"
+              }`}
               style={{
                 width: "min(92vw, 720px)",
                 height: "min(80vh, 720px)",
@@ -1635,7 +1739,7 @@ export default function AdminLeads() {
                 <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">Notes</h3>
+                    <h3 id="notes-modal-title" className="text-base font-semibold text-gray-900">Notes</h3>
                     <p className="text-xs text-gray-500 mt-0.5">Lead actions & call prep</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -1711,6 +1815,7 @@ export default function AdminLeads() {
                   ref={modalScrollRef}
                   tabIndex={0}
                   role="region"
+                  id="notes-modal-desc"
                   aria-label="Notes content"
                   className="relative px-5 py-4 pr-3 focus:outline-none overscroll-contain touch-pan-y"
                   style={{
@@ -1969,6 +2074,8 @@ export default function AdminLeads() {
                               type="text"
                               value={newContactNote}
                               onChange={(e) => setNewContactNote(e.target.value)}
+                              onCompositionStart={() => setIsComposing(true)}
+                              onCompositionEnd={() => setIsComposing(false)}
                               placeholder="Quick note (optional)..."
                               className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               disabled={isAddingContact}
@@ -2120,6 +2227,8 @@ export default function AdminLeads() {
                     <textarea
                       value={newNoteContent}
                       onChange={(e) => setNewNoteContent(e.target.value)}
+                      onCompositionStart={() => setIsComposing(true)}
+                      onCompositionEnd={() => setIsComposing(false)}
                       onKeyDown={(e) => {
                         if (isSavingNote) return;
                         if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && newNoteContent.trim()) {
