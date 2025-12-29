@@ -60,6 +60,17 @@ export interface NormalizeInput {
     note: string;
     created_at: string;
   }>;
+  prevCanonical?: CanonicalV11 | null;
+  newNotesSincePrev?: Array<{
+    note: string;
+    created_at: string;
+  }>;
+  newTimelineSincePrev?: Array<{
+    eventType: string;
+    receivedAt: string;
+    title?: string;
+    additionalNotes?: string;
+  }>;
 }
 
 // Extract JSON from response (handle markdown code blocks or extra text)
@@ -152,10 +163,18 @@ Analyze this lead and return ONLY valid JSON matching this exact schema (v1.1):
     "notes_used_count": <number>,
     "timeline_used_count": <number>,
     "last_note_at": "<ISO string optional>"
-  }
+  },
+  "review_required": <boolean>,
+  "review_reasons": ["<string>", "..."]
 }
 
-IMPORTANT: Return ONLY valid JSON. Do not include markdown, explanations, or any text outside the JSON object. If information is missing, use "unknown" or omit optional fields. Never invent data.
+IMPORTANT: 
+- Return ONLY valid JSON matching Canonical v1.1 schema. No markdown, no explanations.
+- Use lead ground truth values (phone/email/source) exactly as provided above. Do not invent or change them.
+- If information is missing, use "unknown" or omit optional fields. Never invent data.
+- Compare with previous canonical (if provided) and only update fields that have actually changed.
+- Set review_required: true if confidence < 0.55 or if you detect conflicts with lead ground truth.
+- Set review_reasons array with specific reasons if review_required is true.
 `;
 
   // Use the same AI analyze endpoint but with a special prompt for normalization
@@ -259,6 +278,8 @@ export function transformV10ToV11(v10: CanonicalNote, leadId: string): Canonical
       notes_used_count: v10.evidence?.notes_used_count || 0,
       timeline_used_count: 0,
     },
+    review_required: false,
+    review_reasons: [],
   };
 }
 

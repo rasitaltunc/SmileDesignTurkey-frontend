@@ -45,5 +45,8 @@ export interface CanonicalV11 {
     timeline_used_count: number;
     last_note_at?: string;
   };
+  review_required: boolean;
+  review_reasons: string[];
+  last_run_hash?: string;
 }
 

@@ -1378,7 +1378,17 @@ export default function AdminLeads() {
       // Get previous canonical from cache
       const prevCanonical = canonicalCacheRef.current.get(leadId) || null;
 
-      // Call normalize function
+      // Calculate incremental notes/events since last canonical
+      const lastNoteAt = prevCanonical?.sources?.last_note_at;
+      const newNotesSincePrev = lastNoteAt
+        ? humanNotes.filter(n => new Date(n.created_at) > new Date(lastNoteAt))
+        : humanNotes;
+      
+      const newTimelineSincePrev = lastNoteAt
+        ? timeline.filter(t => new Date(t.receivedAt) > new Date(lastNoteAt))
+        : timeline;
+
+      // Call normalize function with memory prompting
       const rawCanonical = await normalizeLeadNote(
         {
           lead: {
@@ -1395,6 +1405,9 @@ export default function AdminLeads() {
           contactEvents: contactEvents,
           timeline: timeline,
           notes: humanNotes.slice(0, 10), // Last 10, excluding canonical
+          prevCanonical: prevCanonical as CanonicalV11 | null,
+          newNotesSincePrev: newNotesSincePrev.slice(0, 10),
+          newTimelineSincePrev: newTimelineSincePrev,
         },
         apiUrl,
         adminToken
@@ -1433,6 +1446,21 @@ export default function AdminLeads() {
         timeline_used_count: timeline.length,
         last_note_at: humanNotes.length > 0 ? humanNotes[0].created_at : undefined,
       };
+
+      // Review gating logic
+      const reviewReasons: string[] = [];
+      if (canonicalV11.confidence !== null && canonicalV11.confidence < 55) {
+        reviewReasons.push('Low confidence');
+      }
+      if (changelog.conflicts.length > 0) {
+        reviewReasons.push('Conflicts detected');
+      }
+      if (canonicalV11.missing_fields.length >= 3 && (!canonicalV11.next_best_action.script || canonicalV11.next_best_action.script.length === 0)) {
+        reviewReasons.push('Insufficient info for script');
+      }
+      
+      canonicalV11.review_required = reviewReasons.length > 0;
+      canonicalV11.review_reasons = reviewReasons;
 
       // Save as system note (v1.1)
       const canonicalNoteContent = `[AI_CANONICAL_NOTE v1.1]\n${JSON.stringify(canonicalV11, null, 2)}`;
@@ -2714,18 +2742,65 @@ export default function AdminLeads() {
                             <div className="border-t border-gray-200 pt-3">
                               <div className="flex items-center justify-between mb-2">
                                 <span className="text-xs font-semibold text-gray-700">Next Best Action:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const scriptText = canonicalNote.next_best_action.script.join('\n');
-                                    copyText(scriptText);
-                                    toast.success('Script copied to clipboard');
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 rounded transition-colors"
-                                >
-                                  <Copy className="w-3 h-3" />
-                                  Copy script
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const scriptText = canonicalNote.next_best_action.script.join('\n');
+                                      copyText(scriptText);
+                                      toast.success('Script copied to clipboard');
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 rounded transition-colors"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                    Copy script
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!notesLeadId) return;
+                                      const lead = leads.find(l => l.id === notesLeadId);
+                                      if (!lead) return;
+
+                                      const nba = canonicalNote.next_best_action;
+                                      const channel = (nba as any).channel || 'unknown';
+                                      const label = nba.label.toLowerCase();
+
+                                      // Apply NBA action
+                                      if (channel === 'whatsapp' && lead.phone) {
+                                        const wa = normalizePhoneToWhatsApp(lead.phone);
+                                        if (wa) {
+                                          const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                          window.open(url, "_blank", "noopener,noreferrer");
+                                          toast.success('WhatsApp opened');
+                                        }
+                                      } else if (channel === 'email' && lead.email) {
+                                        window.location.href = `mailto:${lead.email}`;
+                                        toast.success('Email client opened');
+                                      } else if (channel === 'phone' && lead.phone) {
+                                        window.location.href = `tel:${lead.phone}`;
+                                        toast.success('Phone dialer opened');
+                                      } else if (label.includes('mark contacted') || label.includes('mark as contacted')) {
+                                        markContacted(notesLeadId);
+                                      } else {
+                                        // Fallback: copy script
+                                        const scriptText = nba.script.join('\n');
+                                        copyText(scriptText);
+                                        toast.success('Script copied to clipboard');
+                                      }
+                                    }}
+                                    disabled={(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).review_required}
+                                    className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                                      (canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).review_required
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'bg-green-50 text-green-700 hover:bg-green-100'
+                                    }`}
+                                    title={(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).review_required ? 'Review required before applying' : 'Apply this action'}
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Apply
+                                  </button>
+                                </div>
                               </div>
                               <p className="text-xs text-gray-900 font-medium mb-1">{canonicalNote.next_best_action.label}</p>
                               <p className="text-xs text-gray-500 mb-2">
