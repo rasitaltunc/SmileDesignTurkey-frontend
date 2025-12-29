@@ -1567,7 +1567,7 @@ export default function AdminLeads() {
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 transition-opacity duration-200"
+            className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 transition-opacity duration-200 motion-reduce:transition-none"
             style={{ zIndex: 2147483647 }}
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
@@ -1575,7 +1575,7 @@ export default function AdminLeads() {
           >
             <div
               data-modal-root="true"
-              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-transform duration-200 will-change-transform"
+              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-transform duration-200 will-change-transform motion-reduce:transition-none motion-reduce:transform-none"
               style={{
                 width: "min(92vw, 720px)",
                 height: "min(80vh, 720px)",
