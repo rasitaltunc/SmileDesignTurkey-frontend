@@ -1580,7 +1580,6 @@ export default function AdminLeads() {
                 height: "min(80vh, 720px)",
                 display: "grid",
                 gridTemplateRows: "auto minmax(0, 1fr) auto",
-                transform: "scale(1)",
               }}
               onMouseDown={(e) => e.stopPropagation()}
             >
