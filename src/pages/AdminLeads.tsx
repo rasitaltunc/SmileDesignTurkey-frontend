@@ -5,6 +5,7 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { normalizeLeadNote, type CanonicalNote } from '@/lib/ai/normalizeLeadNote';
+import { findLatestCanonical, parseCanonical, type CanonicalV1 } from '@/lib/ai/canonicalNote';
 
 // Copy to clipboard helper
 const copyText = async (text: string) => {
@@ -470,6 +471,9 @@ export default function AdminLeads() {
   const leadRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
+
+  // Canonical note cache (for active/visible leads)
+  const canonicalCacheRef = useRef<Map<string, CanonicalV1>>(new Map());
 
   // Lock body scroll when modal is open (position: fixed + overflow hidden - Safari-proof)
   useEffect(() => {
@@ -1400,6 +1404,9 @@ export default function AdminLeads() {
       // Update local state
       setCanonicalNote(canonical);
       
+      // Update cache immediately
+      canonicalCacheRef.current.set(leadId, canonical as CanonicalV1);
+      
       // Reload notes to get the new canonical note
       await loadNotes(leadId);
 
@@ -1444,36 +1451,32 @@ export default function AdminLeads() {
   // Parse canonical note when notes load
   useEffect(() => {
     if (notes.length > 0 && notesLeadId) {
-      // Find latest note that starts with [AI_CANONICAL_NOTE v1.0]
-      const canonicalNoteEntry = notes
-        .slice()
-        .reverse()
-        .find(n => {
-          const content = n.note || '';
-          return content.startsWith('[AI_CANONICAL_NOTE v1.0]');
-        });
-
-      if (canonicalNoteEntry) {
-        try {
-          const content = canonicalNoteEntry.note || '';
-          // Extract JSON after header line
-          const lines = content.split('\n');
-          const jsonStart = lines.findIndex(l => l.trim().startsWith('{'));
-          if (jsonStart !== -1) {
-            const jsonText = lines.slice(jsonStart).join('\n');
-            const parsed = JSON.parse(jsonText);
-            setCanonicalNote(parsed as CanonicalNote);
-            return;
-          }
-        } catch (err) {
-          console.error('[AdminLeads] Failed to parse canonical note:', err);
-        }
+      const canonical = findLatestCanonical(notes);
+      if (canonical) {
+        setCanonicalNote(canonical);
+        // Update cache
+        canonicalCacheRef.current.set(notesLeadId, canonical);
+      } else {
+        setCanonicalNote(null);
+        // Remove from cache if no canonical found
+        canonicalCacheRef.current.delete(notesLeadId);
       }
-      setCanonicalNote(null);
     } else {
       setCanonicalNote(null);
     }
   }, [notes, notesLeadId]);
+
+  // Update cache when activeLeadId changes (if we have notes for that lead)
+  useEffect(() => {
+    if (activeLeadId && notesLeadId === activeLeadId && notes.length > 0) {
+      const canonical = findLatestCanonical(notes);
+      if (canonical) {
+        canonicalCacheRef.current.set(activeLeadId, canonical);
+      } else {
+        canonicalCacheRef.current.delete(activeLeadId);
+      }
+    }
+  }, [activeLeadId, notesLeadId, notes]);
 
   // Close notes modal with animation
   const handleCloseNotes = () => {
@@ -1945,6 +1948,9 @@ export default function AdminLeads() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredLeads.map((lead) => {
+                      // Get canonical note from cache (if available)
+                      const canonical = canonicalCacheRef.current.get(lead.id);
+                      
                       // Compute priority and next action for this lead
                       const leadNotes = notes.filter(n => n.lead_id === lead.id);
                       const leadTimeline = timeline.filter(t => t.leadId === lead.id);
@@ -1975,8 +1981,16 @@ export default function AdminLeads() {
                       );
                       const isStale = daysSinceActivity >= 3;
                       
-                      // Priority badge
-                      const priorityBadge = priorityScore >= 70 ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
+                      // Priority badge (prefer canonical, fallback to computed)
+                      const canonicalPriority = canonical?.priority;
+                      const canonicalRisk = canonical?.risk_score;
+                      const canonicalNBA = canonical?.next_best_action;
+                      const canonicalMissing = canonical?.missing_fields || [];
+                      
+                      const priorityBadge = canonicalPriority === 'hot' ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
+                                           canonicalPriority === 'warm' ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
+                                           canonicalPriority === 'cool' ? { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' } :
+                                           priorityScore >= 70 ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
                                            priorityScore >= 40 ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
                                            { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' };
 
@@ -1993,15 +2007,52 @@ export default function AdminLeads() {
                             }`}
                           >
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="flex items-center gap-2">
-                              {new Date(lead.created_at).toLocaleString()}
-                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${priorityBadge.color}`}>
-                                {priorityBadge.emoji} {priorityBadge.label}
-                              </span>
-                              {isStale && (
-                                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
-                                  ⏳ {daysSinceActivity}d no activity
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-gray-500">{new Date(lead.created_at).toLocaleString()}</span>
+                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${priorityBadge.color}`}>
+                                  {priorityBadge.emoji} {priorityBadge.label}
                                 </span>
+                                {canonicalRisk !== undefined && (
+                                  <span className="text-xs text-gray-600">
+                                    Risk {canonicalRisk}
+                                  </span>
+                                )}
+                                {isStale && (
+                                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                    ⏳ {daysSinceActivity}d no activity
+                                  </span>
+                                )}
+                              </div>
+                              {canonicalNBA && (
+                                <div className="text-xs text-gray-700 font-medium truncate max-w-[300px]" title={canonicalNBA.label}>
+                                  Next: {canonicalNBA.label}
+                                </div>
+                              )}
+                              {canonicalMissing.length > 0 && (
+                                <div className="flex flex-wrap gap-1 max-w-[300px]">
+                                  {canonicalMissing.slice(0, 3).map((field, idx) => (
+                                    <span key={idx} className="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded">
+                                      {field}
+                                    </span>
+                                  ))}
+                                  {canonicalMissing.length > 3 && (
+                                    <span className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                                      +{canonicalMissing.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {!canonical && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenNotes(lead.id);
+                                  }}
+                                  className="text-xs text-purple-600 hover:text-purple-700 underline"
+                                >
+                                  Open Notes to generate snapshot
+                                </button>
                               )}
                             </div>
                           </td>
@@ -2203,6 +2254,31 @@ export default function AdminLeads() {
                           <div className="flex items-center gap-2">
                             {activeLeadId === lead.id && (
                               <div className="flex items-center gap-1 mr-2">
+                                {/* Copy NBA script (if canonical exists) */}
+                                {canonicalNBA?.script && canonicalNBA.script.length > 0 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const scriptText = canonicalNBA.script.join('\n');
+                                      copyText(scriptText);
+                                      toast.success('Script copied to clipboard');
+                                    }}
+                                    className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                    title="Copy NBA script"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markContacted(lead.id);
+                                  }}
+                                  className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                  title="Mark as contacted"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </button>
                                 {hasPhone && (
                                   <>
                                     <button
