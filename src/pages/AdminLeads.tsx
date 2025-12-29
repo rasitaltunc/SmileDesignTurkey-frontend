@@ -292,7 +292,7 @@ export default function AdminLeads() {
   // Modal açılınca ilk ölçüm
   useEffect(() => {
     if (!notesLeadId) return;
-    setTimeout(() => handleNotesScroll(), 0);
+    requestAnimationFrame(() => handleNotesScroll());
   }, [notesLeadId]);
 
   // ESC ile kapat
@@ -1550,12 +1550,13 @@ export default function AdminLeads() {
           >
             <div
               data-modal-root="true"
-              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden"
+              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-transform duration-200"
               style={{
                 width: "min(92vw, 720px)",
                 height: "min(80vh, 720px)",
                 display: "grid",
                 gridTemplateRows: "auto minmax(0, 1fr) auto",
+                transform: "scale(1)",
               }}
               onMouseDown={(e) => e.stopPropagation()}
             >
