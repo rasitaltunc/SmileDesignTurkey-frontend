@@ -74,8 +74,20 @@ async function recoverSession(
       toast.error('Session expired. Please sign in again.');
     }
     
-    // Redirect
-    onExpired();
+    // Preserve current path as "next" parameter
+    const currentPath = window.location.pathname;
+    const isPrivateRoute = currentPath.startsWith('/admin') || 
+                          currentPath.startsWith('/employee') ||
+                          currentPath.startsWith('/patient') ||
+                          currentPath.startsWith('/doctor') ||
+                          currentPath === '/plan-dashboard';
+    
+    if (isPrivateRoute) {
+      const next = encodeURIComponent(currentPath);
+      window.location.assign(`/login?next=${next}`);
+    } else {
+      onExpired();
+    }
   } catch (err) {
     console.error('[sessionRecovery] Recovery failed:', err);
     // Still redirect even if recovery fails

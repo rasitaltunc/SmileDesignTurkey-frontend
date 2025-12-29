@@ -120,8 +120,43 @@ export default function App() {
   const isPublicRoute = PUBLIC_ROUTES.has(currentPath);
   const isPrivateRoute = PRIVATE_ROUTES.has(currentPath) || currentPath.startsWith('/admin/') || currentPath.startsWith('/employee/');
 
+  // Check if demo login is enabled
+  const ENABLE_DEMO_LOGIN = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
+
+  // Handle /demo-login route (only if enabled, else redirect to /login)
+  if (currentPath === '/demo-login') {
+    if (!ENABLE_DEMO_LOGIN) {
+      // Redirect to /login in prod
+      window.history.replaceState({}, '', '/login');
+      setCurrentPath('/login');
+    }
+  }
+
+  // Handle /login route
+  if (currentPath === '/login') {
+    // If authenticated, redirect to role-based home or next param
+    if (isAuthenticated && role) {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get('next');
+      const defaultHome = role === 'admin' ? '/admin/leads' 
+        : role === 'employee' ? '/employee/leads'
+        : role === 'patient' ? '/patient/portal'
+        : role === 'doctor' ? '/doctor/portal'
+        : '/';
+      const target = next || defaultHome;
+      window.history.replaceState({}, '', target);
+      setCurrentPath(target);
+    } else {
+      return <Login />;
+    }
+  }
+
   // Only require auth for private routes
   if (!isAuthenticated && isPrivateRoute) {
+    // Redirect to /login with next parameter
+    const next = encodeURIComponent(currentPath);
+    window.history.replaceState({}, '', `/login?next=${next}`);
+    setCurrentPath('/login');
     return <Login />;
   }
 
@@ -159,6 +194,15 @@ export default function App() {
         return <PlanDashboard />;
       case '/intake':
         return <Intake />;
+      case '/login':
+        // Already handled above, but keep for completeness
+        return <Login />;
+      case '/demo-login':
+        // Only render if enabled, else redirect handled above
+        if (ENABLE_DEMO_LOGIN) {
+          return <Login />;
+        }
+        return null;
       case '/patient/portal':
         // Role check: only patient can access
         if (role && role !== 'patient') {
