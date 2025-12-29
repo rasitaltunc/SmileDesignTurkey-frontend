@@ -227,6 +227,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  // Quick test endpoint (GET for easy browser testing)
+  if (req.method === 'GET') {
+    return res.status(200).json({ 
+      ok: true, 
+      source: 'api/ai/normalize',
+      message: 'AI Gateway normalize endpoint is working',
+      method: req.method,
+    });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
