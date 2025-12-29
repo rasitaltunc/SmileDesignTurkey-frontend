@@ -270,7 +270,7 @@ export default function AdminLeads() {
     };
   }, [notesLeadId]);
 
-  // Modal açılınca body'ye focus ver
+  // Modal açılınca body'ye focus ver + focus trap
   useEffect(() => {
     if (!notesLeadId) return;
 
@@ -278,6 +278,30 @@ export default function AdminLeads() {
     requestAnimationFrame(() => {
       modalScrollRef.current?.focus();
     });
+
+    // Focus trap: Tab dışarı kaçmasın
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const modal = document.querySelector('[data-modal-root="true"]');
+      if (!modal) return;
+      
+      const focusableElements = modal.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const firstElement = focusableElements[0] as HTMLElement;
+      const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+      if (e.shiftKey && document.activeElement === firstElement) {
+        e.preventDefault();
+        lastElement?.focus();
+      } else if (!e.shiftKey && document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleTab);
+    return () => document.removeEventListener("keydown", handleTab);
   }, [notesLeadId]);
 
   // Scroll handler for shadow/fade effects
@@ -1542,7 +1566,7 @@ export default function AdminLeads() {
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 bg-black/40 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 transition-opacity duration-200"
             style={{ zIndex: 2147483647 }}
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) handleCloseNotes();
@@ -1639,7 +1663,7 @@ export default function AdminLeads() {
                   tabIndex={0}
                   role="region"
                   aria-label="Notes content"
-                  className="px-5 py-4 focus:outline-none"
+                  className="relative px-5 py-4 focus:outline-none"
                   style={{
                     overflowY: "auto",
                     minHeight: 0,
@@ -1666,6 +1690,12 @@ export default function AdminLeads() {
                     }
                   }}
                 >
+                  {/* FADE TOP */}
+                  <div
+                    className={`pointer-events-none sticky top-0 h-6 -mt-4 bg-gradient-to-b from-white to-transparent z-10 transition-opacity ${
+                      notesScroll.atTop ? "opacity-0" : "opacity-100"
+                    }`}
+                  />
                   <div className="space-y-6">
                     {/* AI Analysis Section */}
                     <div>
@@ -1678,9 +1708,23 @@ export default function AdminLeads() {
                       </div>
 
                       {isLoadingAI ? (
-                        <div className="text-gray-500 text-sm flex items-center gap-2">
-                          <RefreshCw className="w-3 h-3 animate-spin" />
-                          Generating call briefing...
+                        <div className="space-y-3">
+                          <div className="text-gray-500 text-sm flex items-center gap-2 mb-3">
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            Generating call briefing...
+                          </div>
+                          {/* Skeleton */}
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gradient-to-r from-gray-50 to-white animate-pulse">
+                            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                            <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                          </div>
+                          <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-blue-50/30 animate-pulse">
+                            <div className="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
+                            <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
+                            <div className="h-3 bg-gray-200 rounded w-4/5 mb-2"></div>
+                            <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                          </div>
                         </div>
                       ) : aiRiskScore !== null || aiSummary ? (
                         <div className="space-y-3">
@@ -2014,21 +2058,13 @@ export default function AdminLeads() {
                       </div>
                     </div>
                   </div>
-              </div>
-
-                {/* FADE TOP */}
-                <div
-                  className={`pointer-events-none absolute left-0 right-0 top-[56px] h-6 bg-gradient-to-b from-white to-transparent transition-opacity z-10 ${
-                    notesScroll.atTop ? "opacity-0" : "opacity-100"
-                  }`}
-                />
-
-                {/* FADE BOTTOM */}
-                <div
-                  className={`pointer-events-none absolute left-0 right-0 bottom-[72px] h-6 bg-gradient-to-t from-gray-50 to-transparent transition-opacity z-10 ${
-                    notesScroll.atBottom ? "opacity-0" : "opacity-100"
-                  }`}
-                />
+                  {/* FADE BOTTOM */}
+                  <div
+                    className={`pointer-events-none sticky bottom-0 h-6 -mb-4 bg-gradient-to-t from-gray-50 to-transparent z-10 transition-opacity ${
+                      notesScroll.atBottom ? "opacity-0" : "opacity-100"
+                    }`}
+                  />
+                </div>
 
                 {/* FOOTER */}
                 <div className={`shrink-0 border-t border-gray-200 px-5 py-3 bg-gray-50 ${notesScroll.atBottom ? "" : "shadow-[0_-8px_20px_rgba(0,0,0,0.06)]"}`}>
@@ -2046,7 +2082,13 @@ export default function AdminLeads() {
                       rows={3}
                       className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <div className="flex justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-gray-500 flex items-center gap-3">
+                        <span>ESC to close</span>
+                        <span>•</span>
+                        <span>Enter to add note</span>
+                      </div>
+                      <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={handleCloseNotes}
