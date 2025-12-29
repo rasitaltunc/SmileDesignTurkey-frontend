@@ -1,5 +1,7 @@
 import { useState, createContext, useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
+import { getSupabaseClient } from './lib/supabaseClient';
+import { installSessionRecovery } from './lib/auth/sessionRecovery';
 import Home from './pages/Home';
 import Treatments from './pages/Treatments';
 import TreatmentDetail from './pages/TreatmentDetail';
@@ -31,6 +33,19 @@ export const NavigationContext = createContext<{
 
 export default function App() {
   const { isAuthenticated, isLoading, role, checkSession } = useAuthStore();
+  
+  // Install session recovery on mount
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const cleanup = installSessionRecovery(supabase, {
+        onExpired: () => {
+          window.location.assign('/login');
+        },
+      });
+      return cleanup;
+    }
+  }, []);
   
   // Initialize auth session on mount
   useEffect(() => {

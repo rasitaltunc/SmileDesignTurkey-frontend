@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getSupabaseClient } from '../lib/supabaseClient';
+import { markManualLogout } from '../lib/auth/sessionRecovery';
 import type { User } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -135,9 +136,12 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         set({ isLoading: true });
         try {
+          // Mark manual logout to prevent "expired" toast
+          markManualLogout();
+          
           const supabase = getSupabaseClient();
           if (supabase) {
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' });
           }
         } catch (error) {
           console.error('Logout error:', error);
@@ -149,9 +153,8 @@ export const useAuthStore = create<AuthState>()(
             error: null,
             role: null,
           });
-          // Navigate to home after logout
-          window.history.pushState({}, '', '/');
-          window.dispatchEvent(new PopStateEvent('popstate'));
+          // Navigate to login after logout
+          window.location.assign('/login');
         }
       },
 
