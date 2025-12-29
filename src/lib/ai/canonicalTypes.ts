@@ -48,5 +48,16 @@ export interface CanonicalV11 {
   review_required: boolean;
   review_reasons: string[];
   last_run_hash?: string;
+  security?: {
+    firewall?: {
+      redaction_counts?: Partial<Record<string, number>>;
+      redaction_samples_masked?: Partial<Record<string, string[]>>;
+      injection_detected?: boolean;
+      injection_signals?: Array<{ pattern: string; match: string }>;
+      detected_contacts_masked?: { emails: string[]; phones: string[] };
+      applied_at?: string;
+      run_hash?: string;
+    };
+  };
 }
 

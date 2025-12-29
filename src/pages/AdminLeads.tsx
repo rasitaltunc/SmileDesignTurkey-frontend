@@ -1388,8 +1388,8 @@ export default function AdminLeads() {
         ? timeline.filter(t => new Date(t.receivedAt) > new Date(lastNoteAt))
         : timeline;
 
-      // Call normalize function with memory prompting
-      const rawCanonical = await normalizeLeadNote(
+      // Call normalize function with memory prompting (returns with firewallReport and runHash)
+      const normalizeResult = await normalizeLeadNote(
         {
           lead: {
             id: lead.id,
@@ -1413,13 +1413,16 @@ export default function AdminLeads() {
         adminToken
       );
 
+      const firewallReport = normalizeResult.firewallReport;
+      const runHash = normalizeResult.runHash;
+
       // Transform to v1.1 if needed
       let canonicalV11: CanonicalV11;
-      if (rawCanonical.version === '1.1') {
-        canonicalV11 = rawCanonical as CanonicalV11;
+      if (normalizeResult.version === '1.1') {
+        canonicalV11 = normalizeResult as CanonicalV11;
       } else {
         // Transform v1.0 to v1.1
-        canonicalV11 = transformV10ToV11(rawCanonical as CanonicalNote, lead.id);
+        canonicalV11 = transformV10ToV11(normalizeResult as CanonicalNote, lead.id);
       }
 
       // Apply safe merge (lead ground truth > AI)
@@ -1447,7 +1450,24 @@ export default function AdminLeads() {
         last_note_at: humanNotes.length > 0 ? humanNotes[0].created_at : undefined,
       };
 
-      // Review gating logic
+      // Inject firewall security meta into canonical
+      if (firewallReport && runHash) {
+        canonicalV11.security = canonicalV11.security || {};
+        canonicalV11.security.firewall = {
+          redaction_counts: firewallReport.redaction.counts,
+          redaction_samples_masked: firewallReport.redaction.samples_masked,
+          injection_detected: firewallReport.injection.detected,
+          injection_signals: firewallReport.injection.signals.map(s => ({ pattern: s.pattern, match: s.match })),
+          detected_contacts_masked: {
+            emails: firewallReport.detected_contacts.emails_masked,
+            phones: firewallReport.detected_contacts.phones_masked,
+          },
+          applied_at: new Date().toISOString(),
+          run_hash: runHash,
+        };
+      }
+
+      // Review gating logic (strengthened with firewall)
       const reviewReasons: string[] = [];
       if (canonicalV11.confidence !== null && canonicalV11.confidence < 55) {
         reviewReasons.push('Low confidence');
@@ -1457,6 +1477,19 @@ export default function AdminLeads() {
       }
       if (canonicalV11.missing_fields.length >= 3 && (!canonicalV11.next_best_action.script || canonicalV11.next_best_action.script.length === 0)) {
         reviewReasons.push('Insufficient info for script');
+      }
+      
+      // Firewall-based review gating
+      if (firewallReport) {
+        if (firewallReport.injection.detected) {
+          reviewReasons.push('Prompt-injection signals detected');
+        }
+        if (firewallReport.detected_contacts.emails_masked.length > 0 && !lead.email) {
+          reviewReasons.push('Potential contact data detected in notes');
+        }
+        if (firewallReport.detected_contacts.phones_masked.length > 0 && !lead.phone) {
+          reviewReasons.push('Potential contact data detected in notes');
+        }
       }
       
       canonicalV11.review_required = reviewReasons.length > 0;
@@ -2902,6 +2935,14 @@ export default function AdminLeads() {
                                 )}
                                 {(canonicalNote as CanonicalV11).updated_at && (
                                   <p>Updated: {new Date((canonicalNote as CanonicalV11).updated_at).toLocaleString()}</p>
+                                )}
+                                {(canonicalNote as CanonicalV11).security?.firewall && (
+                                  <>
+                                    <p className="mt-1 font-medium">Firewall applied: {new Date((canonicalNote as CanonicalV11).security.firewall.applied_at || '').toLocaleString()}</p>
+                                    {(canonicalNote as CanonicalV11).security.firewall.run_hash && (
+                                      <p className="text-gray-500 font-mono">Hash: {(canonicalNote as CanonicalV11).security.firewall.run_hash}</p>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>

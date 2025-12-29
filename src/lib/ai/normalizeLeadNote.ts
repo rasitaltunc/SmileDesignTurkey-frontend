@@ -1,6 +1,8 @@
 // AI Note Normalizer - Canonical JSON Schema (v1.0 and v1.1)
 
 import type { CanonicalV11 } from './canonicalTypes';
+import { sanitizeNotesForAI, sanitizeTimelineForAI, wrapUntrustedBlock, type FirewallReport } from './dataFirewall';
+import { shortHash } from './hash';
 
 export interface CanonicalNote {
   version: string;
@@ -94,10 +96,80 @@ export async function normalizeLeadNote(
   input: NormalizeInput,
   apiUrl: string,
   adminToken: string
-): Promise<CanonicalNote> {
-  // Prepare input text for AI
+): Promise<CanonicalNote & { firewallReport?: FirewallReport; runHash?: string }> {
+  // Apply firewall: sanitize notes and timeline
+  const { sanitizedNotes, report: notesReport } = sanitizeNotesForAI(input.notes);
+  const { sanitizedTimeline, report: timelineReport } = sanitizeTimelineForAI(input.timeline);
+  
+  // Aggregate firewall reports
+  const firewallReport: FirewallReport = {
+    redaction: {
+      applied: notesReport.redaction.applied || timelineReport.redaction.applied,
+      counts: {
+        email: notesReport.redaction.counts.email + timelineReport.redaction.counts.email,
+        phone: notesReport.redaction.counts.phone + timelineReport.redaction.counts.phone,
+        iban: notesReport.redaction.counts.iban + timelineReport.redaction.counts.iban,
+        trid: notesReport.redaction.counts.trid + timelineReport.redaction.counts.trid,
+        credit_card: notesReport.redaction.counts.credit_card + timelineReport.redaction.counts.credit_card,
+        passport_like: notesReport.redaction.counts.passport_like + timelineReport.redaction.counts.passport_like,
+      },
+      samples_masked: { ...notesReport.redaction.samples_masked },
+    },
+    injection: {
+      detected: notesReport.injection.detected || timelineReport.injection.detected,
+      signals: [...notesReport.injection.signals, ...timelineReport.injection.signals]
+        .slice(0, 8)
+        .filter((signal, index, self) => 
+          index === self.findIndex(s => s.pattern === signal.pattern && s.match === signal.match)
+        ),
+    },
+    detected_contacts: {
+      emails_masked: [...new Set([...notesReport.detected_contacts.emails_masked, ...timelineReport.detected_contacts.emails_masked])].slice(0, 10),
+      phones_masked: [...new Set([...notesReport.detected_contacts.phones_masked, ...timelineReport.detected_contacts.phones_masked])].slice(0, 10),
+    },
+  };
+
+  // Merge samples (keep first 3 per kind)
+  Object.keys(timelineReport.redaction.samples_masked).forEach((key) => {
+    if (!firewallReport.redaction.samples_masked[key as keyof typeof firewallReport.redaction.samples_masked]) {
+      firewallReport.redaction.samples_masked[key as keyof typeof firewallReport.redaction.samples_masked] = [];
+    }
+    const samples = timelineReport.redaction.samples_masked[key as keyof typeof timelineReport.redaction.samples_masked] || [];
+    samples.forEach((sample) => {
+      const existing = firewallReport.redaction.samples_masked[key as keyof typeof firewallReport.redaction.samples_masked] || [];
+      if (existing.length < 3 && !existing.includes(sample)) {
+        existing.push(sample);
+      }
+    });
+  });
+
+  // Prepare sanitized content blocks
+  const sanitizedNotesText = sanitizedNotes.length > 0
+    ? sanitizedNotes.map(n => `- ${n.content_sanitized} (${n.created_at})`).join('\n')
+    : 'None';
+
+  const sanitizedTimelineText = sanitizedTimeline.length > 0
+    ? sanitizedTimeline.map(e => `- ${e.eventType} on ${e.receivedAt}${e.title_sanitized ? `: ${e.title_sanitized}` : ''}${e.notes_sanitized ? ` (${e.notes_sanitized})` : ''}`).join('\n')
+    : 'None';
+
+  // Prepare input text for AI with firewall and memory
+  const prevCanonicalText = input.prevCanonical 
+    ? `\nPrevious Canonical Snapshot (v${input.prevCanonical.version}):
+${JSON.stringify(input.prevCanonical, null, 2)}
+
+IMPORTANT: Use the previous canonical as context. Only update fields that have actually changed based on new information. Do not repeat unchanged information.`
+    : '';
+
+  const newNotesText = input.newNotesSincePrev && input.newNotesSincePrev.length > 0
+    ? `\nNew Notes Since Last Snapshot (${input.newNotesSincePrev.length}):`
+    : '';
+
+  const newTimelineText = input.newTimelineSincePrev && input.newTimelineSincePrev.length > 0
+    ? `\nNew Timeline Events Since Last Snapshot (${input.newTimelineSincePrev.length}):`
+    : '';
+
   const inputText = `
-Lead Information:
+Lead Ground Truth (ALWAYS USE THESE VALUES - DO NOT INVENT):
 - ID: ${input.lead.id}
 - Name: ${input.lead.name || 'unknown'}
 - Email: ${input.lead.email || 'unknown'}
@@ -112,11 +184,23 @@ Last Contacted: ${input.lastContactedAt || 'never'}
 Contact Attempts:
 ${input.contactEvents.length === 0 ? 'None' : input.contactEvents.map(e => `- ${e.channel} on ${e.created_at}: ${e.note || 'no note'}`).join('\n')}
 
-Timeline Events:
-${input.timeline.length === 0 ? 'None' : input.timeline.map(e => `- ${e.eventType} on ${e.receivedAt}${e.title ? `: ${e.title}` : ''}${e.additionalNotes ? ` (${e.additionalNotes})` : ''}`).join('\n')}
+All Timeline Events:
+${sanitizedTimeline.length > 0 ? sanitizedTimeline.map(e => `- ${e.eventType} on ${e.receivedAt}${e.title_sanitized ? `: ${e.title_sanitized}` : ''}${e.notes_sanitized ? ` (${e.notes_sanitized})` : ''}`).join('\n') : 'None'}
 
-Recent Notes (last 10, excluding AI canonical notes):
-${input.notes.slice(0, 10).map(n => `- ${n.note || ''} (${n.created_at})`).join('\n')}
+All Notes (excluding AI canonical notes):
+${sanitizedNotes.length > 0 ? sanitizedNotes.map(n => `- ${n.content_sanitized} (${n.created_at})`).join('\n') : 'None'}
+${prevCanonicalText}
+${newNotesText}
+${newTimelineText}
+
+FIREWALL SUMMARY:
+- Redaction counts: ${JSON.stringify(firewallReport.redaction.counts)}
+- Injection detected: ${firewallReport.injection.detected}
+- Detected contacts (masked): emails=${firewallReport.detected_contacts.emails_masked.length}, phones=${firewallReport.detected_contacts.phones_masked.length}
+
+${wrapUntrustedBlock('TIMELINE', sanitizedTimelineText)}
+
+${wrapUntrustedBlock('NOTES', sanitizedNotesText)}
 
 Analyze this lead and return ONLY valid JSON matching this exact schema (v1.1):
 {
@@ -234,6 +318,13 @@ IMPORTANT:
       throw new Error('Failed to parse canonical JSON from AI response');
     }
   }
+
+  // Attach firewall report and run hash to result
+  return {
+    ...parsed,
+    firewallReport,
+    runHash,
+  } as CanonicalNote & { firewallReport: FirewallReport; runHash: string };
 }
 
 // Transform v1.0 to v1.1 format (for backward compatibility)
