@@ -1550,7 +1550,7 @@ export default function AdminLeads() {
           >
             <div
               data-modal-root="true"
-              className="bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden"
+              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden"
               style={{
                 width: "min(92vw, 720px)",
                 height: "min(80vh, 720px)",
@@ -1560,7 +1560,7 @@ export default function AdminLeads() {
               onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* HEADER */}
-                <div className="shrink-0 border-b border-gray-200 px-5 py-3 bg-white">
+                <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">Notes</h3>
@@ -1643,7 +1643,9 @@ export default function AdminLeads() {
                     overflowY: "auto",
                     minHeight: 0,
                     WebkitOverflowScrolling: "touch",
+                    scrollbarGutter: "stable" as any,
                   }}
+                  onScroll={handleNotesScroll}
                   onKeyDown={(e) => {
                     const el = modalScrollRef.current;
                     if (!el) return;
@@ -2013,13 +2015,33 @@ export default function AdminLeads() {
                   </div>
               </div>
 
+                {/* FADE TOP */}
+                <div
+                  className={`pointer-events-none absolute left-0 right-0 top-[56px] h-6 bg-gradient-to-b from-white to-transparent transition-opacity z-10 ${
+                    notesScroll.atTop ? "opacity-0" : "opacity-100"
+                  }`}
+                />
+
+                {/* FADE BOTTOM */}
+                <div
+                  className={`pointer-events-none absolute left-0 right-0 bottom-[72px] h-6 bg-gradient-to-t from-gray-50 to-transparent transition-opacity z-10 ${
+                    notesScroll.atBottom ? "opacity-0" : "opacity-100"
+                  }`}
+                />
+
                 {/* FOOTER */}
-                <div className="shrink-0 border-t border-gray-200 px-5 py-3 bg-gray-50">
+                <div className={`shrink-0 border-t border-gray-200 px-5 py-3 bg-gray-50 ${notesScroll.atBottom ? "" : "shadow-[0_-8px_20px_rgba(0,0,0,0.06)]"}`}>
                   <form onSubmit={handleAddNote} className="space-y-3">
                     <textarea
                       value={newNoteContent}
                       onChange={(e) => setNewNoteContent(e.target.value)}
-                      placeholder="Add a note..."
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && newNoteContent.trim()) {
+                          e.preventDefault();
+                          handleAddNote(e as any);
+                        }
+                      }}
+                      placeholder="Add a note... (Enter to submit, Shift+Enter for new line)"
                       rows={3}
                       className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
