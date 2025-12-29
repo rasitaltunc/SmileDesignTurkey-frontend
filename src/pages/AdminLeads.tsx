@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy, HelpCircle } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
@@ -220,6 +220,7 @@ export default function AdminLeads() {
   // Quick filter tabs
   type LeadTab = 'all' | 'unassigned' | 'due_today' | 'appointment_set' | 'deposit_paid';
   const [tab, setTab] = useState<LeadTab>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   function isDueTodayISO(dt?: string | null) {
     if (!dt) return false;
@@ -235,24 +236,36 @@ export default function AdminLeads() {
   }
 
   function applyTabFilter(allLeads: Lead[]) {
+    // Apply search filter first
+    let filtered = allLeads;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = allLeads.filter(lead => 
+        lead.name?.toLowerCase().includes(query) ||
+        lead.email?.toLowerCase().includes(query) ||
+        lead.phone?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Then apply tab filter
     if (isAdmin) {
       // Admin filters apply to all leads
       switch (tab) {
         case 'unassigned':
-          return allLeads.filter(l => !l.assigned_to);
+          return filtered.filter(l => !l.assigned_to);
         case 'due_today':
-          return allLeads.filter(l => isDueTodayISO(l.follow_up_at));
+          return filtered.filter(l => isDueTodayISO(l.follow_up_at));
         case 'appointment_set':
-          return allLeads.filter(l => l.status === 'appointment_set');
+          return filtered.filter(l => l.status === 'appointment_set');
         case 'deposit_paid':
-          return allLeads.filter(l => l.status === 'deposit_paid');
+          return filtered.filter(l => l.status === 'deposit_paid');
         case 'all':
         default:
-          return allLeads;
+          return filtered;
       }
     } else {
       // Employee filters apply only to assigned leads
-      const myLeads = allLeads.filter(l => l.assigned_to === user?.id);
+      const myLeads = filtered.filter(l => l.assigned_to === user?.id);
       switch (tab) {
         case 'due_today':
           return myLeads.filter(l => isDueTodayISO(l.follow_up_at));
@@ -286,6 +299,12 @@ export default function AdminLeads() {
   const [isClosing, setIsClosing] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const firstFocusableRef = useRef<HTMLElement | null>(null);
+
+  // Keyboard navigation state
+  const [activeLeadId, setActiveLeadId] = useState<string | null>(null);
+  const leadRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
 
   // Lock body scroll when modal is open (position: fixed + overflow hidden - Safari-proof)
   useEffect(() => {
@@ -1282,6 +1301,127 @@ export default function AdminLeads() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, isAuthenticated]);
 
+  // Set activeLeadId to first lead when leads load or tab changes
+  useEffect(() => {
+    const filtered = applyTabFilter(leads);
+    if (filtered.length > 0) {
+      const currentActiveExists = filtered.some(l => l.id === activeLeadId);
+      if (!currentActiveExists) {
+        setActiveLeadId(filtered[0].id);
+      }
+    } else {
+      setActiveLeadId(null);
+    }
+  }, [leads, tab]);
+
+  // Keyboard navigation handler (only when modal closed and not typing)
+  useEffect(() => {
+    const isModalOpen = notesLeadId !== null || isClosing;
+    if (isModalOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if user is typing in input/textarea/contentEditable
+      const target = e.target as HTMLElement;
+      const isTyping = target?.tagName === "INPUT" || 
+                       target?.tagName === "TEXTAREA" || 
+                       target?.isContentEditable ||
+                       isComposing;
+      
+      if (isTyping) {
+        // Handle / for search focus even when typing
+        if (e.key === "/" && target?.tagName !== "INPUT") {
+          e.preventDefault();
+          searchRef.current?.focus();
+        }
+        // Handle ESC to blur search if empty
+        if (e.key === "Escape" && target?.tagName === "INPUT" && (target as HTMLInputElement).value === "") {
+          target.blur();
+        }
+        return;
+      }
+
+      const filteredLeads = applyTabFilter(leads);
+      if (filteredLeads.length === 0) return;
+
+      const currentIndex = filteredLeads.findIndex(l => l.id === activeLeadId);
+      
+      // J = next lead
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        const nextIndex = currentIndex < filteredLeads.length - 1 ? currentIndex + 1 : 0;
+        const nextLead = filteredLeads[nextIndex];
+        setActiveLeadId(nextLead.id);
+        leadRowRefs.current[nextLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+      
+      // K = previous lead
+      if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        const prevIndex = currentIndex > 0 ? currentIndex - 1 : filteredLeads.length - 1;
+        const prevLead = filteredLeads[prevIndex];
+        setActiveLeadId(prevLead.id);
+        leadRowRefs.current[prevLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+      
+      // G = first lead
+      if (e.key === "g" || e.key === "G") {
+        if (!e.shiftKey) {
+          e.preventDefault();
+          const firstLead = filteredLeads[0];
+          setActiveLeadId(firstLead.id);
+          leadRowRefs.current[firstLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+      }
+      
+      // Shift+G = last lead
+      if (e.key === "G" && e.shiftKey) {
+        e.preventDefault();
+        const lastLead = filteredLeads[filteredLeads.length - 1];
+        setActiveLeadId(lastLead.id);
+        leadRowRefs.current[lastLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+      
+      // Enter = open Notes modal
+      if (e.key === "Enter" && activeLeadId) {
+        e.preventDefault();
+        handleOpenNotes(activeLeadId);
+      }
+      
+      // / = focus search
+      if (e.key === "/") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+      
+      // Quick actions 1-4
+      if (activeLeadId && ["1", "2", "3", "4"].includes(e.key)) {
+        e.preventDefault();
+        const lead = filteredLeads.find(l => l.id === activeLeadId);
+        if (!lead) return;
+        
+        if (e.key === "1") {
+          markContacted(activeLeadId);
+        } else if (e.key === "2") {
+          runAIAnalysis(activeLeadId);
+        } else if (e.key === "3") {
+          handleOpenNotes(activeLeadId);
+        } else if (e.key === "4") {
+          // Copy best contact (prefer phone, else email)
+          const contact = lead.phone || lead.email;
+          if (contact) {
+            copyText(contact);
+            toast.success(`Copied ${lead.phone ? 'phone' : 'email'}`);
+          } else {
+            toast.error('No contact info available');
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [notesLeadId, isClosing, activeLeadId, leads, isComposing]);
+
   // Show nothing while checking auth or redirecting
   if (!isAuthenticated) {
     return null;
@@ -1298,6 +1438,7 @@ export default function AdminLeads() {
               <h1 className="text-2xl font-bold text-gray-900">Leads Management</h1>
               <p className="text-gray-600 mt-1">
                 <span className="font-medium">{applyTabFilter(leads).length} leads</span>
+                <span className="ml-3 text-xs text-gray-500">Press <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">/</kbd> to search</span>
                 {!isAdmin && user?.id && (
                   <span className="ml-2 text-blue-600">• Assigned to: {user.id}</span>
                 )}
@@ -1321,6 +1462,18 @@ export default function AdminLeads() {
                 Logout
               </button>
             </div>
+          </div>
+
+          {/* Search Input */}
+          <div className="mb-4">
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Search leads... (Press / to focus)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
 
           {/* Quick Filter Tabs */}
@@ -1481,7 +1634,16 @@ export default function AdminLeads() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredLeads.map((lead) => (
-                      <tr key={lead.id} className="hover:bg-gray-50 group">
+                      <tr 
+                        key={lead.id} 
+                        ref={(el) => { leadRowRefs.current[lead.id] = el; }}
+                        onClick={() => setActiveLeadId(lead.id)}
+                        className={`hover:bg-gray-50 group cursor-pointer transition-colors ${
+                          activeLeadId === lead.id 
+                            ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" 
+                            : ""
+                        }`}
+                      >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(lead.created_at).toLocaleString()}
                       </td>
@@ -2248,7 +2410,66 @@ export default function AdminLeads() {
                         <span>ESC to close</span>
                         <span>•</span>
                         <span>Cmd/Ctrl+Enter to add note</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowCheatSheet(!showCheatSheet)}
+                          className="ml-2 text-gray-400 hover:text-gray-600 transition-colors"
+                          title="Keyboard shortcuts"
+                        >
+                          <HelpCircle className="w-4 h-4" />
+                        </button>
                       </div>
+                      {showCheatSheet && (
+                        <div className="absolute right-5 bottom-14 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-50 min-w-[280px]">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-semibold text-gray-900">Keyboard Shortcuts</h4>
+                            <button
+                              type="button"
+                              onClick={() => setShowCheatSheet(false)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            <div className="font-medium text-gray-700 mb-1">In Modal:</div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">ESC</span>
+                              <span className="text-gray-900">Close modal</span>
+                            </div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">Tab</span>
+                              <span className="text-gray-900">Cycle focus</span>
+                            </div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">Cmd/Ctrl+Enter</span>
+                              <span className="text-gray-900">Add note</span>
+                            </div>
+                            <div className="border-t border-gray-200 my-2"></div>
+                            <div className="font-medium text-gray-700 mb-1">In List:</div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">J / K</span>
+                              <span className="text-gray-900">Next / Previous lead</span>
+                            </div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">G / Shift+G</span>
+                              <span className="text-gray-900">First / Last lead</span>
+                            </div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">Enter</span>
+                              <span className="text-gray-900">Open notes</span>
+                            </div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">/</span>
+                              <span className="text-gray-900">Focus search</span>
+                            </div>
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-gray-600">1-4</span>
+                              <span className="text-gray-900">Quick actions</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <button
                           type="button"
