@@ -2089,39 +2089,40 @@ export default function AdminLeads() {
                         <span>Enter to add note</span>
                       </div>
                       <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleCloseNotes}
-                        className="px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 transition-colors"
-                      >
-                        Close
-                      </button>
+                        <button
+                          type="button"
+                          onClick={handleCloseNotes}
+                          className="px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 transition-colors"
+                        >
+                          Close
+                        </button>
 
-                      <button
-                        type="submit"
-                        disabled={!newNoteContent.trim() || isSavingNote}
-                        className={[
-                          "inline-flex items-center justify-center gap-2",
-                          "px-4 py-2 rounded-md text-sm font-semibold",
-                          "border transition-all duration-200 min-w-[120px]",
-                          !newNoteContent.trim() || isSavingNote
-                            ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                            : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
-                        ].join(" ")}
-                        title={!newNoteContent.trim() ? "Type a note to enable" : "Add note to lead"}
-                      >
-                        {isSavingNote ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            <span>Saving...</span>
-                          </>
-                        ) : (
-                          <>
-                            <MessageSquare className="w-4 h-4" />
-                            <span>Add Note</span>
-                          </>
-                        )}
-                      </button>
+                        <button
+                          type="submit"
+                          disabled={!newNoteContent.trim() || isSavingNote}
+                          className={[
+                            "inline-flex items-center justify-center gap-2",
+                            "px-4 py-2 rounded-md text-sm font-semibold",
+                            "border transition-all duration-200 min-w-[120px]",
+                            !newNoteContent.trim() || isSavingNote
+                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
+                          ].join(" ")}
+                          title={!newNoteContent.trim() ? "Type a note to enable" : "Add note to lead"}
+                        >
+                          {isSavingNote ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            <>
+                              <MessageSquare className="w-4 h-4" />
+                              <span>Add Note</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </form>
                 </div>
