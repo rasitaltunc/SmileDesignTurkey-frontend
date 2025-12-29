@@ -3,17 +3,40 @@
 // Authorization: Bearer <supabase_access_token>
 // Role: admin | employee only
 
-export default async function handler(req: any, res: any) {
-  // CORS gerekmez (aynı origin), ama OPTIONS gelirse cevaplayalım
-  if (req.method === "OPTIONS") return res.status(204).end();
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-  if (req.method === "GET") {
-    return res.status(200).json({
-      ok: true,
-      source: "api/ai/normalize",
-      message: "AI Gateway normalize endpoint is working",
-    });
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+): Promise<void> {
+  // Handle OPTIONS
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
   }
 
-  return res.status(405).json({ ok: false, error: "Method not allowed" });
+  // Health check: GET returns JSON
+  if (req.method === 'GET') {
+    res.status(200).json({
+      ok: true,
+      source: 'api/ai/normalize',
+      message: 'AI Gateway normalize endpoint is working',
+    });
+    return;
+  }
+
+  // POST handler (will be implemented later)
+  if (req.method === 'POST') {
+    res.status(200).json({
+      ok: true,
+      message: 'POST endpoint ready',
+    });
+    return;
+  }
+
+  // Method not allowed
+  res.status(405).json({
+    ok: false,
+    error: 'Method not allowed',
+  });
 }
