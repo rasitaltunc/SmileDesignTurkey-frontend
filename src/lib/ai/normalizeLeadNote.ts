@@ -3,6 +3,7 @@
 import type { CanonicalV11 } from './canonicalTypes';
 import { sanitizeNotesForAI, sanitizeTimelineForAI, wrapUntrustedBlock, type FirewallReport } from './dataFirewall';
 import { shortHash } from './hash';
+import { emitAIAudit } from './aiAudit';
 
 export interface CanonicalNote {
   version: string;

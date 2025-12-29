@@ -8,6 +8,7 @@ import { normalizeLeadNote, type CanonicalNote, transformV10ToV11 } from '@/lib/
 import { findLatestCanonical, type CanonicalAny } from '@/lib/ai/canonicalNote';
 import { diffCanonical, safeMergeCanonical } from '@/lib/ai/canonicalDiff';
 import type { CanonicalV11 } from '@/lib/ai/canonicalTypes';
+import { emitAIAudit } from '@/lib/ai/aiAudit';
 
 // Copy to clipboard helper
 const copyText = async (text: string) => {
@@ -1493,7 +1494,35 @@ export default function AdminLeads() {
       }
       
       canonicalV11.review_required = reviewReasons.length > 0;
-      canonicalV11.review_reasons = reviewReasons;
+      // De-dupe review reasons
+      canonicalV11.review_reasons = [...new Set(reviewReasons)];
+
+      // Emit audit event (privacy-safe, no raw content)
+      if (firewallReport && runHash) {
+        emitAIAudit({
+          type: "normalize_run",
+          leadId: lead.id,
+          runHashShort: runHash,
+          firewall: {
+            injectionDetected: firewallReport.injection.detected,
+            redactionCounts: firewallReport.redaction.counts,
+          },
+          gating: {
+            reviewRequired: canonicalV11.review_required,
+            reasons: canonicalV11.review_reasons,
+          },
+          scores: {
+            risk: canonicalV11.risk_score ?? undefined,
+            confidence: canonicalV11.confidence ?? undefined,
+            priorityLabel: (canonicalV11 as any).priority || undefined,
+          },
+          sourceMeta: {
+            notesUsed: canonicalV11.sources.notes_used_count,
+            timelineUsed: canonicalV11.sources.timeline_used_count,
+          },
+          at: canonicalV11.updated_at,
+        });
+      }
 
       // Save as system note (v1.1)
       const canonicalNoteContent = `[AI_CANONICAL_NOTE v1.1]\n${JSON.stringify(canonicalV11, null, 2)}`;
@@ -2940,7 +2969,11 @@ export default function AdminLeads() {
                                   <>
                                     <p className="mt-1 font-medium">Firewall applied: {new Date((canonicalNote as CanonicalV11).security.firewall.applied_at || '').toLocaleString()}</p>
                                     {(canonicalNote as CanonicalV11).security.firewall.run_hash && (
-                                      <p className="text-gray-500 font-mono">Hash: {(canonicalNote as CanonicalV11).security.firewall.run_hash}</p>
+                                      <p className="text-gray-500">
+                                        <span className="font-medium">Audit logged</span>
+                                        <span className="mx-1">•</span>
+                                        <span className="font-mono text-xs">{(canonicalNote as CanonicalV11).security.firewall.run_hash}</span>
+                                      </p>
                                     )}
                                   </>
                                 )}
