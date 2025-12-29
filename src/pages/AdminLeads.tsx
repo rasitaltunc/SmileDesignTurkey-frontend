@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy, HelpCircle } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy, HelpCircle, FileText } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
+import { normalizeLeadNote, type CanonicalNote } from '@/lib/ai/normalizeLeadNote';
 
 // Copy to clipboard helper
 const copyText = async (text: string) => {
@@ -455,6 +456,8 @@ export default function AdminLeads() {
   const [newNoteContent, setNewNoteContent] = useState<string>('');
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const [isNormalizing, setIsNormalizing] = useState(false);
+  const [canonicalNote, setCanonicalNote] = useState<CanonicalNote | null>(null);
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
   const [notesScroll, setNotesScroll] = useState({ atTop: true, atBottom: false });
   const lastActiveElRef = useRef<HTMLElement | null>(null);
@@ -1315,6 +1318,101 @@ export default function AdminLeads() {
     }
   };
 
+  // Parse existing canonical note from notes array
+  const parseCanonicalNote = (notesList: LeadNote[]): CanonicalNote | null => {
+    // Find latest note that starts with [AI_CANONICAL_NOTE v1.0]
+    const canonicalNoteEntry = notesList
+      .slice()
+      .reverse()
+      .find(n => {
+        const content = n.note || '';
+        return content.startsWith('[AI_CANONICAL_NOTE v1.0]');
+      });
+
+    if (!canonicalNoteEntry) return null;
+
+    try {
+      const content = canonicalNoteEntry.note || '';
+      // Extract JSON after header line
+      const lines = content.split('\n');
+      const jsonStart = lines.findIndex(l => l.trim().startsWith('{'));
+      if (jsonStart === -1) return null;
+      
+      const jsonText = lines.slice(jsonStart).join('\n');
+      const parsed = JSON.parse(jsonText);
+      return parsed as CanonicalNote;
+    } catch (err) {
+      console.error('[AdminLeads] Failed to parse canonical note:', err);
+      return null;
+    }
+  };
+
+  // Normalize notes via AI
+  const handleNormalizeNotes = async (leadId: string) => {
+    if (!leadId) return;
+
+    setIsNormalizing(true);
+    setError(null);
+
+    const toastId = toast.loading('Normalizing notes…');
+
+    try {
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) throw new Error('Lead not found');
+
+      // Filter out existing canonical notes
+      const humanNotes = notes.filter(n => {
+        const content = n.note || '';
+        return !content.startsWith('[AI_CANONICAL_NOTE');
+      });
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
+
+      // Call normalize function
+      const canonical = await normalizeLeadNote(
+        {
+          lead: {
+            id: lead.id,
+            name: lead.name,
+            email: lead.email,
+            phone: lead.phone,
+            source: lead.source,
+            created_at: lead.created_at,
+            treatment: lead.treatment,
+            status: lead.status,
+          },
+          lastContactedAt: lastContactedAt,
+          contactEvents: contactEvents,
+          timeline: timeline,
+          notes: humanNotes.slice(0, 10), // Last 10, excluding canonical
+        },
+        apiUrl,
+        adminToken
+      );
+
+      // Save as system note
+      const canonicalNoteContent = `[AI_CANONICAL_NOTE v1.0]\n${JSON.stringify(canonical, null, 2)}`;
+      
+      // Use existing createNote function
+      await createNote(leadId, canonicalNoteContent);
+
+      // Update local state
+      setCanonicalNote(canonical);
+      
+      // Reload notes to get the new canonical note
+      await loadNotes(leadId);
+
+      toast.success('AI snapshot updated', { id: toastId });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to normalize notes';
+      setError(errorMessage);
+      toast.error('Failed to normalize notes', { id: toastId, description: errorMessage });
+    } finally {
+      setIsNormalizing(false);
+    }
+  };
+
   // Open notes modal
   const handleOpenNotes = async (leadId: string) => {
     setNotesLeadId(leadId);
@@ -1322,6 +1420,7 @@ export default function AdminLeads() {
     setNewNoteContent('');
     setTimeline([]);
     setContactEvents([]);
+    setCanonicalNote(null);
     
     // Smart default: Set contact channel based on lead's contact info
     const lead = leads.find(l => l.id === leadId);
@@ -1341,6 +1440,40 @@ export default function AdminLeads() {
     loadAIAnalysis(leadId);
     await Promise.all([loadNotes(leadId), loadTimeline(leadId), loadContactEvents(leadId)]);
   };
+
+  // Parse canonical note when notes load
+  useEffect(() => {
+    if (notes.length > 0 && notesLeadId) {
+      // Find latest note that starts with [AI_CANONICAL_NOTE v1.0]
+      const canonicalNoteEntry = notes
+        .slice()
+        .reverse()
+        .find(n => {
+          const content = n.note || '';
+          return content.startsWith('[AI_CANONICAL_NOTE v1.0]');
+        });
+
+      if (canonicalNoteEntry) {
+        try {
+          const content = canonicalNoteEntry.note || '';
+          // Extract JSON after header line
+          const lines = content.split('\n');
+          const jsonStart = lines.findIndex(l => l.trim().startsWith('{'));
+          if (jsonStart !== -1) {
+            const jsonText = lines.slice(jsonStart).join('\n');
+            const parsed = JSON.parse(jsonText);
+            setCanonicalNote(parsed as CanonicalNote);
+            return;
+          }
+        } catch (err) {
+          console.error('[AdminLeads] Failed to parse canonical note:', err);
+        }
+      }
+      setCanonicalNote(null);
+    } else {
+      setCanonicalNote(null);
+    }
+  }, [notes, notesLeadId]);
 
   // Close notes modal with animation
   const handleCloseNotes = () => {
@@ -2336,6 +2469,34 @@ export default function AdminLeads() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => notesLeadId && handleNormalizeNotes(notesLeadId)}
+                          disabled={isNormalizing || !notesLeadId}
+                          className={[
+                            "inline-flex items-center justify-center gap-2 h-10",
+                            "px-4 rounded-lg text-sm font-semibold",
+                            "border transition-all duration-200 min-w-[160px]",
+                            "focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2",
+                            "active:scale-[0.99] motion-reduce:active:scale-100",
+                            isNormalizing || !notesLeadId
+                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-gradient-to-r from-purple-600 to-indigo-600 !text-white border-transparent hover:from-purple-700 hover:to-indigo-700 shadow-sm hover:shadow-md"
+                          ].join(" ")}
+                          title={!notesLeadId ? "Select a lead first" : "Normalize notes into canonical JSON snapshot"}
+                        >
+                          {isNormalizing ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Normalizing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4" />
+                              <span>Normalize Notes</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleCloseNotes}
                           className="ml-2 h-10 w-10 text-gray-500 hover:text-gray-700 text-xl leading-none rounded hover:bg-gray-100 transition-colors active:scale-[0.99] motion-reduce:active:scale-100 flex items-center justify-center"
                           aria-label="Close"
@@ -2387,6 +2548,114 @@ export default function AdminLeads() {
                     }`}
                   />
                   <div className="space-y-6">
+                    {/* AI Snapshot Section */}
+                    {canonicalNote ? (
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-purple-50/20">
+                        <div className="mb-3">
+                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
+                            <FileText className="w-4 h-4 text-purple-600" />
+                            AI Snapshot
+                          </h4>
+                          <p className="text-xs text-gray-500">Canonical structured view of lead data</p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {/* Summary */}
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 mb-1">{canonicalNote.summary_1line}</p>
+                            {canonicalNote.summary_bullets.length > 0 && (
+                              <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
+                                {canonicalNote.summary_bullets.map((bullet, idx) => (
+                                  <li key={idx}>{bullet}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+
+                          {/* Priority & Risk */}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                              canonicalNote.priority === 'hot' ? 'bg-red-100 text-red-800' :
+                              canonicalNote.priority === 'warm' ? 'bg-orange-100 text-orange-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {canonicalNote.priority === 'hot' ? '🔴' : canonicalNote.priority === 'warm' ? '🟠' : '🟢'} {canonicalNote.priority.toUpperCase()}
+                            </span>
+                            <span className="text-xs text-gray-600">
+                              Risk: <span className="font-semibold">{canonicalNote.risk_score}/100</span>
+                            </span>
+                            <span className="text-xs text-gray-600">
+                              Confidence: <span className="font-semibold">{canonicalNote.confidence}/100</span>
+                            </span>
+                          </div>
+
+                          {/* Next Best Action */}
+                          {canonicalNote.next_best_action && (
+                            <div className="border-t border-gray-200 pt-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-semibold text-gray-700">Next Best Action:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const scriptText = canonicalNote.next_best_action.script.join('\n');
+                                    copyText(scriptText);
+                                    toast.success('Script copied to clipboard');
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 rounded transition-colors"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                  Copy script
+                                </button>
+                              </div>
+                              <p className="text-xs text-gray-900 font-medium mb-1">{canonicalNote.next_best_action.label}</p>
+                              <p className="text-xs text-gray-500 mb-2">Due in {canonicalNote.next_best_action.due_hours} hours</p>
+                              {canonicalNote.next_best_action.script.length > 0 && (
+                                <div className="bg-gray-50 rounded p-2 text-xs text-gray-700 font-mono whitespace-pre-wrap">
+                                  {canonicalNote.next_best_action.script.join('\n')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Missing Fields */}
+                          {canonicalNote.missing_fields.length > 0 && (
+                            <div className="border-t border-gray-200 pt-3">
+                              <p className="text-xs font-semibold text-gray-700 mb-2">Missing Fields:</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {canonicalNote.missing_fields.map((field, idx) => (
+                                  <span key={idx} className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded">
+                                    {field}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* What Changed */}
+                          {canonicalNote.what_changed && canonicalNote.what_changed.length > 0 && (
+                            <div className="border-t border-gray-200 pt-3">
+                              <p className="text-xs font-semibold text-gray-700 mb-2">What Changed:</p>
+                              <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
+                                {canonicalNote.what_changed.map((change, idx) => (
+                                  <li key={idx}>{change}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <div className="mb-2">
+                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
+                            <FileText className="w-4 h-4 text-purple-600" />
+                            AI Snapshot
+                          </h4>
+                        </div>
+                        <p className="text-xs text-gray-500">No AI snapshot yet. Click "Normalize Notes" to generate.</p>
+                      </div>
+                    )}
+
                     {/* AI Analysis Section */}
                     <div>
                       <div className="mb-3">
