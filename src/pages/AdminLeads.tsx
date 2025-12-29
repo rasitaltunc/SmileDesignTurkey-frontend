@@ -1,8 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
+import { toast } from 'sonner';
+
+// Copy to clipboard helper
+const copyText = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success('Copied');
+  } catch (err) {
+    toast.error('Copy failed');
+  }
+};
 
 // Component to format AI Brief output for better readability
 function FormattedAIBrief({ content }: { content: string }) {
@@ -71,12 +82,38 @@ function FormattedAIBrief({ content }: { content: string }) {
           );
         }
 
+        // Check if this section should have a copy button
+        const copyableSections = [
+          'SUGGESTED OPENING',
+          'CONFIRM DETAILS',
+          'ACKNOWLEDGE THE CHANGE',
+          'PROBE GENTLY',
+          'REQUEST CONTACT INFO',
+        ];
+        const shouldShowCopy = section.title && copyableSections.some(
+          (key) => section.title?.toUpperCase().includes(key)
+        );
+        const sectionText = section.items.join('\n');
+
         return (
           <div key={idx} className="border-l-2 border-blue-200 pl-3">
             {section.title && (
-              <h5 className="font-semibold text-gray-800 mb-2 text-base">
-                {section.title}
-              </h5>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h5 className="font-semibold text-gray-800 text-base">
+                  {section.title}
+                </h5>
+                {shouldShowCopy && sectionText && (
+                  <button
+                    type="button"
+                    onClick={() => copyText(sectionText)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    title="Copy"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy</span>
+                  </button>
+                )}
+              </div>
             )}
             <ul className="space-y-1.5">
               {section.items.map((item, itemIdx) => (
@@ -736,10 +773,11 @@ export default function AdminLeads() {
       // Reload notes
       await loadNotes(leadId);
       setNewNoteContent('');
+      toast.success('Note saved');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create note';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save note';
       setError(errorMessage);
-      console.error('[AdminLeads] Error creating note:', err);
+      toast.error('Failed to save note', { description: errorMessage });
     } finally {
       setIsSavingNote(false);
     }
@@ -875,11 +913,11 @@ export default function AdminLeads() {
       setNewContactChannel('phone');
       setNewContactNote('');
 
-      console.log('[AdminLeads] Contact event added:', result);
+      toast.success('Attempt logged');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to add contact event';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to log attempt';
       setError(errorMessage);
-      console.error('[AdminLeads] Error adding contact event:', err);
+      toast.error('Failed to log attempt', { description: errorMessage });
     } finally {
       setIsAddingContact(false);
     }
@@ -938,11 +976,11 @@ export default function AdminLeads() {
         )
       );
 
-      console.log('[AdminLeads] Lead marked as contacted:', result);
+      toast.success('Marked as contacted');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to mark as contacted';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to mark contacted';
       setError(errorMessage);
-      console.error('[AdminLeads] Error marking as contacted:', err);
+      toast.error('Failed to mark contacted', { description: errorMessage });
     } finally {
       setIsMarkingContacted(false);
     }
@@ -954,6 +992,8 @@ export default function AdminLeads() {
 
     setIsLoadingAI(true);
     setError(null);
+
+    const toastId = toast.loading('Generating AI brief…');
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
@@ -975,11 +1015,6 @@ export default function AdminLeads() {
 
       const result = await response.json();
       
-      // Debug: Log response structure
-      console.log('[AdminLeads] AI analysis response:', result);
-      console.log('[AdminLeads] ai_summary field:', result.ai_summary);
-      console.log('[AdminLeads] ai_risk_score field:', result.ai_risk_score);
-      
       // Update local state (with null safety)
       setAiRiskScore(result.ai_risk_score ?? null);
       setAiSummary(result.ai_summary ?? null);
@@ -998,16 +1033,11 @@ export default function AdminLeads() {
         )
       );
 
-      // Show success (optional toast)
-      console.log('[AdminLeads] AI analysis completed. State updated:', {
-        aiRiskScore: result.ai_risk_score ?? null,
-        aiSummary: result.ai_summary ?? null,
-        hasSummary: !!(result.ai_summary),
-      });
+      toast.success('AI brief generated', { id: toastId });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to analyze lead';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate AI brief';
       setError(errorMessage);
-      console.error('[AdminLeads] Error running AI analysis:', err);
+      toast.error('Failed to generate AI brief', { id: toastId, description: errorMessage });
     } finally {
       setIsLoadingAI(false);
     }
@@ -1042,9 +1072,8 @@ export default function AdminLeads() {
   // Handle add note form submission
   const handleAddNote = (e: any) => {
     e.preventDefault();
-    if (newNoteContent.trim() && notesLeadId) {
-      createNote(notesLeadId, newNoteContent);
-    }
+    if (isSavingNote || !newNoteContent.trim() || !notesLeadId) return;
+    createNote(notesLeadId, newNoteContent);
   };
 
   // Handle logout
@@ -1918,9 +1947,8 @@ export default function AdminLeads() {
                         <form
                           onSubmit={(e) => {
                             e.preventDefault();
-                            if (notesLeadId) {
-                              addContactEvent(notesLeadId);
-                            }
+                            if (isAddingContact || !notesLeadId || !newContactChannel) return;
+                            addContactEvent(notesLeadId);
                           }}
                           className="space-y-2"
                         >
@@ -2093,14 +2121,18 @@ export default function AdminLeads() {
                       value={newNoteContent}
                       onChange={(e) => setNewNoteContent(e.target.value)}
                       onKeyDown={(e) => {
+                        if (isSavingNote) return;
                         if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && newNoteContent.trim()) {
                           e.preventDefault();
                           handleAddNote(e as any);
                         }
                       }}
+                      readOnly={isSavingNote}
                       placeholder="Add a note... (Cmd/Ctrl+Enter to submit)"
                       rows={3}
-                      className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto bg-white leading-relaxed placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto bg-white leading-relaxed placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        isSavingNote ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
                     />
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-xs text-gray-500 flex items-center gap-3">
