@@ -141,6 +141,99 @@ const LEAD_STATUSES = [
   { value: 'lost', label: 'Lost' },
 ] as const;
 
+// Priority Score Helper (0-100)
+function computePriority(
+  lead: Lead,
+  aiRiskScore: number | null,
+  lastContactedAt: string | null,
+  timeline: any[],
+  notes: LeadNote[],
+  contactEvents: any[]
+): number {
+  let score = 0;
+
+  // Booking varsa +40
+  const hasBooking = timeline.some(e => e.eventType?.includes('booking'));
+  if (hasBooking) score += 40;
+
+  // Never contacted ise +25
+  if (!lastContactedAt && contactEvents.length === 0) {
+    score += 25;
+  }
+
+  // Son aktivite çok yeni ise (24-48h) +20
+  if (lastContactedAt) {
+    const lastContact = new Date(lastContactedAt);
+    const now = new Date();
+    const hoursSince = (now.getTime() - lastContact.getTime()) / (1000 * 60 * 60);
+    if (hoursSince >= 24 && hoursSince <= 48) {
+      score += 20;
+    }
+  }
+
+  // Not yoksa +10
+  if (!notes || notes.length === 0) {
+    score += 10;
+  }
+
+  // Telefon yoksa -10
+  if (!lead.phone) {
+    score -= 10;
+  }
+
+  // AI risk score varsa ekle (0-100 scale)
+  if (aiRiskScore !== null) {
+    score += aiRiskScore * 0.3; // 30% weight
+  }
+
+  // Clamp to 0-100
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+// Next Best Action Helper
+function computeNextAction(
+  lead: Lead,
+  hasBrief: boolean,
+  hasNotes: boolean,
+  hasPhone: boolean,
+  hasEmail: boolean,
+  lastContactedAt: string | null
+): { icon: string; label: string; action: string } {
+  // Phone varsa → Call/WhatsApp öncelik
+  if (hasPhone) {
+    if (!lastContactedAt) {
+      return { icon: '📞', label: 'Call now', action: 'call' };
+    }
+    return { icon: '💬', label: 'WhatsApp first', action: 'whatsapp' };
+  }
+
+  // Phone yok email varsa → Email
+  if (hasEmail && !hasPhone) {
+    return { icon: '✉️', label: 'Email', action: 'email' };
+  }
+
+  // AI brief yoksa ve lead yeni ise → Generate brief öner
+  if (!hasBrief && !lastContactedAt) {
+    return { icon: '🧠', label: 'Generate brief', action: 'brief' };
+  }
+
+  // Not yoksa → Add note öner
+  if (!hasNotes) {
+    return { icon: '📝', label: 'Add note', action: 'note' };
+  }
+
+  // Default: follow up
+  return { icon: '📞', label: 'Follow up', action: 'call' };
+}
+
+// Get days since last activity
+function getDaysSinceActivity(lastContactedAt: string | null, createdAt: string): number {
+  const date = lastContactedAt ? new Date(lastContactedAt) : new Date(createdAt);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}
+
 // WhatsApp helper functions
 function normalizePhoneToWhatsApp(phone?: string) {
   if (!phone) return null;
@@ -1608,9 +1701,11 @@ export default function AdminLeads() {
           
           return filteredLeads.length === 0 ? (
             <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-              <p className="text-gray-500 text-lg">No leads found.</p>
+              <p className="text-gray-500 text-lg">
+                {searchQuery.trim() ? 'No leads match your search.' : 'No leads found.'}
+              </p>
               <p className="text-gray-400 text-sm mt-2">
-                {isLoading ? 'Loading...' : 'Try adjusting your filters or check back later.'}
+                {isLoading ? 'Loading...' : searchQuery.trim() ? 'Try a different search term.' : 'Try adjusting your filters or check back later.'}
               </p>
             </div>
           ) : (
@@ -1633,23 +1728,70 @@ export default function AdminLeads() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredLeads.map((lead) => (
-                      <tr 
-                        key={lead.id} 
-                        ref={(el) => { leadRowRefs.current[lead.id] = el; }}
-                        onClick={() => setActiveLeadId(lead.id)}
-                        className={`hover:bg-gray-50 group cursor-pointer transition-colors ${
-                          activeLeadId === lead.id 
-                            ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" 
-                            : ""
-                        }`}
-                      >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(lead.created_at).toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {lead.name || '-'}
-                      </td>
+                    {filteredLeads.map((lead) => {
+                      // Compute priority and next action for this lead
+                      const leadNotes = notes.filter(n => n.lead_id === lead.id);
+                      const leadTimeline = timeline.filter(t => t.leadId === lead.id);
+                      const leadContactEvents = contactEvents.filter(e => e.lead_id === lead.id);
+                      const priorityScore = computePriority(
+                        lead,
+                        lead.ai_risk_score ?? null,
+                        lead.last_contacted_at ?? null,
+                        leadTimeline,
+                        leadNotes,
+                        leadContactEvents
+                      );
+                      const hasBrief = !!(lead.ai_summary);
+                      const hasNotes = leadNotes.length > 0;
+                      const hasPhone = !!lead.phone;
+                      const hasEmail = !!lead.email;
+                      const nextAction = computeNextAction(
+                        lead,
+                        hasBrief,
+                        hasNotes,
+                        hasPhone,
+                        hasEmail,
+                        lead.last_contacted_at ?? null
+                      );
+                      const daysSinceActivity = getDaysSinceActivity(
+                        lead.last_contacted_at ?? null,
+                        lead.created_at
+                      );
+                      const isStale = daysSinceActivity >= 3;
+                      
+                      // Priority badge
+                      const priorityBadge = priorityScore >= 70 ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
+                                           priorityScore >= 40 ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
+                                           { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' };
+
+                      return (
+                        <>
+                          <tr 
+                            key={lead.id} 
+                            ref={(el) => { leadRowRefs.current[lead.id] = el; }}
+                            onClick={() => setActiveLeadId(lead.id)}
+                            className={`hover:bg-gray-50 group cursor-pointer transition-colors ${
+                              activeLeadId === lead.id 
+                                ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" 
+                                : ""
+                            }`}
+                          >
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="flex items-center gap-2">
+                              {new Date(lead.created_at).toLocaleString()}
+                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${priorityBadge.color}`}>
+                                {priorityBadge.emoji} {priorityBadge.label}
+                              </span>
+                              {isStale && (
+                                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                  ⏳ {daysSinceActivity}d no activity
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {lead.name || '-'}
+                          </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {lead.email || '-'}
                       </td>
@@ -1842,7 +1984,83 @@ export default function AdminLeads() {
                             </button>
                           </div>
                         ) : (
-                          <div className="flex gap-2">
+                          <div className="flex items-center gap-2">
+                            {activeLeadId === lead.id && (
+                              <div className="flex items-center gap-1 mr-2">
+                                {hasPhone && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (lead.phone) {
+                                          window.location.href = `tel:${lead.phone}`;
+                                        }
+                                      }}
+                                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                      title="Call"
+                                    >
+                                      <Phone className="w-4 h-4" />
+                                    </button>
+                                    {normalizePhoneToWhatsApp(lead.phone) && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const wa = normalizePhoneToWhatsApp(lead.phone);
+                                          if (wa) {
+                                            const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                            window.open(url, "_blank", "noopener,noreferrer");
+                                          }
+                                        }}
+                                        className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                        title="WhatsApp"
+                                      >
+                                        <MessageCircle className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                                {hasEmail && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (lead.email) {
+                                        window.location.href = `mailto:${lead.email}`;
+                                      }
+                                    }}
+                                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                                    title="Email"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const contact = lead.phone || lead.email;
+                                    if (contact) {
+                                      copyText(contact);
+                                      toast.success(`Copied ${lead.phone ? 'phone' : 'email'}`);
+                                    } else {
+                                      toast.error('No contact info available');
+                                    }
+                                  }}
+                                  className="p-1.5 text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                                  title="Copy contact"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenNotes(lead.id);
+                                  }}
+                                  className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                                  title="Open Notes"
+                                >
+                                  <MessageSquare className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
                             <button
                               onClick={() => handleEditStart(lead)}
                               className="text-blue-600 hover:text-blue-700"
@@ -1860,7 +2078,47 @@ export default function AdminLeads() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    {/* Next Best Action Row */}
+                    <tr 
+                      key={`${lead.id}-action`}
+                      className={`${activeLeadId === lead.id ? "bg-blue-50/20" : "bg-gray-50/50"} border-t border-gray-100`}
+                    >
+                      <td colSpan={11} className="px-6 py-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <span className="font-medium">Next:</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (nextAction.action === 'call' && lead.phone) {
+                                window.location.href = `tel:${lead.phone}`;
+                              } else if (nextAction.action === 'whatsapp' && lead.phone) {
+                                const wa = normalizePhoneToWhatsApp(lead.phone);
+                                if (wa) {
+                                  const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                  window.open(url, "_blank", "noopener,noreferrer");
+                                }
+                              } else if (nextAction.action === 'email' && lead.email) {
+                                window.location.href = `mailto:${lead.email}`;
+                              } else if (nextAction.action === 'brief') {
+                                handleOpenNotes(lead.id);
+                                setTimeout(() => {
+                                  if (lead.id) runAIAnalysis(lead.id);
+                                }, 500);
+                              } else if (nextAction.action === 'note') {
+                                handleOpenNotes(lead.id);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                          >
+                            <span>{nextAction.icon}</span>
+                            <span>{nextAction.label}</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                        </>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -2096,7 +2354,10 @@ export default function AdminLeads() {
                       {isLoadingTimeline ? (
                         <div className="text-gray-500 text-sm">Loading timeline…</div>
                       ) : timeline.length === 0 ? (
-                        <div className="text-gray-500 text-sm">No timeline events yet.</div>
+                        <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
+                          <p>No timeline events yet.</p>
+                          <p className="text-xs mt-1 text-gray-400">Booking events will appear here.</p>
+                        </div>
                       ) : (
                         <div className="space-y-2">
                           {timeline.map((event) => {
@@ -2275,7 +2536,10 @@ export default function AdminLeads() {
                       {isLoadingContactEvents ? (
                         <div className="text-gray-500 text-sm">Loading contact events…</div>
                       ) : contactEvents.length === 0 ? (
-                        <div className="text-gray-500 text-sm">No contact attempts yet.</div>
+                        <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
+                          <p>Log first attempt...</p>
+                          <p className="text-xs mt-1 text-gray-400">Use the form above to log a call, WhatsApp, or email.</p>
+                        </div>
                       ) : (
                         <div className="space-y-2">
                           {contactEvents.map((event) => {
@@ -2354,7 +2618,10 @@ export default function AdminLeads() {
                         {isLoadingNotes ? (
                           <div className="text-gray-500 text-sm">Loading notes…</div>
                         ) : notes.length === 0 ? (
-                          <div className="text-gray-500 text-sm">No notes yet.</div>
+                          <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
+                            <p>Add first note...</p>
+                            <p className="text-xs mt-1 text-gray-400">Use the form below to add your first note about this lead.</p>
+                          </div>
                         ) : (
                           notes.map((n: any) => (
                             <div key={n.id} className="border border-gray-200 rounded-lg p-3 max-w-full overflow-hidden">
