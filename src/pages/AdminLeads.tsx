@@ -274,9 +274,10 @@ export default function AdminLeads() {
   useEffect(() => {
     if (!notesLeadId) return;
 
-    // modal açılınca scroll container'a focus ver
+    // modal açılınca scroll container'a focus ver + ilk scroll ölçümü
     requestAnimationFrame(() => {
       modalScrollRef.current?.focus();
+      handleNotesScroll();
     });
 
     // Focus trap: Tab dışarı kaçmasın
@@ -1574,12 +1575,13 @@ export default function AdminLeads() {
           >
             <div
               data-modal-root="true"
-              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-transform duration-200"
+              className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-transform duration-200 will-change-transform"
               style={{
                 width: "min(92vw, 720px)",
                 height: "min(80vh, 720px)",
                 display: "grid",
                 gridTemplateRows: "auto minmax(0, 1fr) auto",
+                transform: "translateZ(0)",
               }}
               onMouseDown={(e) => e.stopPropagation()}
             >
@@ -2072,12 +2074,12 @@ export default function AdminLeads() {
                       value={newNoteContent}
                       onChange={(e) => setNewNoteContent(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && newNoteContent.trim()) {
+                        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && newNoteContent.trim()) {
                           e.preventDefault();
                           handleAddNote(e as any);
                         }
                       }}
-                      placeholder="Add a note... (Enter to submit, Shift+Enter for new line)"
+                      placeholder="Add a note... (Cmd/Ctrl+Enter to submit)"
                       rows={3}
                       className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
