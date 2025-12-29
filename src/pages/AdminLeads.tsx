@@ -244,6 +244,7 @@ export default function AdminLeads() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
+  const [notesScroll, setNotesScroll] = useState({ atTop: true, atBottom: false });
 
   // Lock body scroll when modal is open (position: fixed yöntemi - Safari-proof, modal scroll'a dokunmaz)
   useEffect(() => {
@@ -277,6 +278,31 @@ export default function AdminLeads() {
     requestAnimationFrame(() => {
       modalScrollRef.current?.focus();
     });
+  }, [notesLeadId]);
+
+  // Scroll handler for shadow/fade effects
+  const handleNotesScroll = () => {
+    const el = modalScrollRef.current;
+    if (!el) return;
+    const atTop = el.scrollTop <= 1;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    setNotesScroll({ atTop, atBottom });
+  };
+
+  // Modal açılınca ilk ölçüm
+  useEffect(() => {
+    if (!notesLeadId) return;
+    setTimeout(() => handleNotesScroll(), 0);
+  }, [notesLeadId]);
+
+  // ESC ile kapat
+  useEffect(() => {
+    if (!notesLeadId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleCloseNotes();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [notesLeadId]);
 
 
