@@ -245,13 +245,15 @@ export default function AdminLeads() {
   const [isSavingNote, setIsSavingNote] = useState(false);
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
   const [notesScroll, setNotesScroll] = useState({ atTop: true, atBottom: false });
+  const lastActiveElRef = useRef<HTMLElement | null>(null);
 
-  // Lock body scroll when modal is open (position: fixed yöntemi - Safari-proof, modal scroll'a dokunmaz)
+  // Lock body scroll when modal is open (position: fixed + overflow hidden - Safari-proof)
   useEffect(() => {
     if (!notesLeadId) return;
 
     const scrollY = window.scrollY;
     const body = document.body;
+    const html = document.documentElement;
 
     // position: fixed yöntemi (Safari-proof, modal scroll'a dokunmaz)
     body.style.position = "fixed";
@@ -260,19 +262,30 @@ export default function AdminLeads() {
     body.style.right = "0";
     body.style.width = "100%";
 
+    // Overflow hidden (Safari fix - arka plan scroll'unu tam kilitle)
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
     return () => {
       body.style.position = "";
       body.style.top = "";
       body.style.left = "";
       body.style.right = "";
       body.style.width = "";
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
       window.scrollTo(0, scrollY);
     };
   }, [notesLeadId]);
 
-  // Modal açılınca body'ye focus ver + focus trap
+  // Modal açılınca body'ye focus ver + focus trap + restore focus on close
   useEffect(() => {
     if (!notesLeadId) return;
+
+    // Modal açılmadan önce active element'i sakla
+    lastActiveElRef.current = document.activeElement as HTMLElement;
 
     // modal açılınca scroll container'a focus ver + ilk scroll ölçümü
     requestAnimationFrame(() => {
@@ -302,7 +315,11 @@ export default function AdminLeads() {
     };
 
     document.addEventListener("keydown", handleTab);
-    return () => document.removeEventListener("keydown", handleTab);
+    return () => {
+      document.removeEventListener("keydown", handleTab);
+      // Modal kapanınca eski elemana geri focus ver
+      lastActiveElRef.current?.focus?.();
+    };
   }, [notesLeadId]);
 
   // Scroll handler for shadow/fade effects
@@ -2081,7 +2098,7 @@ export default function AdminLeads() {
                       }}
                       placeholder="Add a note... (Cmd/Ctrl+Enter to submit)"
                       rows={3}
-                      className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto bg-white leading-relaxed placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-xs text-gray-500 flex items-center gap-3">
