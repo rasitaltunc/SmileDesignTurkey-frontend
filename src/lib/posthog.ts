@@ -4,6 +4,17 @@ import { ANALYTICS_CONFIG } from '../config.analytics';
 let posthogInitialized = false;
 let posthogInstance: typeof posthog | null = null;
 
+// Check if PostHog should be enabled (prod only, or via ENV override)
+const shouldEnablePosthog = () => {
+  // Allow ENV override
+  const envOverride = import.meta.env.VITE_ENABLE_POSTHOG;
+  if (envOverride === 'false') return false;
+  if (envOverride === 'true') return true;
+  
+  // Default: only in production
+  return import.meta.env.PROD;
+};
+
 export function initPosthog() {
   // Only initialize in browser
   if (typeof window === 'undefined') {
@@ -12,6 +23,14 @@ export function initPosthog() {
 
   // Don't initialize if already done
   if (posthogInitialized) {
+    return;
+  }
+
+  // Check if PostHog should be enabled (prod only by default)
+  if (!shouldEnablePosthog()) {
+    if (import.meta.env.DEV) {
+      console.log('[PostHog] Skipping initialization - disabled in dev mode');
+    }
     return;
   }
 
@@ -34,9 +53,13 @@ export function initPosthog() {
     posthog.init(ANALYTICS_CONFIG.posthogKey, {
       api_host: ANALYTICS_CONFIG.posthogHost,
       autocapture: false, // Manual events only
-      loaded: () => {
+      loaded: (ph) => {
         if (import.meta.env.DEV) {
           console.log('[PostHog] Initialized successfully');
+        }
+        // Expose to window for backward compatibility (but prefer using posthogInstance)
+        if (typeof window !== 'undefined') {
+          (window as any).posthog = ph;
         }
       },
     });
@@ -74,5 +97,12 @@ export function capture(eventName: string, properties?: Record<string, any>) {
       console.warn('[PostHog] Failed to capture event:', eventName, error);
     }
   }
+}
+
+/**
+ * Get PostHog instance (for backward compatibility with window.posthog usage)
+ */
+export function getPosthogInstance() {
+  return posthogInstance;
 }
 

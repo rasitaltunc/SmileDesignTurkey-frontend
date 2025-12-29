@@ -55,15 +55,12 @@ async function recoverSession(
     
     // Emit audit event (privacy-safe)
     try {
-      const posthog = (window as any).posthog;
-      if (posthog && typeof posthog.capture === 'function') {
-        posthog.capture('auth_session_recovered', {
-          at: new Date().toISOString(),
-          reason,
-          hasPosthog: true,
-          path: window.location.pathname,
-        });
-      }
+      const { capture } = await import('../posthog');
+      capture('auth_session_recovered', {
+        at: new Date().toISOString(),
+        reason,
+        path: window.location.pathname,
+      });
     } catch (auditErr) {
       // Silent fail
       console.debug('[sessionRecovery] Failed to emit audit:', auditErr);

@@ -1,4 +1,5 @@
 // AI Audit Logging - Privacy-safe observability
+import { capture } from '../posthog';
 
 export type AIAuditEvent = {
   type: "normalize_run";
@@ -29,12 +30,7 @@ export type AIAuditEvent = {
  */
 export function emitAIAudit(event: AIAuditEvent): void {
   try {
-    // Check if PostHog is available
-    const posthog = (window as any).posthog;
-    if (!posthog || typeof posthog.capture !== 'function') {
-      // Silently no-op if PostHog not configured
-      return;
-    }
+    // Use posthog-js capture wrapper (safe no-op if not initialized)
 
     // Build safe properties (NO raw content, NO PII, only counts/flags/hashes)
     const safeProps: Record<string, any> = {
@@ -72,11 +68,11 @@ export function emitAIAudit(event: AIAuditEvent): void {
     }
 
     // Emit main audit event
-    posthog.capture('ai_audit', safeProps);
+    capture('ai_audit', safeProps);
 
     // Emit firewall-specific event if firewall was active
     if (event.firewall.injectionDetected || Object.values(event.firewall.redactionCounts).some(count => count > 0)) {
-      posthog.capture('ai_firewall', {
+      capture('ai_firewall', {
         lead_id: event.leadId,
         run_hash_short: event.runHashShort,
         injection_detected: event.firewall.injectionDetected,

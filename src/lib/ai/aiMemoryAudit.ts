@@ -1,4 +1,5 @@
 // AI Memory Audit - Privacy-safe memory sync observability
+import { capture } from '../posthog';
 
 export interface MemorySyncEvent {
   leadId: string;
@@ -17,11 +18,7 @@ export interface MemorySyncEvent {
  */
 export function emitAIMemorySync(event: MemorySyncEvent): void {
   try {
-    const posthog = (window as any).posthog;
-    if (!posthog || typeof posthog.capture !== 'function') {
-      // Silently no-op if PostHog not configured
-      return;
-    }
+    // Use posthog-js capture wrapper (safe no-op if not initialized)
 
     // Build safe properties (NO raw content, only counts)
     const safeProps: Record<string, any> = {
@@ -39,7 +36,7 @@ export function emitAIMemorySync(event: MemorySyncEvent): void {
     });
 
     // Emit memory sync event
-    posthog.capture('ai_memory_sync', safeProps);
+    capture('ai_memory_sync', safeProps);
   } catch (err) {
     // Fail-safe: silently no-op on errors
     console.debug('[aiMemoryAudit] Failed to emit memory sync event:', err);
