@@ -2087,7 +2087,7 @@ export default function AdminLeads() {
                       <div className="text-xs text-gray-500 flex items-center gap-3">
                         <span>ESC to close</span>
                         <span>•</span>
-                        <span>Enter to add note</span>
+                        <span>Cmd/Ctrl+Enter to add note</span>
                       </div>
                       <div className="flex gap-2">
                         <button
