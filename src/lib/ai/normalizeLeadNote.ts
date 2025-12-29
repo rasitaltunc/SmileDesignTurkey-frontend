@@ -1,4 +1,6 @@
-// AI Note Normalizer - Canonical JSON Schema v1.0
+// AI Note Normalizer - Canonical JSON Schema (v1.0 and v1.1)
+
+import type { CanonicalV11 } from './canonicalTypes';
 
 export interface CanonicalNote {
   version: string;
@@ -105,35 +107,51 @@ ${input.timeline.length === 0 ? 'None' : input.timeline.map(e => `- ${e.eventTyp
 Recent Notes (last 10, excluding AI canonical notes):
 ${input.notes.slice(0, 10).map(n => `- ${n.note || ''} (${n.created_at})`).join('\n')}
 
-Analyze this lead and return ONLY valid JSON matching this exact schema:
+Analyze this lead and return ONLY valid JSON matching this exact schema (v1.1):
 {
-  "version": "1.0",
-  "leadId": "<string>",
-  "summary_1line": "<string>",
-  "summary_bullets": ["<string>", "..."],
-  "status": "new|contacted|booking_pending|booked|cold|lost",
-  "priority": "hot|warm|cool",
-  "risk_score": <number 0-100>,
-  "confidence": <number 0-100>,
-  "intent": "pricing|consultation|booking|info|complaint|unknown",
-  "treatment_interest": ["<string>"],
-  "objections": ["<string>"],
-  "constraints": {
-    "budget_eur": <number optional>,
-    "timeline": "asap|1-2w|1m+|unknown",
-    "travel_date": "<ISO string optional>"
+  "version": "1.1",
+  "lead_id": "<string>",
+  "updated_at": "<ISO string>",
+  "facts": {
+    "name": "<string optional>",
+    "phone": "<string optional>",
+    "email": "<string optional>",
+    "source": "<string optional>",
+    "language": "<string optional>",
+    "country": "<string optional>",
+    "city": "<string optional>",
+    "treatment_interest": ["<string>"],
+    "budget": <number optional>,
+    "time_window": "<string optional>",
+    "objections": ["<string>"],
+    "preferences": ["<string>"]
+  },
+  "events_summary": {
+    "last_activity_at": "<ISO string optional>",
+    "last_contact_at": "<ISO string optional>",
+    "booking_status": "<string optional>",
+    "booking_time": "<ISO string optional>"
   },
   "next_best_action": {
     "label": "<string>",
     "due_hours": <number>,
-    "script": ["<string>", "..."]
+    "script": ["<string>", "..."],
+    "channel": "phone|whatsapp|email|note|unknown"
   },
   "missing_fields": ["phone|email|photos|xray|passport|preferred_dates"],
-  "what_changed": ["<string>", "..."],
-  "evidence": {
-    "last_contact": "never|phone|whatsapp|email",
-    "last_activity_at": "<ISO optional>",
-    "notes_used_count": <number>
+  "open_questions": ["<string>", "..."],
+  "risk_score": <number 0-100 or null>,
+  "confidence": <number 0-100 or null>,
+  "changelog": {
+    "added": [],
+    "updated": [],
+    "removed": [],
+    "conflicts": []
+  },
+  "sources": {
+    "notes_used_count": <number>,
+    "timeline_used_count": <number>,
+    "last_note_at": "<ISO string optional>"
   }
 }
 
@@ -172,8 +190,12 @@ IMPORTANT: Return ONLY valid JSON. Do not include markdown, explanations, or any
   try {
     // Try direct parse first
     const parsed = JSON.parse(jsonText);
-    // Validate it has required fields
-    if (parsed.version && parsed.leadId) {
+    // Validate it has required fields (v1.1)
+    if (parsed.version === '1.1' && parsed.lead_id) {
+      return parsed as CanonicalV11;
+    }
+    // Fallback to v1.0
+    if (parsed.version === '1.0' && parsed.leadId) {
       return parsed as CanonicalNote;
     }
     throw new Error('Invalid canonical note structure');
@@ -182,7 +204,10 @@ IMPORTANT: Return ONLY valid JSON. Do not include markdown, explanations, or any
     try {
       const extracted = extractJSONFromResponse(jsonText);
       const parsed = JSON.parse(extracted);
-      if (parsed.version && parsed.leadId) {
+      if (parsed.version === '1.1' && parsed.lead_id) {
+        return parsed as CanonicalV11;
+      }
+      if (parsed.version === '1.0' && parsed.leadId) {
         return parsed as CanonicalNote;
       }
       throw new Error('Invalid canonical note structure');
@@ -190,5 +215,50 @@ IMPORTANT: Return ONLY valid JSON. Do not include markdown, explanations, or any
       throw new Error('Failed to parse canonical JSON from AI response');
     }
   }
+}
+
+// Transform v1.0 to v1.1 format (for backward compatibility)
+export function transformV10ToV11(v10: CanonicalNote, leadId: string): CanonicalV11 {
+  return {
+    version: '1.1',
+    lead_id: leadId,
+    updated_at: new Date().toISOString(),
+    facts: {
+      name: undefined,
+      phone: undefined,
+      email: undefined,
+      source: undefined,
+      treatment_interest: v10.treatment_interest || [],
+      budget: v10.constraints?.budget_eur,
+      time_window: v10.constraints?.timeline,
+      objections: v10.objections || [],
+      preferences: [],
+    },
+    events_summary: {
+      last_activity_at: v10.evidence?.last_activity_at,
+      last_contact_at: undefined,
+      booking_status: v10.status === 'booked' ? 'booked' : undefined,
+    },
+    next_best_action: {
+      label: v10.next_best_action.label,
+      due_hours: v10.next_best_action.due_hours,
+      script: v10.next_best_action.script,
+      channel: 'unknown',
+    },
+    missing_fields: v10.missing_fields || [],
+    open_questions: [],
+    risk_score: v10.risk_score,
+    confidence: v10.confidence,
+    changelog: {
+      added: [],
+      updated: [],
+      removed: [],
+      conflicts: [],
+    },
+    sources: {
+      notes_used_count: v10.evidence?.notes_used_count || 0,
+      timeline_used_count: 0,
+    },
+  };
 }
 

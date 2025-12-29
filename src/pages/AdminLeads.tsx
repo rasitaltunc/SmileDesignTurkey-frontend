@@ -4,8 +4,10 @@ import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCi
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
-import { normalizeLeadNote, type CanonicalNote } from '@/lib/ai/normalizeLeadNote';
-import { findLatestCanonical, parseCanonical, type CanonicalV1 } from '@/lib/ai/canonicalNote';
+import { normalizeLeadNote, type CanonicalNote, transformV10ToV11 } from '@/lib/ai/normalizeLeadNote';
+import { findLatestCanonical, type CanonicalAny } from '@/lib/ai/canonicalNote';
+import { diffCanonical, safeMergeCanonical } from '@/lib/ai/canonicalDiff';
+import type { CanonicalV11 } from '@/lib/ai/canonicalTypes';
 
 // Copy to clipboard helper
 const copyText = async (text: string) => {
@@ -458,7 +460,7 @@ export default function AdminLeads() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isNormalizing, setIsNormalizing] = useState(false);
-  const [canonicalNote, setCanonicalNote] = useState<CanonicalNote | null>(null);
+  const [canonicalNote, setCanonicalNote] = useState<CanonicalAny | null>(null);
   const modalScrollRef = useRef<HTMLDivElement | null>(null);
   const [notesScroll, setNotesScroll] = useState({ atTop: true, atBottom: false });
   const lastActiveElRef = useRef<HTMLElement | null>(null);
@@ -473,7 +475,7 @@ export default function AdminLeads() {
   const [showCheatSheet, setShowCheatSheet] = useState(false);
 
   // Canonical note cache (for active/visible leads)
-  const canonicalCacheRef = useRef<Map<string, CanonicalV1>>(new Map());
+  const canonicalCacheRef = useRef<Map<string, CanonicalAny>>(new Map());
 
   // Lock body scroll when modal is open (position: fixed + overflow hidden - Safari-proof)
   useEffect(() => {
@@ -1373,8 +1375,11 @@ export default function AdminLeads() {
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
 
+      // Get previous canonical from cache
+      const prevCanonical = canonicalCacheRef.current.get(leadId) || null;
+
       // Call normalize function
-      const canonical = await normalizeLeadNote(
+      const rawCanonical = await normalizeLeadNote(
         {
           lead: {
             id: lead.id,
@@ -1395,17 +1400,51 @@ export default function AdminLeads() {
         adminToken
       );
 
-      // Save as system note
-      const canonicalNoteContent = `[AI_CANONICAL_NOTE v1.0]\n${JSON.stringify(canonical, null, 2)}`;
+      // Transform to v1.1 if needed
+      let canonicalV11: CanonicalV11;
+      if (rawCanonical.version === '1.1') {
+        canonicalV11 = rawCanonical as CanonicalV11;
+      } else {
+        // Transform v1.0 to v1.1
+        canonicalV11 = transformV10ToV11(rawCanonical as CanonicalNote, lead.id);
+      }
+
+      // Apply safe merge (lead ground truth > AI)
+      canonicalV11 = safeMergeCanonical(canonicalV11, {
+        phone: lead.phone,
+        email: lead.email,
+        source: lead.source,
+        status: lead.status,
+      });
+
+      // Compute changelog via diff
+      const changelog = diffCanonical(prevCanonical, canonicalV11, {
+        phone: lead.phone,
+        email: lead.email,
+        source: lead.source,
+        status: lead.status,
+      });
+
+      // Add changelog and sources to canonical
+      canonicalV11.changelog = changelog;
+      canonicalV11.updated_at = new Date().toISOString();
+      canonicalV11.sources = {
+        notes_used_count: humanNotes.length,
+        timeline_used_count: timeline.length,
+        last_note_at: humanNotes.length > 0 ? humanNotes[0].created_at : undefined,
+      };
+
+      // Save as system note (v1.1)
+      const canonicalNoteContent = `[AI_CANONICAL_NOTE v1.1]\n${JSON.stringify(canonicalV11, null, 2)}`;
       
       // Use existing createNote function
       await createNote(leadId, canonicalNoteContent);
 
       // Update local state
-      setCanonicalNote(canonical);
+      setCanonicalNote(canonicalV11);
       
       // Update cache immediately
-      canonicalCacheRef.current.set(leadId, canonical as CanonicalV1);
+      canonicalCacheRef.current.set(leadId, canonicalV11);
       
       // Reload notes to get the new canonical note
       await loadNotes(leadId);
@@ -1982,7 +2021,6 @@ export default function AdminLeads() {
                       const isStale = daysSinceActivity >= 3;
                       
                       // Priority badge (prefer canonical, fallback to computed)
-                      const canonicalPriority = canonical?.priority;
                       const canonicalRisk = canonical?.risk_score;
                       const canonicalNBA = canonical?.next_best_action;
                       const canonicalMissing = canonical?.missing_fields || [];
@@ -2636,33 +2674,39 @@ export default function AdminLeads() {
                         </div>
                         
                         <div className="space-y-3">
-                          {/* Summary */}
-                          <div>
-                            <p className="text-sm font-medium text-gray-900 mb-1">{canonicalNote.summary_1line}</p>
-                            {canonicalNote.summary_bullets.length > 0 && (
-                              <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
-                                {canonicalNote.summary_bullets.map((bullet, idx) => (
-                                  <li key={idx}>{bullet}</li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
+                          {/* Summary (v1.0 only) */}
+                          {(canonicalNote as any).summary_1line && (
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 mb-1">{(canonicalNote as any).summary_1line}</p>
+                              {((canonicalNote as any).summary_bullets || []).length > 0 && (
+                                <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
+                                  {((canonicalNote as any).summary_bullets || []).map((bullet: string, idx: number) => (
+                                    <li key={idx}>{bullet}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          )}
 
                           {/* Priority & Risk */}
                           <div className="flex items-center gap-3 flex-wrap">
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              canonicalNote.priority === 'hot' ? 'bg-red-100 text-red-800' :
-                              canonicalNote.priority === 'warm' ? 'bg-orange-100 text-orange-800' :
+                              (canonicalNote as any).priority === 'hot' ? 'bg-red-100 text-red-800' :
+                              (canonicalNote as any).priority === 'warm' ? 'bg-orange-100 text-orange-800' :
                               'bg-green-100 text-green-800'
                             }`}>
-                              {canonicalNote.priority === 'hot' ? '🔴' : canonicalNote.priority === 'warm' ? '🟠' : '🟢'} {canonicalNote.priority.toUpperCase()}
+                              {(canonicalNote as any).priority === 'hot' ? '🔴' : (canonicalNote as any).priority === 'warm' ? '🟠' : '🟢'} {((canonicalNote as any).priority || 'cool').toUpperCase()}
                             </span>
-                            <span className="text-xs text-gray-600">
-                              Risk: <span className="font-semibold">{canonicalNote.risk_score}/100</span>
-                            </span>
-                            <span className="text-xs text-gray-600">
-                              Confidence: <span className="font-semibold">{canonicalNote.confidence}/100</span>
-                            </span>
+                            {(canonicalNote as any).risk_score !== null && (canonicalNote as any).risk_score !== undefined && (
+                              <span className="text-xs text-gray-600">
+                                Risk: <span className="font-semibold">{(canonicalNote as any).risk_score}/100</span>
+                              </span>
+                            )}
+                            {(canonicalNote as any).confidence !== null && (canonicalNote as any).confidence !== undefined && (
+                              <span className="text-xs text-gray-600">
+                                Confidence: <span className="font-semibold">{(canonicalNote as any).confidence}/100</span>
+                              </span>
+                            )}
                           </div>
 
                           {/* Next Best Action */}
@@ -2684,7 +2728,12 @@ export default function AdminLeads() {
                                 </button>
                               </div>
                               <p className="text-xs text-gray-900 font-medium mb-1">{canonicalNote.next_best_action.label}</p>
-                              <p className="text-xs text-gray-500 mb-2">Due in {canonicalNote.next_best_action.due_hours} hours</p>
+                              <p className="text-xs text-gray-500 mb-2">
+                                Due in {canonicalNote.next_best_action.due_hours} hours
+                                {(canonicalNote as any).version === '1.1' && (canonicalNote.next_best_action as any).channel && (
+                                  <span className="ml-2 text-gray-400">• {(canonicalNote.next_best_action as any).channel}</span>
+                                )}
+                              </p>
                               {canonicalNote.next_best_action.script.length > 0 && (
                                 <div className="bg-gray-50 rounded p-2 text-xs text-gray-700 font-mono whitespace-pre-wrap">
                                   {canonicalNote.next_best_action.script.join('\n')}
@@ -2707,15 +2756,79 @@ export default function AdminLeads() {
                             </div>
                           )}
 
-                          {/* What Changed */}
-                          {canonicalNote.what_changed && canonicalNote.what_changed.length > 0 && (
+                          {/* Changelog (v1.1) */}
+                          {(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).changelog && (
+                            <div className="border-t border-gray-200 pt-3">
+                              <p className="text-xs font-semibold text-gray-700 mb-2">Changelog:</p>
+                              {(canonicalNote as CanonicalV11).changelog.added.length > 0 && (
+                                <div className="mb-2">
+                                  <p className="text-xs font-medium text-green-700 mb-1">Added:</p>
+                                  <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
+                                    {(canonicalNote as CanonicalV11).changelog.added.map((item, idx) => (
+                                      <li key={idx}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {(canonicalNote as CanonicalV11).changelog.updated.length > 0 && (
+                                <div className="mb-2">
+                                  <p className="text-xs font-medium text-blue-700 mb-1">Updated:</p>
+                                  <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
+                                    {(canonicalNote as CanonicalV11).changelog.updated.map((item, idx) => (
+                                      <li key={idx}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {(canonicalNote as CanonicalV11).changelog.removed.length > 0 && (
+                                <div className="mb-2">
+                                  <p className="text-xs font-medium text-gray-700 mb-1">Removed:</p>
+                                  <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
+                                    {(canonicalNote as CanonicalV11).changelog.removed.map((item, idx) => (
+                                      <li key={idx}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {(canonicalNote as CanonicalV11).changelog.conflicts.length > 0 && (
+                                <div className="mb-2">
+                                  <p className="text-xs font-medium text-red-700 mb-1">Conflicts:</p>
+                                  <ul className="text-xs text-red-600 space-y-0.5 ml-4 list-disc">
+                                    {(canonicalNote as CanonicalV11).changelog.conflicts.map((item, idx) => (
+                                      <li key={idx}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* What Changed (v1.0 backward compatibility) */}
+                          {(canonicalNote as any).what_changed && ((canonicalNote as any).what_changed || []).length > 0 && (
                             <div className="border-t border-gray-200 pt-3">
                               <p className="text-xs font-semibold text-gray-700 mb-2">What Changed:</p>
                               <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
-                                {canonicalNote.what_changed.map((change, idx) => (
+                                {((canonicalNote as any).what_changed || []).map((change: string, idx: number) => (
                                   <li key={idx}>{change}</li>
                                 ))}
                               </ul>
+                            </div>
+                          )}
+
+                          {/* Sources (v1.1) */}
+                          {(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).sources && (
+                            <div className="border-t border-gray-200 pt-3">
+                              <p className="text-xs font-semibold text-gray-700 mb-1">Sources:</p>
+                              <div className="text-xs text-gray-600 space-y-0.5">
+                                <p>Notes used: {(canonicalNote as CanonicalV11).sources.notes_used_count}</p>
+                                <p>Timeline events: {(canonicalNote as CanonicalV11).sources.timeline_used_count}</p>
+                                {(canonicalNote as CanonicalV11).sources.last_note_at && (
+                                  <p>Last note: {new Date((canonicalNote as CanonicalV11).sources.last_note_at).toLocaleString()}</p>
+                                )}
+                                {(canonicalNote as CanonicalV11).updated_at && (
+                                  <p>Updated: {new Date((canonicalNote as CanonicalV11).updated_at).toLocaleString()}</p>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>

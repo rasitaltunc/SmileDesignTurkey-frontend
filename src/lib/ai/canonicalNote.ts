@@ -1,16 +1,20 @@
 // Canonical Note Utilities - Extract and parse canonical JSON from notes
 
 import type { CanonicalNote } from './normalizeLeadNote';
+import type { CanonicalV11 } from './canonicalTypes';
 
 export interface CanonicalV1 extends CanonicalNote {
   version: '1.0';
 }
 
+export type CanonicalAny = CanonicalV1 | CanonicalV11;
+
 /**
  * Check if a note content is a canonical note
  */
 export function isCanonicalNote(content: string): boolean {
-  return content.trim().startsWith('[AI_CANONICAL_NOTE v1.0]');
+  const trimmed = content.trim();
+  return trimmed.startsWith('[AI_CANONICAL_NOTE v1.0]') || trimmed.startsWith('[AI_CANONICAL_NOTE v1.1]');
 }
 
 /**
@@ -52,9 +56,35 @@ export function parseCanonical(content: string): CanonicalV1 | null {
 }
 
 /**
- * Find and parse the latest canonical note from an array of notes
+ * Parse canonical note (supports v1.0 and v1.1)
  */
-export function findLatestCanonical(notes: Array<{ note: string; created_at: string }>): CanonicalV1 | null {
+export function parseCanonicalAny(content: string): CanonicalAny | null {
+  if (!isCanonicalNote(content)) return null;
+
+  try {
+    const jsonText = extractCanonicalJson(content);
+    if (!jsonText) return null;
+
+    const parsed = JSON.parse(jsonText);
+    
+    // Check version
+    if (parsed.version === '1.1' && parsed.lead_id) {
+      return parsed as CanonicalV11;
+    } else if (parsed.version === '1.0' && parsed.leadId) {
+      return parsed as CanonicalV1;
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('[canonicalNote] Failed to parse canonical:', err);
+    return null;
+  }
+}
+
+/**
+ * Find and parse the latest canonical note from an array of notes (supports v1.0 and v1.1)
+ */
+export function findLatestCanonical(notes: Array<{ note: string; created_at: string }>): CanonicalAny | null {
   // Find latest canonical note (by created_at)
   const canonicalNotes = notes
     .filter(n => isCanonicalNote(n.note))
@@ -62,6 +92,6 @@ export function findLatestCanonical(notes: Array<{ note: string; created_at: str
 
   if (canonicalNotes.length === 0) return null;
 
-  return parseCanonical(canonicalNotes[0].note);
+  return parseCanonicalAny(canonicalNotes[0].note);
 }
 
