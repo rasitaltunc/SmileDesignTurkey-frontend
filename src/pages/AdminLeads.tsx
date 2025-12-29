@@ -1615,9 +1615,10 @@ export default function AdminLeads() {
                           onClick={() => notesLeadId && markContacted(notesLeadId)}
                           disabled={isMarkingContacted || !notesLeadId}
                           className={[
-                            "inline-flex items-center justify-center gap-2",
-                            "px-3 py-2 rounded-md text-sm font-semibold",
+                            "inline-flex items-center justify-center gap-2 h-10",
+                            "px-3 rounded-md text-sm font-semibold",
                             "border transition-all duration-200 min-w-[140px]",
+                            "active:scale-[0.99] motion-reduce:active:scale-100",
                             isMarkingContacted || !notesLeadId
                               ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
                               : "bg-green-600 !text-white border-green-600 hover:bg-green-700 hover:border-green-700 shadow-sm hover:shadow"
@@ -1641,10 +1642,11 @@ export default function AdminLeads() {
                           onClick={() => notesLeadId && runAIAnalysis(notesLeadId)}
                           disabled={isLoadingAI || !notesLeadId}
                           className={[
-                            "inline-flex items-center justify-center gap-2",
-                            "px-4 py-2 rounded-lg text-sm font-semibold",
+                            "inline-flex items-center justify-center gap-2 h-10",
+                            "px-4 rounded-lg text-sm font-semibold",
                             "border transition-all duration-200 min-w-[180px]",
                             "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2",
+                            "active:scale-[0.99] motion-reduce:active:scale-100",
                             isLoadingAI || !notesLeadId
                               ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
                               : "bg-gradient-to-r from-blue-600 to-purple-600 !text-white border-transparent hover:from-blue-700 hover:to-purple-700 shadow-sm hover:shadow-md"
@@ -1681,12 +1683,12 @@ export default function AdminLeads() {
                   tabIndex={0}
                   role="region"
                   aria-label="Notes content"
-                  className="relative px-5 py-4 focus:outline-none"
+                  className="relative px-5 py-4 pr-3 focus:outline-none overscroll-contain touch-pan-y"
                   style={{
                     overflowY: "auto",
                     minHeight: 0,
                     WebkitOverflowScrolling: "touch",
-                    scrollbarGutter: "stable" as any,
+                    scrollbarGutter: "stable",
                   }}
                   onScroll={handleNotesScroll}
                   onKeyDown={(e) => {
