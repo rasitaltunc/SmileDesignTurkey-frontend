@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
@@ -55,7 +54,7 @@ export default function AdminPatientProfile() {
     }
   }, []);
 
-  // Fetch lead data
+  // Fetch lead data via API endpoint
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
 
@@ -69,17 +68,36 @@ export default function AdminPatientProfile() {
           throw new Error('Supabase client not configured');
         }
 
-        const { data, error: fetchError } = await supabase
-          .from('leads')
-          .select('*')
-          .eq('id', leadId)
-          .single();
+        // Get JWT token from Supabase session
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) {
+          throw new Error('Session expired');
+        }
 
-        if (fetchError || !data) {
+        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+        const response = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to load patient' }));
+          if (errorData.error === 'NOT_FOUND') {
+            throw new Error('Patient not found');
+          }
+          throw new Error(errorData.error || 'Failed to load patient');
+        }
+
+        const result = await response.json();
+        if (!result.ok || !result.lead) {
           throw new Error('Patient not found');
         }
 
-        setLead(data as Lead);
+        setLead(result.lead as Lead);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load patient';
         setError(errorMessage);
