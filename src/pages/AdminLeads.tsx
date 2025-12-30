@@ -2658,7 +2658,7 @@ export default function AdminLeads() {
               onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* HEADER */}
-                <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`}>
+                <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`} style={{ pointerEvents: "auto" }}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1">
                     <h3 id="notes-modal-title" className="text-base font-semibold text-gray-900">Notes</h3>
@@ -2684,13 +2684,13 @@ export default function AdminLeads() {
                       return null;
                     })()}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0" style={{ pointerEvents: "auto" }}>
                         <button
                           type="button"
                           onClick={() => notesLeadId && markContacted(notesLeadId)}
                           disabled={isMarkingContacted || !notesLeadId}
                           className={[
-                            "inline-flex items-center justify-center gap-2 h-10",
+                            "relative z-10 inline-flex items-center justify-center gap-2 h-10",
                             "px-3 rounded-md text-sm font-semibold",
                             "border transition-all duration-200 min-w-[140px]",
                             "active:scale-[0.99] motion-reduce:active:scale-100",
@@ -2714,10 +2714,45 @@ export default function AdminLeads() {
                         </button>
                         <button
                           type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log("AI Snapshot clicked", notesLeadId);
+                            if (notesLeadId) {
+                              handleGenerateBrief(notesLeadId);
+                            }
+                          }}
+                          disabled={isLoadingBrief || !notesLeadId}
+                          className={[
+                            "relative z-10 inline-flex items-center justify-center gap-2 h-10",
+                            "px-4 rounded-lg text-sm font-semibold",
+                            "border transition-all duration-200 min-w-[150px]",
+                            "focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2",
+                            "active:scale-[0.99] motion-reduce:active:scale-100",
+                            isLoadingBrief || !notesLeadId
+                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                              : "bg-gradient-to-r from-teal-600 to-cyan-600 !text-white border-transparent hover:from-teal-700 hover:to-cyan-700 shadow-sm hover:shadow-md"
+                          ].join(" ")}
+                          title={!notesLeadId ? "Select a lead first" : "Generate AI snapshot and call brief"}
+                        >
+                          {isLoadingBrief ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Generating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="w-4 h-4" />
+                              <span>AI Snapshot</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => notesLeadId && runAIAnalysis(notesLeadId)}
                           disabled={isLoadingAI || !notesLeadId}
                           className={[
-                            "inline-flex items-center justify-center gap-2 h-10",
+                            "relative z-10 inline-flex items-center justify-center gap-2 h-10",
                             "px-4 rounded-lg text-sm font-semibold",
                             "border transition-all duration-200 min-w-[180px]",
                             "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2",
