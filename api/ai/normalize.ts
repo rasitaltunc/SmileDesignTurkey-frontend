@@ -9,6 +9,8 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
+  const requestId = `norm_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
   try {
     // Handle OPTIONS
     if (req.method === 'OPTIONS') {
@@ -22,12 +24,63 @@ export default async function handler(
         ok: true,
         source: 'api/ai/normalize',
         message: 'AI Gateway normalize endpoint is working',
+        requestId,
       });
       return;
     }
 
     // POST handler - dynamic imports for heavy dependencies
     if (req.method === 'POST') {
+      // 1) ENV guard - check required server-only environment variables
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const openaiKey = process.env.OPENAI_API_KEY;
+
+      if (!supabaseUrl || supabaseUrl.trim().length === 0) {
+        console.error('[normalize] Missing SUPABASE_URL', requestId);
+        res.status(500).json({
+          ok: false,
+          error: 'Missing SUPABASE_URL',
+          requestId,
+        });
+        return;
+      }
+
+      if (!supabaseServiceKey || supabaseServiceKey.trim().length === 0) {
+        console.error('[normalize] Missing SUPABASE_SERVICE_ROLE_KEY', requestId);
+        res.status(500).json({
+          ok: false,
+          error: 'Missing SUPABASE_SERVICE_ROLE_KEY',
+          requestId,
+        });
+        return;
+      }
+
+      if (!openaiKey || openaiKey.trim().length === 0) {
+        console.error('[normalize] Missing OPENAI_API_KEY', requestId);
+        res.status(500).json({
+          ok: false,
+          error: 'Missing OPENAI_API_KEY',
+          requestId,
+        });
+        return;
+      }
+
+      // 2) Bearer token guard - client must send Authorization header
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      const tokenMatch = String(authHeader || '').match(/^Bearer\s+(.+)$/i);
+      const jwt = tokenMatch ? tokenMatch[1] : null;
+
+      if (!jwt) {
+        console.error('[normalize] Missing Authorization Bearer token', requestId);
+        res.status(401).json({
+          ok: false,
+          error: 'Missing Authorization Bearer token',
+          requestId,
+        });
+        return;
+      }
+
       // Dynamic imports to keep GET handler zero-dependency
       const { createClient } = await import('@supabase/supabase-js');
 
@@ -38,17 +91,10 @@ export default async function handler(
       interface NormalizeRequest {
         leadId: string;
         prevCanonical?: any;
-        newNotesSincePrev?: Array<{ note: string; created_at: string }>;
-        newTimelineSincePrev?: Array<{ eventType: string; receivedAt: string; title?: string; additionalNotes?: string }>;
       }
 
       // Verify Supabase access token and extract user + role
-      async function verifyAuth(authHeader: string | undefined): Promise<{ userId: string; role: string | null } | null> {
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return null;
-        }
-
-        const token = authHeader.substring(7);
+      async function verifyAuth(token: string): Promise<{ userId: string; role: string | null } | null> {
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
@@ -242,31 +288,45 @@ export default async function handler(
         return JSON.parse(jsonText);
       }
 
-      // 1) Verify auth
-      const auth = await verifyAuth(req.headers.authorization);
+      // 3) Verify auth (token already extracted above)
+      const auth = await verifyAuth(jwt);
       if (!auth) {
-        res.status(401).json({ ok: false, error: 'Invalid or missing authorization token' });
+        console.error('[normalize] Auth verification failed', requestId);
+        res.status(401).json({
+          ok: false,
+          error: 'Invalid or missing authorization token',
+          requestId,
+        });
         return;
       }
 
       const { userId, role } = auth;
 
-      // 2) Role check: only admin | employee
+      // 4) Role check: only admin | employee
       if (role !== 'admin' && role !== 'employee') {
-        res.status(403).json({ ok: false, error: 'Access denied. Only admin and employee roles can normalize leads.' });
+        console.error('[normalize] Role check failed', { role, userId }, requestId);
+        res.status(403).json({
+          ok: false,
+          error: 'Access denied. Only admin and employee roles can normalize leads.',
+          requestId,
+        });
         return;
       }
 
-      // 3) Parse request
+      // 5) Parse request
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-      const { leadId, prevCanonical, newNotesSincePrev, newTimelineSincePrev }: NormalizeRequest = body;
+      const { leadId, prevCanonical }: NormalizeRequest = body;
 
       if (!leadId) {
-        res.status(400).json({ ok: false, error: 'Missing leadId' });
+        res.status(400).json({
+          ok: false,
+          error: 'Missing leadId',
+          requestId,
+        });
         return;
       }
 
-      // 4) Rate limit check
+      // 6) Rate limit check
       if (!checkRateLimit(userId, leadId)) {
         res.status(429).json({ 
           ok: false,
@@ -276,10 +336,10 @@ export default async function handler(
         return;
       }
 
-      // 5) Fetch lead data
+      // 7) Fetch lead data
       const { lead, notes, timeline, contactEvents, lastContactedAt } = await fetchLeadData(leadId);
 
-      // 6) Build normalize input
+      // 8) Build normalize input
       const leadTruth = {
         id: lead.id,
         name: lead.name || undefined,
@@ -394,10 +454,10 @@ IMPORTANT:
 - Set review_required: true if confidence < 0.55 or if you detect conflicts with lead ground truth.
 `;
 
-      // 7) Call OpenAI
+      // 9) Call OpenAI
       const aiResponse = await callOpenAI(prompt);
       
-      // 8) Parse and validate response
+      // 10) Parse and validate response
       const canonical = extractJSON(aiResponse);
       
       // Ensure v1.1 structure
@@ -411,7 +471,7 @@ IMPORTANT:
         canonical.updated_at = new Date().toISOString();
       }
 
-      // 9) Emit audit event (privacy-safe) - optional, don't fail if PostHog not available
+      // 11) Emit audit event (privacy-safe) - optional, don't fail if PostHog not available
       try {
         // PostHog is optional, don't import it at top level
         const posthog = (global as any).posthog;
@@ -428,10 +488,11 @@ IMPORTANT:
         console.debug('[ai/normalize] Audit event failed:', auditErr);
       }
 
-      // 10) Return canonical
+      // 12) Return canonical
       res.status(200).json({
         ok: true,
         canonical,
+        requestId,
       });
       return;
     }
@@ -440,13 +501,16 @@ IMPORTANT:
     res.status(405).json({
       ok: false,
       error: 'Method not allowed',
+      requestId,
     });
   } catch (err: any) {
-    console.error('[ai/normalize] Handler crashed:', err);
+    console.error('[normalize] Fatal error', requestId, err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
     res.status(500).json({
       ok: false,
-      where: 'api/ai/normalize',
-      message: err?.message || String(err),
+      error: 'Normalize failed',
+      details: errorMessage,
+      requestId,
     });
   }
 }

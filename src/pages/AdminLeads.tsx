@@ -746,11 +746,15 @@ export default function AdminLeads() {
   const [isLoadingIntakes, setIsLoadingIntakes] = useState(false);
   const [convertingIntakeId, setConvertingIntakeId] = useState<string | null>(null);
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated (soft redirect via router)
   useEffect(() => {
     if (!isAuthenticated) {
-      window.history.pushState({}, '', '/login');
-      window.dispatchEvent(new PopStateEvent('popstate'));
+      // Use router navigation instead of direct history manipulation
+      // This prevents flash/white screen issues
+      const timer = setTimeout(() => {
+        window.location.assign('/login');
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated]);
 
@@ -885,7 +889,9 @@ export default function AdminLeads() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) {
-        window.location.href = '/';
+        setError('Session expired. Please login again.');
+        toast.error('Session expired. Please login again.');
+        setIsLoading(false);
         return;
       }
 
@@ -996,7 +1002,9 @@ export default function AdminLeads() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) {
-        window.location.href = '/';
+        setError('Session expired. Please login again.');
+        toast.error('Session expired. Please login again.');
+        setIsLoadingNotes(false);
         return;
       }
 
@@ -1041,7 +1049,9 @@ export default function AdminLeads() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) {
-        window.location.href = '/';
+        setError('Session expired. Please login again.');
+        toast.error('Session expired. Please login again.');
+        setIsSavingNote(false);
         return;
       }
 
@@ -1652,9 +1662,8 @@ export default function AdminLeads() {
     await logout();
     setLeads([]);
     setError(null);
-    // Redirect to login
-    window.history.pushState({}, '', '/login');
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    // Redirect to login (soft redirect)
+    window.location.assign('/login');
   };
 
   // Load patient intakes (admin only)
