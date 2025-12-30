@@ -14,6 +14,7 @@ import UploadCenter from './pages/UploadCenter';
 import Onboarding from './pages/Onboarding';
 import PlanDashboard from './pages/PlanDashboard';
 import AdminLeads from './pages/AdminLeads';
+import AdminPatientProfile from './pages/AdminPatientProfile';
 import Intake from './pages/Intake';
 import PatientPortal from './pages/PatientPortal';
 import DoctorPortal from './pages/DoctorPortal';
@@ -312,6 +313,38 @@ export default function App() {
         }
         return <AdminLeads />;
       default:
+        // Handle dynamic /admin/patient/:leadId route
+        if (currentPath.startsWith('/admin/patient/')) {
+          if (isLoading || !role) {
+            return (
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Loading...</p>
+                </div>
+              </div>
+            );
+          }
+          if (role !== 'admin') {
+            return (
+              <div className="min-h-screen flex items-center justify-center p-6">
+                <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
+                  <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
+                  <p className="mt-2 text-gray-600">
+                    You don't have permission to access the admin panel.
+                  </p>
+                  <button
+                    className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
+                    onClick={() => navigate('/')}
+                  >
+                    Go back home
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          return <AdminPatientProfile />;
+        }
         return <Home />;
     }
   };
