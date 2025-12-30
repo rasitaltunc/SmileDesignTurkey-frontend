@@ -73,7 +73,7 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             role: null,
           });
-          throw e; // ÖNEMLİ: throw et ki Navbar.tsx'te catch'e düşsün
+          throw e; // ÖNEMLİ: throw et ki Login.tsx'te catch'e düşsün
         }
       },
 
