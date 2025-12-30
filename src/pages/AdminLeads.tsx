@@ -2671,11 +2671,11 @@ export default function AdminLeads() {
               onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* HEADER */}
-                <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`} style={{ pointerEvents: "auto" }}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex-1">
-                    <h3 id="notes-modal-title" className="text-base font-semibold text-gray-900">Notes</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Lead actions & call prep</p>
+                <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`} style={{ pointerEvents: "auto", maxWidth: "100%", overflow: "hidden" }}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <h3 id="notes-modal-title" className="text-base font-semibold text-gray-900 break-words">Notes</h3>
+                    <p className="text-xs text-gray-500 mt-0.5 break-words">Lead actions & call prep</p>
                     {notesLeadId && (() => {
                       const currentLead = leads.find(l => l.id === notesLeadId);
                       const leadPriority = currentLead ? computePriority(
@@ -2697,7 +2697,7 @@ export default function AdminLeads() {
                       return null;
                     })()}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0" style={{ pointerEvents: "auto" }}>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap" style={{ pointerEvents: "auto" }}>
                         <button
                           type="button"
                           onClick={() => notesLeadId && markContacted(notesLeadId)}
@@ -2876,10 +2876,14 @@ export default function AdminLeads() {
                   role="region"
                   id="notes-modal-desc"
                   aria-label="Notes content"
-                  className="relative px-5 py-4 pr-3 focus:outline-none overscroll-contain touch-pan-y"
+                  className="relative px-5 py-4 pr-3 focus:outline-none overscroll-contain touch-pan-y break-words"
                   style={{
+                    overflowX: "hidden",
                     overflowY: "auto",
                     minHeight: 0,
+                    maxWidth: "100%",
+                    wordBreak: "break-word",
+                    whiteSpace: "normal",
                     WebkitOverflowScrolling: "touch",
                     scrollbarGutter: "stable",
                   }}
@@ -2909,54 +2913,54 @@ export default function AdminLeads() {
                       notesScroll.atTop ? "opacity-0" : "opacity-100"
                     }`}
                   />
-                  <div className="space-y-6">
+                  <div className="space-y-6 max-w-full">
                     {/* B2: AI Snapshot Section */}
                     {briefData ? (
                       <div 
                         data-snapshot-section
-                        className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all"
+                        className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all max-w-full overflow-hidden"
                       >
                         {/* Header */}
-                        <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-                          <div className="flex items-center justify-between mb-1">
-                            <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                              <Brain className="w-4 h-4 text-teal-600" />
-                              AI Snapshot
+                        <div className="px-4 pt-4 pb-3 border-b border-gray-100 max-w-full">
+                          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                            <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 break-words min-w-0">
+                              <Brain className="w-4 h-4 text-teal-600 shrink-0" />
+                              <span className="break-words">AI Snapshot</span>
                             </h4>
                             {!briefData.hasOpenAI && (
                               <span 
-                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded"
+                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded shrink-0 whitespace-nowrap"
                                 title="This is a preview. Real AI activates when OPENAI_API_KEY is enabled."
                               >
                                 Preview Mode
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-gray-500">Instant lead insight and call preparation.</p>
+                          <p className="text-xs text-gray-500 break-words">Instant lead insight and call preparation.</p>
                         </div>
 
-                        <div className="p-4 space-y-4">
+                        <div className="p-4 space-y-4 max-w-full">
                           {/* 1) Overview */}
                           {briefData.brief.snapshot && (
-                            <div className="space-y-3">
-                              <div className="border-b border-gray-100 pb-3">
-                                <p className="text-sm font-medium text-gray-900 mb-1.5">
+                            <div className="space-y-3 max-w-full">
+                              <div className="border-b border-gray-100 pb-3 max-w-full">
+                                <p className="text-sm font-medium text-gray-900 mb-1.5 break-words whitespace-normal">
                                   {briefData.brief.snapshot.oneLiner}
                                 </p>
-                                <p className="text-xs text-gray-600">
+                                <p className="text-xs text-gray-600 break-words whitespace-normal">
                                   {briefData.brief.snapshot.goal}
                                 </p>
                               </div>
 
                               {/* 2) Key Facts */}
                               {briefData.brief.snapshot.keyFacts && briefData.brief.snapshot.keyFacts.length > 0 && (
-                                <div className="border-b border-gray-100 pb-3">
+                                <div className="border-b border-gray-100 pb-3 max-w-full">
                                   <h5 className="text-xs font-semibold text-gray-700 mb-2">Key Facts</h5>
-                                  <ul className="text-xs text-gray-600 space-y-1.5">
+                                  <ul className="text-xs text-gray-600 space-y-1.5 max-w-full">
                                     {briefData.brief.snapshot.keyFacts.map((fact, idx) => (
-                                      <li key={idx} className="flex items-start gap-2">
-                                        <span className="text-teal-600 mt-0.5">•</span>
-                                        <span>{fact}</span>
+                                      <li key={idx} className="flex items-start gap-2 max-w-full">
+                                        <span className="text-teal-600 mt-0.5 shrink-0">•</span>
+                                        <span className="break-words whitespace-normal min-w-0 flex-1">{fact}</span>
                                       </li>
                                     ))}
                                   </ul>
@@ -2965,9 +2969,9 @@ export default function AdminLeads() {
 
                               {/* 3) Recommended Next Step */}
                               {briefData.brief.snapshot.nextBestAction && (
-                                <div className="p-3 bg-teal-50 rounded-lg border border-teal-100">
-                                  <p className="text-xs font-semibold text-teal-900 mb-1.5">Recommended Next Step</p>
-                                  <p className="text-xs text-teal-800 leading-relaxed">{briefData.brief.snapshot.nextBestAction}</p>
+                                <div className="p-3 bg-teal-50 rounded-lg border border-teal-100 max-w-full">
+                                  <p className="text-xs font-semibold text-teal-900 mb-1.5 break-words">Recommended Next Step</p>
+                                  <p className="text-xs text-teal-800 leading-relaxed break-words whitespace-normal">{briefData.brief.snapshot.nextBestAction}</p>
                                 </div>
                               )}
                             </div>
@@ -2975,25 +2979,25 @@ export default function AdminLeads() {
 
                           {/* 4) Call Preparation */}
                           {briefData.brief.callBrief && (
-                            <div className="border-t border-gray-200 pt-4 space-y-3">
-                              <h5 className="text-xs font-semibold text-gray-700 mb-2">Call Preparation</h5>
+                            <div className="border-t border-gray-200 pt-4 space-y-3 max-w-full">
+                              <h5 className="text-xs font-semibold text-gray-700 mb-2 break-words">Call Preparation</h5>
                               
                               {briefData.brief.callBrief.openingLine && (
-                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                                  <p className="text-xs font-semibold text-blue-900 mb-1.5">Suggested Opening</p>
-                                  <p className="text-xs text-blue-800 leading-relaxed">{briefData.brief.callBrief.openingLine}</p>
+                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 max-w-full">
+                                  <p className="text-xs font-semibold text-blue-900 mb-1.5 break-words">Suggested Opening</p>
+                                  <p className="text-xs text-blue-800 leading-relaxed break-words whitespace-normal">{briefData.brief.callBrief.openingLine}</p>
                                 </div>
                               )}
 
-                              <div className="grid grid-cols-1 gap-3">
+                              <div className="grid grid-cols-1 gap-3 max-w-full">
                                 {briefData.brief.callBrief.mustAsk && briefData.brief.callBrief.mustAsk.length > 0 && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-gray-700 mb-1.5">Key Questions</p>
-                                    <ul className="text-xs text-gray-600 space-y-1.5">
+                                  <div className="max-w-full">
+                                    <p className="text-xs font-semibold text-gray-700 mb-1.5 break-words">Key Questions</p>
+                                    <ul className="text-xs text-gray-600 space-y-1.5 max-w-full">
                                       {briefData.brief.callBrief.mustAsk.map((q, idx) => (
-                                        <li key={idx} className="flex items-start gap-2">
-                                          <span className="text-blue-600 mt-0.5">✓</span>
-                                          <span>{q}</span>
+                                        <li key={idx} className="flex items-start gap-2 max-w-full">
+                                          <span className="text-blue-600 mt-0.5 shrink-0">✓</span>
+                                          <span className="break-words whitespace-normal min-w-0 flex-1">{q}</span>
                                         </li>
                                       ))}
                                     </ul>
@@ -3001,13 +3005,13 @@ export default function AdminLeads() {
                                 )}
 
                                 {briefData.brief.callBrief.avoid && briefData.brief.callBrief.avoid.length > 0 && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-gray-700 mb-1.5">Avoid Mentioning</p>
-                                    <ul className="text-xs text-gray-600 space-y-1.5">
+                                  <div className="max-w-full">
+                                    <p className="text-xs font-semibold text-gray-700 mb-1.5 break-words">Avoid Mentioning</p>
+                                    <ul className="text-xs text-gray-600 space-y-1.5 max-w-full">
                                       {briefData.brief.callBrief.avoid.map((a, idx) => (
-                                        <li key={idx} className="flex items-start gap-2">
-                                          <span className="text-red-600 mt-0.5">✗</span>
-                                          <span>{a}</span>
+                                        <li key={idx} className="flex items-start gap-2 max-w-full">
+                                          <span className="text-red-600 mt-0.5 shrink-0">✗</span>
+                                          <span className="break-words whitespace-normal min-w-0 flex-1">{a}</span>
                                         </li>
                                       ))}
                                     </ul>
@@ -3016,7 +3020,7 @@ export default function AdminLeads() {
                               </div>
 
                               {briefData.brief.callBrief.tone && (
-                                <div className="text-xs text-gray-600 pt-2 border-t border-gray-100">
+                                <div className="text-xs text-gray-600 pt-2 border-t border-gray-100 break-words whitespace-normal max-w-full">
                                   <span className="font-medium">Tone:</span> {briefData.brief.callBrief.tone}
                                 </div>
                               )}
@@ -3025,10 +3029,10 @@ export default function AdminLeads() {
 
                           {/* 5) Lead Risk & Priority */}
                           {briefData.brief.risk && (
-                            <div className="border-t border-gray-200 pt-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <h5 className="text-xs font-semibold text-gray-700">Lead Risk & Priority</h5>
-                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            <div className="border-t border-gray-200 pt-4 max-w-full">
+                              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                                <h5 className="text-xs font-semibold text-gray-700 break-words min-w-0">Lead Risk & Priority</h5>
+                                <span className={`text-xs px-2 py-0.5 rounded font-medium shrink-0 whitespace-nowrap ${
                                   briefData.brief.risk.priority === 'hot' ? 'bg-red-100 text-red-800' :
                                   briefData.brief.risk.priority === 'warm' ? 'bg-orange-100 text-orange-800' :
                                   'bg-green-100 text-green-800'
@@ -3039,17 +3043,17 @@ export default function AdminLeads() {
                                 </span>
                               </div>
                               {briefData.brief.risk.reasons && briefData.brief.risk.reasons.length > 0 && (
-                                <ul className="text-xs text-gray-600 space-y-1.5 mb-2">
+                                <ul className="text-xs text-gray-600 space-y-1.5 mb-2 max-w-full">
                                   {briefData.brief.risk.reasons.map((reason, idx) => (
-                                    <li key={idx} className="flex items-start gap-2">
-                                      <span className="text-gray-400 mt-0.5">•</span>
-                                      <span>{reason}</span>
+                                    <li key={idx} className="flex items-start gap-2 max-w-full">
+                                      <span className="text-gray-400 mt-0.5 shrink-0">•</span>
+                                      <span className="break-words whitespace-normal min-w-0 flex-1">{reason}</span>
                                     </li>
                                   ))}
                                 </ul>
                               )}
                               {briefData.brief.risk.confidence !== null && (
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-gray-500 break-words">
                                   Confidence: {briefData.brief.risk.confidence}%
                                 </p>
                               )}
@@ -3059,13 +3063,13 @@ export default function AdminLeads() {
                       </div>
                     ) : (
                       /* Empty State */
-                      <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-gray-50 to-white text-center">
-                        <Brain className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                        <h4 className="text-sm font-semibold text-gray-800 mb-1.5">No snapshot yet</h4>
-                        <p className="text-xs text-gray-600 mb-3">
+                      <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-gray-50 to-white text-center max-w-full">
+                        <Brain className="w-8 h-8 text-gray-400 mx-auto mb-3 shrink-0" />
+                        <h4 className="text-sm font-semibold text-gray-800 mb-1.5 break-words">No snapshot yet</h4>
+                        <p className="text-xs text-gray-600 mb-3 break-words whitespace-normal">
                           Generate a quick AI-powered preview to prepare your conversation.
                         </p>
-                        <p className="text-xs text-gray-500 italic">
+                        <p className="text-xs text-gray-500 italic break-words">
                           Click 'AI Snapshot' above
                         </p>
                       </div>
