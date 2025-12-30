@@ -85,17 +85,96 @@ module.exports = async function handler(req, res) {
       console.debug("[brief] Notes fetch skipped:", err);
     }
 
-    // If OpenAI key missing, return no-op response
+    // If OpenAI key missing, generate deterministic demo brief
     if (!openaiKey || openaiKey.trim().length === 0) {
+      // Demo mode: rules-based brief from lead data
+      const leadName = lead.name || lead.full_name || "Lead";
+      const leadCountry = lead.country || "Unknown";
+      const leadStatus = lead.status || "new";
+      
+      // Infer goal from notes keywords
+      const notesText = notes.length > 0
+        ? notes.map((n) => (n.note || n.content || "").toLowerCase()).join(" ")
+        : "";
+      let goal = "Smile design consultation";
+      if (notesText.includes("implant")) {
+        goal = "Implant consultation";
+      } else if (notesText.includes("veneer")) {
+        goal = "Veneer smile design";
+      } else if (notesText.includes("crown") || notesText.includes("zirkon") || notesText.includes("zircon")) {
+        goal = "Crown / zircon plan";
+      } else if (notesText.includes("whitening") || notesText.includes("bleaching")) {
+        goal = "Whitening";
+      }
+      
+      // Build key facts
+      const keyFacts = [];
+      if (lead.phone) keyFacts.push(`Phone: ${lead.phone}`);
+      if (leadCountry !== "Unknown") keyFacts.push(`Country: ${leadCountry}`);
+      if (lead.created_at) {
+        const createdDate = new Date(lead.created_at).toLocaleDateString();
+        keyFacts.push(`Created: ${createdDate}`);
+      }
+      keyFacts.push(`Status: ${leadStatus}`);
+      if (notesText.includes("budget") || notesText.includes("price") || notesText.includes("cost")) {
+        keyFacts.push("Budget mentioned in notes");
+      }
+      
+      // Calculate risk priority based on missing info count
+      let missingCount = 0;
+      if (!lead.phone) missingCount++;
+      if (!lead.email) missingCount++;
+      if (notes.length === 0) missingCount++;
+      if (!lead.treatment) missingCount++;
+      
+      let priority = "cool";
+      if (missingCount <= 1) {
+        priority = "hot";
+      } else if (missingCount <= 2) {
+        priority = "warm";
+      }
+      
+      const riskReasons = [];
+      if (!lead.phone) riskReasons.push("No phone number");
+      if (!lead.email) riskReasons.push("No email");
+      if (notes.length === 0) riskReasons.push("No notes yet");
+      if (missingCount === 0) riskReasons.push("Complete lead information");
+      
+      // Generate demo brief
+      const demoBrief = {
+        snapshot: {
+          oneLiner: `${leadName} from ${leadCountry} - status: ${leadStatus}`,
+          goal: goal,
+          keyFacts: keyFacts,
+          nextBestAction: "Ask for photos + expectations + timeline + budget range",
+        },
+        callBrief: {
+          openingLine: `Hello ${leadName}, thank you for your interest in our dental services. How can I help you today?`,
+          mustAsk: [
+            "Send clear photos",
+            "Desired tooth shade",
+            "Any pain/sensitivity?",
+            "Travel dates",
+          ],
+          avoid: [
+            "Price first without context",
+            "Overpromising results",
+          ],
+          tone: "Calm, confident, premium",
+        },
+        risk: {
+          priority: priority,
+          reasons: riskReasons.length > 0 ? riskReasons : ["Standard consultation lead"],
+          confidence: 55,
+        },
+      };
+      
       return res.status(200).json({
         ok: true,
         hasOpenAI: false,
+        demo: true,
         requestId,
-        brief: {
-          snapshot: null,
-          callBrief: null,
-          risk: null,
-        },
+        brief: demoBrief,
       });
     }
 
