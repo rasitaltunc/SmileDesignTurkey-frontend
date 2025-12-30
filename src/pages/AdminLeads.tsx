@@ -2131,7 +2131,20 @@ export default function AdminLeads() {
           ) : (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-[1100px] w-full">
+                <table className="min-w-[1100px] w-full" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup>
+                    <col style={{ width: '140px' }} /> {/* Created */}
+                    <col style={{ width: '150px' }} /> {/* Name */}
+                    <col style={{ width: '180px' }} /> {/* Email */}
+                    <col style={{ width: '150px' }} /> {/* Phone */}
+                    <col style={{ width: '100px' }} /> {/* Source */}
+                    <col style={{ width: '120px' }} /> {/* Treatment */}
+                    <col style={{ width: '120px' }} /> {/* Status */}
+                    <col style={{ width: '140px' }} /> {/* Follow-up */}
+                    <col style={{ width: '140px' }} /> {/* Assigned To */}
+                    <col style={{ width: '220px' }} /> {/* Notes */}
+                    <col style={{ width: '200px' }} /> {/* Actions */}
+                  </colgroup>
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
@@ -2142,8 +2155,8 @@ export default function AdminLeads() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Treatment</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[180px]">Assigned To</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{ width: '220px' }}>Notes</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Actions</th>
                     </tr>
                   </thead>
@@ -2216,8 +2229,8 @@ export default function AdminLeads() {
                                 : ""
                             }`}
                           >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="flex flex-col gap-1.5">
+                          <td className="px-6 py-4 text-sm text-gray-900 truncate overflow-hidden">
+                            <div className="flex flex-col gap-1.5 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-xs text-gray-500">{new Date(lead.created_at).toLocaleString()}</span>
                                 <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${priorityBadge.color}`}>
@@ -2266,8 +2279,18 @@ export default function AdminLeads() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {lead.name || '-'}
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.location.href = `/admin/patient/${lead.id}`;
+                              }}
+                              className="text-teal-600 hover:text-teal-700 hover:underline font-medium truncate block max-w-full"
+                              title="Open Profile"
+                            >
+                              {lead.name || '-'}
+                            </button>
                           </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {lead.email || '-'}
@@ -2291,7 +2314,7 @@ export default function AdminLeads() {
                           })()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 truncate overflow-hidden whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           lead.source === 'onboarding' 
                             ? 'bg-blue-100 text-blue-800' 
@@ -2300,10 +2323,10 @@ export default function AdminLeads() {
                           {lead.source}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500 truncate overflow-hidden whitespace-nowrap">
                         {lead.treatment || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 truncate overflow-hidden whitespace-nowrap">
                         {editingLead?.id === lead.id ? (
                           <div className="flex flex-col gap-2">
                             <select
@@ -2348,7 +2371,7 @@ export default function AdminLeads() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 truncate overflow-hidden whitespace-nowrap">
                         {editingLead?.id === lead.id ? (
                           <div className="flex flex-col gap-2">
                             <input
@@ -2359,6 +2382,7 @@ export default function AdminLeads() {
                             />
                             <div className="flex gap-2">
                               <button
+                                type="button"
                                 onClick={handleEditSave}
                                 className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
                               >
@@ -2366,6 +2390,7 @@ export default function AdminLeads() {
                                 Save
                               </button>
                               <button
+                                type="button"
                                 onClick={() => setEditingLead(null)}
                                 className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
                               >
@@ -2375,16 +2400,16 @@ export default function AdminLeads() {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-gray-600 truncate block">
                             {lead.follow_up_at 
                               ? new Date(lead.follow_up_at).toLocaleString()
                               : '-'}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 min-w-[180px]">
+                      <td className="px-4 py-3 truncate overflow-hidden whitespace-nowrap">
                         {role === 'admin' && (
-                          <div className="min-w-[240px] flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <select
                               className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm bg-white"
                               value={selectedEmployeeByLead[lead.id] ?? lead.assigned_to ?? ""}
@@ -2442,28 +2467,42 @@ export default function AdminLeads() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                      <td className="px-6 py-4 text-sm sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                         {editingLead?.id === lead.id ? (
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <button
+                              type="button"
                               onClick={handleEditSave}
-                              className="text-green-600 hover:text-green-700"
+                              className="text-green-600 hover:text-green-700 shrink-0"
                               title="Save"
                             >
                               <Save className="w-4 h-4" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => setEditingLead(null)}
-                              className="text-gray-600 hover:text-gray-700"
+                              className="text-gray-600 hover:text-gray-700 shrink-0"
                               title="Cancel"
                             >
                               <X className="w-4 h-4" />
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            {/* Profile button - FIRST and most visible */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.location.href = `/admin/patient/${lead.id}`;
+                              }}
+                              className="p-1.5 text-teal-600 hover:bg-teal-50 rounded transition-colors shrink-0"
+                              title="Open Profile"
+                            >
+                              <User className="w-4 h-4" />
+                            </button>
                             {activeLeadId === lead.id && (
-                              <div className="flex items-center gap-1 mr-2">
+                              <div className="flex items-center gap-1 flex-wrap shrink-0">
                                 {/* Copy NBA script (if canonical exists) */}
                                 {canonicalNBA?.script && canonicalNBA.script.length > 0 && (
                                   <button
