@@ -5,7 +5,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-export default async function handler(
+// CJS export for Vercel Node builder compatibility
+module.exports = async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
