@@ -12,6 +12,7 @@ import { emitAIAudit } from '@/lib/ai/aiAudit';
 import { buildMemoryFromCanonical, toMemorySystemNote, findLatestMemory, buildContextPack, type MemoryV1, type MemoryScope } from '@/lib/ai/memoryVault';
 import { emitAIMemorySync } from '@/lib/ai/aiMemoryAudit';
 import { getRoleScope, type AIRole } from '@/lib/ai/aiRoles';
+import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
 
 // Copy to clipboard helper
 const copyText = async (text: string) => {
@@ -703,6 +704,10 @@ export default function AdminLeads() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   
+  // B2: AI Brief state
+  const [briefData, setBriefData] = useState<BriefResponse | null>(null);
+  const [isLoadingBrief, setIsLoadingBrief] = useState(false);
+  
   // Contact tracking state
   const [lastContactedAt, setLastContactedAt] = useState<string | null>(null);
   const [isMarkingContacted, setIsMarkingContacted] = useState(false);
@@ -1288,6 +1293,38 @@ export default function AdminLeads() {
       toast.error('Failed to mark contacted', { description: errorMessage });
     } finally {
       setIsMarkingContacted(false);
+    }
+  };
+
+  // B2: Generate AI Brief
+  const handleGenerateBrief = async (leadId: string) => {
+    if (!leadId) return;
+
+    setIsLoadingBrief(true);
+    setError(null);
+
+    const toastId = toast.loading('Generating AI snapshot…');
+
+    try {
+      const result = await briefLead(leadId);
+      
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to generate brief');
+      }
+
+      setBriefData(result);
+
+      if (result.hasOpenAI) {
+        toast.success('AI snapshot generated', { id: toastId });
+      } else {
+        toast.info('AI disabled (OPENAI_API_KEY missing). System is stable.', { id: toastId });
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate brief';
+      setError(errorMessage);
+      toast.error('Failed to generate brief', { id: toastId, description: errorMessage });
+    } finally {
+      setIsLoadingBrief(false);
     }
   };
 
@@ -2825,6 +2862,128 @@ export default function AdminLeads() {
                     }`}
                   />
                   <div className="space-y-6">
+                    {/* B2: AI Snapshot Section */}
+                    {briefData && (
+                      <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-teal-50/20">
+                        <div className="mb-3">
+                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
+                            <Brain className="w-4 h-4 text-teal-600" />
+                            AI Snapshot
+                            {!briefData.hasOpenAI && (
+                              <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                Demo mode (AI off)
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-xs text-gray-500">AI-powered lead analysis and call brief</p>
+                        </div>
+
+                        {briefData.brief.snapshot && (
+                          <div className="space-y-3 mb-4">
+                            <div className="border-l-2 border-teal-200 pl-3">
+                              <p className="text-sm font-medium text-gray-900 mb-1">
+                                {briefData.brief.snapshot.oneLiner}
+                              </p>
+                              <p className="text-xs text-gray-600 mb-2">
+                                Goal: {briefData.brief.snapshot.goal}
+                              </p>
+                              {briefData.brief.snapshot.keyFacts && briefData.brief.snapshot.keyFacts.length > 0 && (
+                                <ul className="text-xs text-gray-700 space-y-1 mt-2">
+                                  {briefData.brief.snapshot.keyFacts.map((fact, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <span className="text-teal-600 mt-0.5">•</span>
+                                      <span>{fact}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {briefData.brief.snapshot.nextBestAction && (
+                                <div className="mt-2 p-2 bg-teal-50 rounded border border-teal-100">
+                                  <p className="text-xs font-semibold text-teal-900 mb-1">Next Best Action:</p>
+                                  <p className="text-xs text-teal-800">{briefData.brief.snapshot.nextBestAction}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {briefData.brief.callBrief && (
+                          <div className="space-y-3 mb-4 border-t border-gray-200 pt-3">
+                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Call Brief</h5>
+                            {briefData.brief.callBrief.openingLine && (
+                              <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
+                                <p className="text-xs font-medium text-blue-900 mb-1">Opening Line:</p>
+                                <p className="text-xs text-blue-800">{briefData.brief.callBrief.openingLine}</p>
+                              </div>
+                            )}
+                            {briefData.brief.callBrief.mustAsk && briefData.brief.callBrief.mustAsk.length > 0 && (
+                              <div className="mb-2">
+                                <p className="text-xs font-medium text-gray-700 mb-1">Must Ask:</p>
+                                <ul className="text-xs text-gray-600 space-y-1">
+                                  {briefData.brief.callBrief.mustAsk.map((q, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <span className="text-blue-600">✓</span>
+                                      <span>{q}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {briefData.brief.callBrief.avoid && briefData.brief.callBrief.avoid.length > 0 && (
+                              <div className="mb-2">
+                                <p className="text-xs font-medium text-gray-700 mb-1">Avoid:</p>
+                                <ul className="text-xs text-gray-600 space-y-1">
+                                  {briefData.brief.callBrief.avoid.map((a, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <span className="text-red-600">✗</span>
+                                      <span>{a}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {briefData.brief.callBrief.tone && (
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">Tone:</span> {briefData.brief.callBrief.tone}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {briefData.brief.risk && (
+                          <div className="space-y-2 border-t border-gray-200 pt-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-gray-700">Risk Assessment:</span>
+                              <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                briefData.brief.risk.priority === 'hot' ? 'bg-red-100 text-red-800' :
+                                briefData.brief.risk.priority === 'warm' ? 'bg-orange-100 text-orange-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {briefData.brief.risk.priority === 'hot' ? '🔴 Hot' :
+                                 briefData.brief.risk.priority === 'warm' ? '🟠 Warm' :
+                                 '🟢 Cool'}
+                              </span>
+                              {briefData.brief.risk.confidence !== null && (
+                                <span className="text-xs text-gray-500 ml-auto">
+                                  Confidence: {briefData.brief.risk.confidence}%
+                                </span>
+                              )}
+                            </div>
+                            {briefData.brief.risk.reasons && briefData.brief.risk.reasons.length > 0 && (
+                              <ul className="text-xs text-gray-600 space-y-1">
+                                {briefData.brief.risk.reasons.map((reason, idx) => (
+                                  <li key={idx} className="flex items-start gap-2">
+                                    <span className="text-gray-400">•</span>
+                                    <span>{reason}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Memory Vault Section */}
                     {(memoryVault.patient || memoryVault.doctor || memoryVault.internal) ? (
                       <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-blue-50/20">

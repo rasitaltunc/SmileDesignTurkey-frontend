@@ -1,0 +1,231 @@
+// api/ai/brief.js (PURE CJS — no TS, no export)
+// B2: AI Read Mode - Generate call brief and snapshot for a lead
+
+module.exports = async function handler(req, res) {
+  const requestId = `brief_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  try {
+    // CORS (Safari fetch için)
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    if (req.method === "OPTIONS") return res.status(200).end();
+
+    // Healthcheck
+    if (req.method === "GET") {
+      return res.status(200).json({ ok: true, source: "api/ai/brief", requestId });
+    }
+
+    if (req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "Method not allowed", requestId });
+    }
+
+    // ENV guards
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return res.status(500).json({
+        ok: false,
+        error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+        requestId,
+      });
+    }
+
+    // Token guard
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const m = String(authHeader || "").match(/^Bearer\s+(.+)$/i);
+    const jwt = m ? m[1] : null;
+    if (!jwt) {
+      return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId });
+    }
+
+    // Parse request
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    const { leadId } = body;
+
+    if (!leadId) {
+      return res.status(400).json({ ok: false, error: "Missing leadId", requestId });
+    }
+
+    // Dynamic import Supabase (keep GET zero-dependency)
+    const { createClient } = await import("@supabase/supabase-js");
+
+    // Fetch lead data
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // Fetch lead
+    const { data: lead, error: leadError } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", leadId)
+      .single();
+
+    if (leadError || !lead) {
+      return res.status(404).json({ ok: false, error: "Lead not found", requestId });
+    }
+
+    // Fetch notes (if lead_notes table exists)
+    let notes = [];
+    try {
+      const { data: notesData } = await supabase
+        .from("lead_notes")
+        .select("*")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (notesData) notes = notesData;
+    } catch (err) {
+      // Notes table might not exist, continue
+      console.debug("[brief] Notes fetch skipped:", err);
+    }
+
+    // If OpenAI key missing, return no-op response
+    if (!openaiKey || openaiKey.trim().length === 0) {
+      return res.status(200).json({
+        ok: true,
+        hasOpenAI: false,
+        requestId,
+        brief: {
+          snapshot: null,
+          callBrief: null,
+          risk: null,
+        },
+      });
+    }
+
+    // Build prompt for OpenAI
+    const leadName = lead.name || lead.full_name || "Unknown";
+    const leadPhone = lead.phone || "Not provided";
+    const leadCountry = lead.country || "Unknown";
+    const leadStatus = lead.status || "new";
+    const leadCreated = lead.created_at || new Date().toISOString();
+    const notesText = notes.length > 0
+      ? notes.map((n) => `- ${n.note || n.content || ""} (${n.created_at || ""})`).join("\n")
+      : "No notes yet";
+
+    const prompt = `You are an AI assistant helping a dental clinic CRM analyze a lead.
+
+Lead Information:
+- Name: ${leadName}
+- Phone: ${leadPhone}
+- Country: ${leadCountry}
+- Status: ${leadStatus}
+- Created: ${leadCreated}
+${lead.treatment ? `- Treatment Interest: ${lead.treatment}` : ""}
+${lead.source ? `- Source: ${lead.source}` : ""}
+
+Notes:
+${notesText}
+
+Analyze this lead and return ONLY valid JSON (no markdown, no explanations):
+{
+  "snapshot": {
+    "oneLiner": "<one sentence summary of the lead>",
+    "goal": "<primary goal/objective for this lead>",
+    "keyFacts": ["<fact1>", "<fact2>", "<fact3>"],
+    "nextBestAction": "<what should be done next>"
+  },
+  "callBrief": {
+    "openingLine": "<suggested opening line for phone call>",
+    "mustAsk": ["<question1>", "<question2>", "<question3>"],
+    "avoid": ["<topic1>", "<topic2>"],
+    "tone": "<professional|friendly|empathetic|direct>"
+  },
+  "risk": {
+    "priority": "hot|warm|cool",
+    "reasons": ["<reason1>", "<reason2>"],
+    "confidence": <number 0-100>
+  }
+}`;
+
+    // Call OpenAI via fetch (no SDK to avoid module issues)
+    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openaiKey}`,
+      },
+      body: JSON.stringify({
+        model: openaiModel,
+        messages: [
+          {
+            role: "system",
+            content: "You are an AI assistant that returns ONLY valid JSON. Never include markdown, explanations, or any text outside the JSON object.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 1500,
+      }),
+    });
+
+    if (!openaiResponse.ok) {
+      const errorData = await openaiResponse.json().catch(() => ({ error: "OpenAI API error" }));
+      throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`);
+    }
+
+    const openaiData = await openaiResponse.json();
+    const aiText = openaiData.choices[0]?.message?.content || "";
+
+    // Extract JSON from response
+    let cleaned = aiText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      return res.status(500).json({
+        ok: false,
+        error: "AI_JSON_PARSE_FAILED",
+        requestId,
+        details: "No valid JSON found in AI response",
+      });
+    }
+
+    const jsonText = cleaned.substring(firstBrace, lastBrace + 1);
+    let brief;
+    try {
+      brief = JSON.parse(jsonText);
+    } catch (parseErr) {
+      return res.status(500).json({
+        ok: false,
+        error: "AI_JSON_PARSE_FAILED",
+        requestId,
+        details: parseErr.message,
+      });
+    }
+
+    // Validate structure
+    if (!brief.snapshot || !brief.callBrief || !brief.risk) {
+      return res.status(500).json({
+        ok: false,
+        error: "AI_JSON_PARSE_FAILED",
+        requestId,
+        details: "Missing required fields in AI response",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      hasOpenAI: true,
+      requestId,
+      brief,
+    });
+  } catch (err) {
+    console.error("[brief] Fatal error", requestId, err);
+    return res.status(500).json({
+      ok: false,
+      error: "Brief generation failed",
+      details: err && err.message ? err.message : String(err),
+      requestId,
+    });
+  }
+};
+
