@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
-import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy, HelpCircle, FileText, User } from 'lucide-react';
+import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy, HelpCircle, FileText, User, ChevronRight } from 'lucide-react';
+import { NavigationContext } from '@/App';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
@@ -382,6 +383,7 @@ interface LeadNote {
 
 export default function AdminLeads() {
   const { user, isAuthenticated, logout, role } = useAuthStore();
+  const { navigate } = useContext(NavigationContext);
   const isAdmin = role === 'admin';
   
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -2222,7 +2224,7 @@ export default function AdminLeads() {
                           <tr 
                             key={lead.id} 
                             ref={(el) => { leadRowRefs.current[lead.id] = el; }}
-                            onClick={() => setActiveLeadId(lead.id)}
+                            onClick={() => navigate(`/admin/patient/${lead.id}`)}
                             className={`hover:bg-gray-50 group cursor-pointer transition-colors ${
                               activeLeadId === lead.id 
                                 ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" 
@@ -2489,23 +2491,24 @@ export default function AdminLeads() {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            {/* Profile button - FIRST and most visible */}
+                            {/* Notes button - dedicated button for Notes modal */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.location.href = `/admin/patient/${lead.id}`;
+                                handleOpenNotes(lead.id);
                               }}
-                              className="p-1.5 text-teal-600 hover:bg-teal-50 rounded transition-colors shrink-0"
-                              title="Open Profile"
+                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors shrink-0"
+                              title="Open Notes"
                             >
-                              <User className="w-4 h-4" />
+                              <MessageSquare className="w-4 h-4" />
                             </button>
                             {activeLeadId === lead.id && (
                               <div className="flex items-center gap-1 flex-wrap shrink-0">
                                 {/* Copy NBA script (if canonical exists) */}
                                 {canonicalNBA?.script && canonicalNBA.script.length > 0 && (
                                   <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       const scriptText = canonicalNBA.script.join('\n');
@@ -2519,6 +2522,7 @@ export default function AdminLeads() {
                                   </button>
                                 )}
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     markContacted(lead.id);
@@ -2531,6 +2535,7 @@ export default function AdminLeads() {
                                 {hasPhone && (
                                   <>
                                     <button
+                                      type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (lead.phone) {
@@ -2544,6 +2549,7 @@ export default function AdminLeads() {
                                     </button>
                                     {normalizePhoneToWhatsApp(lead.phone) && (
                                       <button
+                                        type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           const wa = normalizePhoneToWhatsApp(lead.phone);
@@ -2562,6 +2568,7 @@ export default function AdminLeads() {
                                 )}
                                 {hasEmail && (
                                   <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (lead.email) {
@@ -2575,6 +2582,7 @@ export default function AdminLeads() {
                                   </button>
                                 )}
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     const contact = lead.phone || lead.email;
@@ -2590,31 +2598,20 @@ export default function AdminLeads() {
                                 >
                                   <Copy className="w-4 h-4" />
                                 </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenNotes(lead.id);
-                                  }}
-                                  className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors"
-                                  title="Open Notes"
-                                >
-                                  <MessageSquare className="w-4 h-4" />
-                                </button>
                               </div>
                             )}
                             <button
-                              onClick={() => handleEditStart(lead)}
-                              className="text-blue-600 hover:text-blue-700"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditStart(lead);
+                              }}
+                              className="text-blue-600 hover:text-blue-700 text-xs shrink-0"
                             >
                               Edit
                             </button>
-                            <button
-                              onClick={() => handleOpenNotes(lead.id)}
-                              className="text-purple-600 hover:text-purple-700"
-                              title="View Notes"
-                            >
-                              <MessageSquare className="w-4 h-4" />
-                            </button>
+                            {/* Chevron icon hint for row navigation */}
+                            <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
                           </div>
                         )}
                       </td>
