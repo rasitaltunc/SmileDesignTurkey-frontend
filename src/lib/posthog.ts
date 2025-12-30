@@ -35,9 +35,18 @@ export function initPosthog() {
   }
 
   // Check if enabled (key exists and is not a placeholder)
+  // Guard: if VITE_POSTHOG_KEY is missing => do not init at all
   if (!ANALYTICS_CONFIG.enabled) {
     if (import.meta.env.DEV) {
       console.log('[PostHog] Skipping initialization - key missing or placeholder');
+    }
+    return;
+  }
+  
+  // Additional guard: ensure key is actually present
+  if (!ANALYTICS_CONFIG.posthogKey || ANALYTICS_CONFIG.posthogKey.trim().length === 0) {
+    if (import.meta.env.DEV) {
+      console.log('[PostHog] Skipping initialization - VITE_POSTHOG_KEY not set');
     }
     return;
   }
@@ -53,6 +62,10 @@ export function initPosthog() {
     posthog.init(ANALYTICS_CONFIG.posthogKey, {
       api_host: ANALYTICS_CONFIG.posthogHost,
       autocapture: false, // Manual events only
+      disable_session_recording: true, // Disable session recording
+      // Prevent loading config.js from eu-assets (causes 401/404/nosniff errors)
+      // By using api_host directly, PostHog won't try to load config.js
+      ui_host: ANALYTICS_CONFIG.posthogHost, // Use same host for UI to prevent config.js fetch
       loaded: (ph) => {
         if (import.meta.env.DEV) {
           console.log('[PostHog] Initialized successfully');

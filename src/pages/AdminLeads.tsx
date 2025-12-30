@@ -2128,6 +2128,12 @@ export default function AdminLeads() {
                       const canonicalNBA = canonical?.next_best_action;
                       const canonicalMissing = canonical?.missing_fields || [];
                       
+                      // Extract priority from canonical (v1.0 has priority field, v1.1 uses risk_score)
+                      const canonicalPriority = (canonical as any)?.priority || 
+                        (canonicalRisk !== null && canonicalRisk !== undefined
+                          ? (canonicalRisk >= 70 ? 'hot' : canonicalRisk >= 40 ? 'warm' : 'cool')
+                          : null);
+                      
                       const priorityBadge = canonicalPriority === 'hot' ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
                                            canonicalPriority === 'warm' ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
                                            canonicalPriority === 'cool' ? { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' } :
