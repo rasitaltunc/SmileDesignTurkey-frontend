@@ -2124,15 +2124,19 @@ export default function AdminLeads() {
                       const isStale = daysSinceActivity >= 3;
                       
                       // Priority badge (prefer canonical, fallback to computed)
-                      const canonicalRisk = canonical?.risk_score;
-                      const canonicalNBA = canonical?.next_best_action;
-                      const canonicalMissing = canonical?.missing_fields || [];
+                      // Defensive guards: ensure canonical exists before accessing properties
+                      const canonicalRisk = canonical?.risk_score ?? null;
+                      const canonicalNBA = canonical?.next_best_action ?? null;
+                      const canonicalMissing = Array.isArray(canonical?.missing_fields) ? canonical.missing_fields : [];
                       
                       // Extract priority from canonical (v1.0 has priority field, v1.1 uses risk_score)
-                      const canonicalPriority = (canonical as any)?.priority || 
-                        (canonicalRisk !== null && canonicalRisk !== undefined
-                          ? (canonicalRisk >= 70 ? 'hot' : canonicalRisk >= 40 ? 'warm' : 'cool')
-                          : null);
+                      // Safe fallback: if canonical is null/undefined, use computed priorityScore
+                      const canonicalPriority = canonical
+                        ? ((canonical as any)?.priority || 
+                           (canonicalRisk !== null && canonicalRisk !== undefined
+                             ? (canonicalRisk >= 70 ? 'hot' : canonicalRisk >= 40 ? 'warm' : 'cool')
+                             : null))
+                        : null;
                       
                       const priorityBadge = canonicalPriority === 'hot' ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
                                            canonicalPriority === 'warm' ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
@@ -2160,7 +2164,7 @@ export default function AdminLeads() {
                                 <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${priorityBadge.color}`}>
                                   {priorityBadge.emoji} {priorityBadge.label}
                                 </span>
-                                {canonicalRisk !== undefined && (
+                                {canonicalRisk !== null && canonicalRisk !== undefined && (
                                   <span className="text-xs text-gray-600">
                                     Risk {canonicalRisk}
                                   </span>
@@ -2171,7 +2175,7 @@ export default function AdminLeads() {
                                   </span>
                                 )}
                               </div>
-                              {canonicalNBA && (
+                              {canonicalNBA && canonicalNBA.label && (
                                 <div className="text-xs text-gray-700 font-medium truncate max-w-[300px]" title={canonicalNBA.label}>
                                   Next: {canonicalNBA.label}
                                 </div>
