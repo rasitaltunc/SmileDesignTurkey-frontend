@@ -1303,26 +1303,39 @@ export default function AdminLeads() {
     setIsLoadingBrief(true);
     setError(null);
 
-    const toastId = toast.loading('Generating AI snapshot…');
+    const toastId = toast.loading('Generating snapshot...');
 
     try {
       const result = await briefLead(leadId);
       
       if (!result.ok) {
-        throw new Error(result.error || 'Failed to generate brief');
+        throw new Error(result.error || 'Failed to generate snapshot');
       }
 
       setBriefData(result);
 
+      // Smooth scroll to snapshot section after a brief delay
+      setTimeout(() => {
+        const snapshotEl = document.querySelector('[data-snapshot-section]');
+        if (snapshotEl) {
+          snapshotEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // Brief highlight animation
+          snapshotEl.classList.add('animate-pulse');
+          setTimeout(() => {
+            snapshotEl.classList.remove('animate-pulse');
+          }, 1000);
+        }
+      }, 300);
+
       if (result.hasOpenAI) {
-        toast.success('AI snapshot generated', { id: toastId });
+        toast.success('Snapshot generated', { id: toastId });
       } else {
-        toast.info('AI disabled (OPENAI_API_KEY missing). System is stable.', { id: toastId });
+        toast.info('Preview mode active', { id: toastId });
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate brief';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate snapshot';
       setError(errorMessage);
-      toast.error('Failed to generate brief', { id: toastId, description: errorMessage });
+      toast.error('Unable to generate snapshot', { id: toastId, description: errorMessage });
     } finally {
       setIsLoadingBrief(false);
     }
@@ -2738,7 +2751,7 @@ export default function AdminLeads() {
                           {isLoadingBrief ? (
                             <>
                               <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Generating...</span>
+                              <span>Generating snapshot...</span>
                             </>
                           ) : (
                             <>
@@ -2898,124 +2911,163 @@ export default function AdminLeads() {
                   />
                   <div className="space-y-6">
                     {/* B2: AI Snapshot Section */}
-                    {briefData && (
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-teal-50/20">
-                        <div className="mb-3">
-                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                            <Brain className="w-4 h-4 text-teal-600" />
-                            AI Snapshot
+                    {briefData ? (
+                      <div 
+                        data-snapshot-section
+                        className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all"
+                      >
+                        {/* Header */}
+                        <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                              <Brain className="w-4 h-4 text-teal-600" />
+                              AI Snapshot
+                            </h4>
                             {!briefData.hasOpenAI && (
-                              <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                                Demo mode (AI off)
+                              <span 
+                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded"
+                                title="This is a preview. Real AI activates when OPENAI_API_KEY is enabled."
+                              >
+                                Preview Mode
                               </span>
                             )}
-                          </h4>
-                          <p className="text-xs text-gray-500">AI-powered lead analysis and call brief</p>
+                          </div>
+                          <p className="text-xs text-gray-500">Instant lead insight and call preparation.</p>
                         </div>
 
-                        {briefData.brief.snapshot && (
-                          <div className="space-y-3 mb-4">
-                            <div className="border-l-2 border-teal-200 pl-3">
-                              <p className="text-sm font-medium text-gray-900 mb-1">
-                                {briefData.brief.snapshot.oneLiner}
-                              </p>
-                              <p className="text-xs text-gray-600 mb-2">
-                                Goal: {briefData.brief.snapshot.goal}
-                              </p>
+                        <div className="p-4 space-y-4">
+                          {/* 1) Overview */}
+                          {briefData.brief.snapshot && (
+                            <div className="space-y-3">
+                              <div className="border-b border-gray-100 pb-3">
+                                <p className="text-sm font-medium text-gray-900 mb-1.5">
+                                  {briefData.brief.snapshot.oneLiner}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  {briefData.brief.snapshot.goal}
+                                </p>
+                              </div>
+
+                              {/* 2) Key Facts */}
                               {briefData.brief.snapshot.keyFacts && briefData.brief.snapshot.keyFacts.length > 0 && (
-                                <ul className="text-xs text-gray-700 space-y-1 mt-2">
-                                  {briefData.brief.snapshot.keyFacts.map((fact, idx) => (
-                                    <li key={idx} className="flex items-start gap-2">
-                                      <span className="text-teal-600 mt-0.5">•</span>
-                                      <span>{fact}</span>
-                                    </li>
-                                  ))}
-                                </ul>
+                                <div className="border-b border-gray-100 pb-3">
+                                  <h5 className="text-xs font-semibold text-gray-700 mb-2">Key Facts</h5>
+                                  <ul className="text-xs text-gray-600 space-y-1.5">
+                                    {briefData.brief.snapshot.keyFacts.map((fact, idx) => (
+                                      <li key={idx} className="flex items-start gap-2">
+                                        <span className="text-teal-600 mt-0.5">•</span>
+                                        <span>{fact}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
                               )}
+
+                              {/* 3) Recommended Next Step */}
                               {briefData.brief.snapshot.nextBestAction && (
-                                <div className="mt-2 p-2 bg-teal-50 rounded border border-teal-100">
-                                  <p className="text-xs font-semibold text-teal-900 mb-1">Next Best Action:</p>
-                                  <p className="text-xs text-teal-800">{briefData.brief.snapshot.nextBestAction}</p>
+                                <div className="p-3 bg-teal-50 rounded-lg border border-teal-100">
+                                  <p className="text-xs font-semibold text-teal-900 mb-1.5">Recommended Next Step</p>
+                                  <p className="text-xs text-teal-800 leading-relaxed">{briefData.brief.snapshot.nextBestAction}</p>
                                 </div>
                               )}
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {briefData.brief.callBrief && (
-                          <div className="space-y-3 mb-4 border-t border-gray-200 pt-3">
-                            <h5 className="text-xs font-semibold text-gray-700 mb-2">Call Brief</h5>
-                            {briefData.brief.callBrief.openingLine && (
-                              <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
-                                <p className="text-xs font-medium text-blue-900 mb-1">Opening Line:</p>
-                                <p className="text-xs text-blue-800">{briefData.brief.callBrief.openingLine}</p>
-                              </div>
-                            )}
-                            {briefData.brief.callBrief.mustAsk && briefData.brief.callBrief.mustAsk.length > 0 && (
-                              <div className="mb-2">
-                                <p className="text-xs font-medium text-gray-700 mb-1">Must Ask:</p>
-                                <ul className="text-xs text-gray-600 space-y-1">
-                                  {briefData.brief.callBrief.mustAsk.map((q, idx) => (
-                                    <li key={idx} className="flex items-start gap-2">
-                                      <span className="text-blue-600">✓</span>
-                                      <span>{q}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                            {briefData.brief.callBrief.avoid && briefData.brief.callBrief.avoid.length > 0 && (
-                              <div className="mb-2">
-                                <p className="text-xs font-medium text-gray-700 mb-1">Avoid:</p>
-                                <ul className="text-xs text-gray-600 space-y-1">
-                                  {briefData.brief.callBrief.avoid.map((a, idx) => (
-                                    <li key={idx} className="flex items-start gap-2">
-                                      <span className="text-red-600">✗</span>
-                                      <span>{a}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                            {briefData.brief.callBrief.tone && (
-                              <div className="text-xs text-gray-600">
-                                <span className="font-medium">Tone:</span> {briefData.brief.callBrief.tone}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                          {/* 4) Call Preparation */}
+                          {briefData.brief.callBrief && (
+                            <div className="border-t border-gray-200 pt-4 space-y-3">
+                              <h5 className="text-xs font-semibold text-gray-700 mb-2">Call Preparation</h5>
+                              
+                              {briefData.brief.callBrief.openingLine && (
+                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                  <p className="text-xs font-semibold text-blue-900 mb-1.5">Suggested Opening</p>
+                                  <p className="text-xs text-blue-800 leading-relaxed">{briefData.brief.callBrief.openingLine}</p>
+                                </div>
+                              )}
 
-                        {briefData.brief.risk && (
-                          <div className="space-y-2 border-t border-gray-200 pt-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-gray-700">Risk Assessment:</span>
-                              <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                                briefData.brief.risk.priority === 'hot' ? 'bg-red-100 text-red-800' :
-                                briefData.brief.risk.priority === 'warm' ? 'bg-orange-100 text-orange-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {briefData.brief.risk.priority === 'hot' ? '🔴 Hot' :
-                                 briefData.brief.risk.priority === 'warm' ? '🟠 Warm' :
-                                 '🟢 Cool'}
-                              </span>
-                              {briefData.brief.risk.confidence !== null && (
-                                <span className="text-xs text-gray-500 ml-auto">
-                                  Confidence: {briefData.brief.risk.confidence}%
-                                </span>
+                              <div className="grid grid-cols-1 gap-3">
+                                {briefData.brief.callBrief.mustAsk && briefData.brief.callBrief.mustAsk.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-700 mb-1.5">Key Questions</p>
+                                    <ul className="text-xs text-gray-600 space-y-1.5">
+                                      {briefData.brief.callBrief.mustAsk.map((q, idx) => (
+                                        <li key={idx} className="flex items-start gap-2">
+                                          <span className="text-blue-600 mt-0.5">✓</span>
+                                          <span>{q}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {briefData.brief.callBrief.avoid && briefData.brief.callBrief.avoid.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-700 mb-1.5">Avoid Mentioning</p>
+                                    <ul className="text-xs text-gray-600 space-y-1.5">
+                                      {briefData.brief.callBrief.avoid.map((a, idx) => (
+                                        <li key={idx} className="flex items-start gap-2">
+                                          <span className="text-red-600 mt-0.5">✗</span>
+                                          <span>{a}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+
+                              {briefData.brief.callBrief.tone && (
+                                <div className="text-xs text-gray-600 pt-2 border-t border-gray-100">
+                                  <span className="font-medium">Tone:</span> {briefData.brief.callBrief.tone}
+                                </div>
                               )}
                             </div>
-                            {briefData.brief.risk.reasons && briefData.brief.risk.reasons.length > 0 && (
-                              <ul className="text-xs text-gray-600 space-y-1">
-                                {briefData.brief.risk.reasons.map((reason, idx) => (
-                                  <li key={idx} className="flex items-start gap-2">
-                                    <span className="text-gray-400">•</span>
-                                    <span>{reason}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        )}
+                          )}
+
+                          {/* 5) Lead Risk & Priority */}
+                          {briefData.brief.risk && (
+                            <div className="border-t border-gray-200 pt-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <h5 className="text-xs font-semibold text-gray-700">Lead Risk & Priority</h5>
+                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                  briefData.brief.risk.priority === 'hot' ? 'bg-red-100 text-red-800' :
+                                  briefData.brief.risk.priority === 'warm' ? 'bg-orange-100 text-orange-800' :
+                                  'bg-green-100 text-green-800'
+                                }`}>
+                                  {briefData.brief.risk.priority === 'hot' ? '🔴 Hot' :
+                                   briefData.brief.risk.priority === 'warm' ? '🟠 Warm' :
+                                   '🟢 Cool'}
+                                </span>
+                              </div>
+                              {briefData.brief.risk.reasons && briefData.brief.risk.reasons.length > 0 && (
+                                <ul className="text-xs text-gray-600 space-y-1.5 mb-2">
+                                  {briefData.brief.risk.reasons.map((reason, idx) => (
+                                    <li key={idx} className="flex items-start gap-2">
+                                      <span className="text-gray-400 mt-0.5">•</span>
+                                      <span>{reason}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {briefData.brief.risk.confidence !== null && (
+                                <p className="text-xs text-gray-500">
+                                  Confidence: {briefData.brief.risk.confidence}%
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Empty State */
+                      <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-gray-50 to-white text-center">
+                        <Brain className="w-8 h-8 text-gray-400 mx-auto mb-3" />
+                        <h4 className="text-sm font-semibold text-gray-800 mb-1.5">No snapshot yet</h4>
+                        <p className="text-xs text-gray-600 mb-3">
+                          Generate a quick AI-powered preview to prepare your conversation.
+                        </p>
+                        <p className="text-xs text-gray-500 italic">
+                          Click 'AI Snapshot' above
+                        </p>
                       </div>
                     )}
 
