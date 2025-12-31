@@ -242,6 +242,110 @@ export default function AdminPatientProfile() {
     fetchAIMemory();
   }, [leadId, isAuthenticated]);
 
+  // B5: Fetch AI tasks on page load
+  useEffect(() => {
+    if (!leadId || !isAuthenticated) return;
+
+    const fetchTasks = async () => {
+      setIsLoadingTasks(true);
+      try {
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          throw new Error('Supabase client not configured');
+        }
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) {
+          throw new Error('Session expired');
+        }
+
+        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+        const response = await fetch(`${apiUrl}/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to load tasks' }));
+          // Don't show error if table doesn't exist (graceful degradation)
+          if (errorData.warning === 'Table not found') {
+            console.warn('[AdminPatientProfile] AI tasks table not found');
+            return;
+          }
+          throw new Error(errorData.error || 'Failed to load tasks');
+        }
+
+        const result = await response.json();
+        if (result.ok && Array.isArray(result.tasks)) {
+          setTasks(result.tasks);
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load tasks';
+        console.error('[AdminPatientProfile] Error loading tasks:', err);
+        // Don't show toast for missing table (graceful degradation)
+        if (!errorMessage.includes('Table not found')) {
+          toast.error('Failed to load tasks', { description: errorMessage });
+        }
+      } finally {
+        setIsLoadingTasks(false);
+      }
+    };
+
+    fetchTasks();
+  }, [leadId, isAuthenticated]);
+
+  // B5: Mark task as done
+  const handleMarkTaskDone = async (taskId: string) => {
+    if (!leadId || !isAuthenticated) return;
+
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured');
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        throw new Error('Session expired');
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'mark_done',
+          taskId: taskId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to mark task done' }));
+        throw new Error(errorData.error || 'Failed to mark task done');
+      }
+
+      const result = await response.json();
+      if (result.ok) {
+        // Update local state
+        setTasks((prev) =>
+          prev.map((t) => (t.id === taskId ? { ...t, status: 'done', completed_at: new Date().toISOString() } : t))
+        );
+        toast.success('Task marked as done');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to mark task done';
+      toast.error('Failed to mark task done', { description: errorMessage });
+    }
+  };
+
   // Create new note
   const createNote = async () => {
     if (!leadId || !isAuthenticated || !user || !newNoteContent.trim()) return;
