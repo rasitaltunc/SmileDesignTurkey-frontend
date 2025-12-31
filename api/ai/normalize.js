@@ -3,6 +3,10 @@
 
 module.exports = async function handler(req, res) {
   const requestId = `norm_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+  // Log at start
+  console.log("ai_endpoint_start", { route: "normalize", requestId, hasKey: !!process.env.OPENAI_API_KEY, model });
 
   try {
     // CORS (Safari fetch için)
@@ -33,11 +37,15 @@ module.exports = async function handler(req, res) {
         requestId,
       });
     }
+    
+    // If OPENAI_API_KEY is missing, return 200 with error (not 500)
     if (!openaiKey) {
-      return res.status(500).json({
+      return res.status(200).json({
         ok: false,
-        error: "Missing OPENAI_API_KEY",
+        error: "MISSING_OPENAI_API_KEY",
         requestId,
+        hasOpenAI: false,
+        model,
       });
     }
 
@@ -162,7 +170,6 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
 }`;
 
     // Call OpenAI via fetch (no SDK to avoid module issues)
-    const openaiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -170,7 +177,7 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
         Authorization: `Bearer ${openaiKey}`,
       },
       body: JSON.stringify({
-        model: openaiModel,
+        model: model,
         messages: [
           {
             role: "system",
