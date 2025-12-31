@@ -55,30 +55,23 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Fetch lead from Supabase using service role
-    const response = await fetch(`${supabaseUrl}/rest/v1/leads?id=eq.${encodeURIComponent(leadId)}&select=*`, {
-      method: "GET",
-      headers: {
-        "apikey": supabaseServiceKey,
-        "Authorization": `Bearer ${supabaseServiceKey}`,
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-      },
+    // Debug log
+    console.log("FETCH_LEAD_DEBUG", { leadId, requestId });
+
+    // Fetch lead from Supabase using service role (use Supabase client for consistency)
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "Unknown error");
-      console.error("[admin/lead] Supabase error", response.status, errorText);
-      return res.status(500).json({
-        ok: false,
-        error: "Failed to fetch lead from database",
-        requestId,
-      });
-    }
+    const { data: lead, error: fetchError } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", leadId)
+      .single();
 
-    const leads = await response.json();
-
-    if (!leads || leads.length === 0) {
+    if (fetchError || !lead) {
+      console.error("[admin/lead] Fetch error", requestId, fetchError);
       return res.status(404).json({
         ok: false,
         error: "NOT_FOUND",
@@ -88,7 +81,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      lead: leads[0],
+      lead: lead,
       requestId,
     });
   } catch (err) {
