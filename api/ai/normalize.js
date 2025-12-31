@@ -273,6 +273,127 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
       } else {
         console.log("[normalize] AI memory persisted", requestId);
       }
+
+      // Generate AI tasks from memory.nextSteps and missingInfo (Sprint B5)
+      if (normalizedData.memory) {
+        try {
+          const tasks = [];
+          const memory = normalizedData.memory;
+
+          // Generate tasks from nextSteps
+          if (Array.isArray(memory.nextSteps) && memory.nextSteps.length > 0) {
+            memory.nextSteps.slice(0, 3).forEach((step) => {
+              if (typeof step === "string" && step.trim()) {
+                const stepLower = step.toLowerCase();
+                let type = "follow_up";
+                let priority = normalizedData.risk?.priority || "warm";
+
+                // Infer task type from step content
+                if (stepLower.includes("call") || stepLower.includes("phone")) {
+                  type = "call";
+                } else if (stepLower.includes("whatsapp") || stepLower.includes("message")) {
+                  type = "whatsapp";
+                } else if (stepLower.includes("email") || stepLower.includes("send")) {
+                  type = "email";
+                } else if (stepLower.includes("photo") || stepLower.includes("intake")) {
+                  type = "intake";
+                } else if (stepLower.includes("doctor") || stepLower.includes("review")) {
+                  type = "doctor_review";
+                }
+
+                tasks.push({
+                  lead_id: leadId,
+                  type: type,
+                  title: step.trim(),
+                  description: `AI-generated task from next steps analysis`,
+                  priority: priority,
+                  due_at: null, // No due date by default
+                  status: "open",
+                  source: "ai",
+                });
+              }
+            });
+          }
+
+          // Generate tasks from missingInfo
+          if (Array.isArray(memory.missingInfo) && memory.missingInfo.length > 0) {
+            memory.missingInfo.slice(0, 2).forEach((missing) => {
+              if (typeof missing === "string" && missing.trim()) {
+                const missingLower = missing.toLowerCase();
+                let type = "follow_up";
+                let priority = "hot"; // Missing info is usually high priority
+
+                // Infer task type from missing info
+                if (missingLower.includes("phone") || missingLower.includes("contact")) {
+                  type = "call";
+                  priority = "hot";
+                } else if (missingLower.includes("email")) {
+                  type = "email";
+                  priority = "hot";
+                } else if (missingLower.includes("photo") || missingLower.includes("image")) {
+                  type = "intake";
+                  priority = "warm";
+                } else if (missingLower.includes("passport") || missingLower.includes("document")) {
+                  type = "intake";
+                  priority = "warm";
+                }
+
+                const title = `Request ${missing.trim()}`;
+                tasks.push({
+                  lead_id: leadId,
+                  type: type,
+                  title: title,
+                  description: `AI identified missing information: ${missing.trim()}`,
+                  priority: priority,
+                  due_at: null,
+                  status: "open",
+                  source: "ai",
+                });
+              }
+            });
+          }
+
+          // Insert tasks (upsert by lead_id + title to avoid duplicates)
+          if (tasks.length > 0) {
+            for (const task of tasks) {
+              try {
+                // Check if task already exists (open status)
+                const { data: existing } = await supabaseAdmin
+                  .from("lead_ai_tasks")
+                  .select("id")
+                  .eq("lead_id", task.lead_id)
+                  .eq("title", task.title)
+                  .eq("status", "open")
+                  .eq("source", "ai")
+                  .limit(1)
+                  .single();
+
+                if (!existing) {
+                  // Insert new task
+                  const { error: taskError } = await supabaseAdmin
+                    .from("lead_ai_tasks")
+                    .insert(task);
+
+                  if (taskError) {
+                    // Ignore unique constraint violations (task already exists)
+                    if (taskError.code !== "23505") {
+                      console.error("[normalize] Failed to insert task", requestId, taskError, task);
+                    }
+                  } else {
+                    console.log("[normalize] AI task created", requestId, task.title);
+                  }
+                }
+              } catch (taskErr) {
+                // Ignore errors (non-fatal)
+                console.debug("[normalize] Task insert skipped", requestId, taskErr);
+              }
+            }
+          }
+        } catch (taskGenErr) {
+          // Don't fail the request if task generation fails
+          console.error("[normalize] Task generation error (non-fatal)", requestId, taskGenErr);
+        }
+      }
     } catch (persistErr) {
       // Don't fail the request if persistence fails
       console.error("[normalize] Persistence error (non-fatal)", requestId, persistErr);

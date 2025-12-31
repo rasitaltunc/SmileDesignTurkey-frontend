@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
@@ -50,6 +50,10 @@ export default function AdminPatientProfile() {
   const [memoryData, setMemoryData] = useState<any | null>(null);
   const [isLoadingMemory, setIsLoadingMemory] = useState(false);
   const [isSyncingMemory, setIsSyncingMemory] = useState(false);
+
+  // B5: AI Tasks state
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
   // Extract leadId from URL
   useEffect(() => {
