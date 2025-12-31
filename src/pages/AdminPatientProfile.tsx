@@ -46,6 +46,11 @@ export default function AdminPatientProfile() {
   const [normalizeData, setNormalizeData] = useState<any | null>(null);
   const [isLoadingNormalize, setIsLoadingNormalize] = useState(false);
 
+  // B4: Memory Vault state
+  const [memoryData, setMemoryData] = useState<any | null>(null);
+  const [isLoadingMemory, setIsLoadingMemory] = useState(false);
+  const [isSyncingMemory, setIsSyncingMemory] = useState(false);
+
   // Extract leadId from URL
   useEffect(() => {
     const path = window.location.pathname;
@@ -160,6 +165,77 @@ export default function AdminPatientProfile() {
     };
 
     loadNotes();
+  }, [leadId, isAuthenticated]);
+
+  // B4: Fetch AI memory on page load
+  useEffect(() => {
+    if (!leadId || !isAuthenticated) return;
+
+    const fetchAIMemory = async () => {
+      setIsLoadingMemory(true);
+      try {
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          throw new Error('Supabase client not configured');
+        }
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) {
+          throw new Error('Session expired');
+        }
+
+        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+        const response = await fetch(`${apiUrl}/api/admin/lead-ai/${encodeURIComponent(leadId)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to load AI memory' }));
+          // Don't show error if table doesn't exist (graceful degradation)
+          if (errorData.warning === 'Table not found') {
+            console.warn('[AdminPatientProfile] AI memory table not found');
+            return;
+          }
+          throw new Error(errorData.error || 'Failed to load AI memory');
+        }
+
+        const result = await response.json();
+        if (result.ok && result.data) {
+          // Hydrate briefData from persisted memory
+          if (result.data.snapshot || result.data.callBrief || result.data.risk) {
+            setBriefData({
+              ok: true,
+              hasOpenAI: true,
+              brief: {
+                snapshot: result.data.snapshot,
+                callBrief: result.data.callBrief,
+                risk: result.data.risk,
+              },
+            });
+          }
+          // Set memory vault data
+          if (result.data.memory) {
+            setMemoryData(result.data.memory);
+          }
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load AI memory';
+        console.error('[AdminPatientProfile] Error loading AI memory:', err);
+        // Don't show toast for missing table (graceful degradation)
+        if (!errorMessage.includes('Table not found')) {
+          toast.error('Failed to load AI memory', { description: errorMessage });
+        }
+      } finally {
+        setIsLoadingMemory(false);
+      }
+    };
+
+    fetchAIMemory();
   }, [leadId, isAuthenticated]);
 
   // Create new note
@@ -319,6 +395,67 @@ export default function AdminPatientProfile() {
       toast.error('Normalization failed', { id: toastId, description: errorMessage });
     } finally {
       setIsLoadingNormalize(false);
+    }
+  };
+
+  // B4: Sync Memory Vault
+  const handleSyncMemory = async () => {
+    if (!leadId || !isAuthenticated || !briefData) return;
+
+    setIsSyncingMemory(true);
+    const toastId = toast.loading('Syncing memory vault...');
+
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured');
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        throw new Error('Session expired');
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/admin/lead-ai/${encodeURIComponent(leadId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          snapshot: briefData.brief?.snapshot || null,
+          callBrief: briefData.brief?.callBrief || null,
+          risk: briefData.brief?.risk || null,
+          memory: normalizeData?.memory || memoryData || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to sync memory' }));
+        if (errorData.error === 'TABLE_NOT_FOUND') {
+          throw new Error('AI memory table not found. Please run migration.');
+        }
+        throw new Error(errorData.error || 'Failed to sync memory');
+      }
+
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.error || 'Sync failed');
+      }
+
+      if (result.data?.memory) {
+        setMemoryData(result.data.memory);
+      }
+
+      toast.success('Memory vault synced', { id: toastId });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sync memory';
+      setError(errorMessage);
+      toast.error('Sync failed', { id: toastId, description: errorMessage });
+    } finally {
+      setIsSyncingMemory(false);
     }
   };
 

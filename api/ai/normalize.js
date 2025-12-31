@@ -132,10 +132,10 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
     "nextBestAction": "<what should be done next>"
   },
   "callBrief": {
-    "openingLine": "<suggested opening line for phone call>",
+    "openingLine": "<suggested opening line for phone call. Use 'Smile Design Turkey' or 'GuideHealth team' as the organization name. Example: 'Hello, this is [Your Name] from Smile Design Turkey...'>",
     "mustAsk": ["<question1>", "<question2>", "<question3>"],
     "avoid": ["<topic1>", "<topic2>"],
-    "tone": "<professional|friendly|empathetic|direct>"
+    "tone": "Calm, confident, premium"
   },
   "risk": {
     "priority": "hot|warm|cool",
@@ -237,6 +237,45 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
         error: "AI_JSON_PARSE_FAILED",
         requestId,
       });
+    }
+
+    // Persist to lead_ai_memory (Sprint B4)
+    try {
+      const { createClient: createSupabaseClient } = await import("@supabase/supabase-js");
+      const supabaseAdmin = createSupabaseClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+
+      const upsertData = {
+        lead_id: leadId,
+        snapshot_json: normalizedData.snapshot || null,
+        call_brief_json: normalizedData.callBrief || null,
+        risk_json: normalizedData.risk || null,
+        memory_json: normalizedData.memory || null,
+        normalized_at: new Date().toISOString(),
+        model: model,
+        request_id: requestId,
+      };
+
+      const { error: upsertError } = await supabaseAdmin
+        .from("lead_ai_memory")
+        .upsert(upsertData, {
+          onConflict: "lead_id",
+        });
+
+      if (upsertError) {
+        // Log but don't fail the request if table doesn't exist
+        if (upsertError.code === "42P01" || upsertError.message?.includes("does not exist")) {
+          console.warn("[normalize] Table lead_ai_memory does not exist, skipping persistence", requestId);
+        } else {
+          console.error("[normalize] Failed to persist AI memory", requestId, upsertError);
+        }
+      } else {
+        console.log("[normalize] AI memory persisted", requestId);
+      }
+    } catch (persistErr) {
+      // Don't fail the request if persistence fails
+      console.error("[normalize] Persistence error (non-fatal)", requestId, persistErr);
     }
 
     return res.status(200).json({

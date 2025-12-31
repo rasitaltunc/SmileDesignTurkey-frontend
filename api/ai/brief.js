@@ -214,12 +214,12 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations):
     "keyFacts": ["<fact1>", "<fact2>", "<fact3>"],
     "nextBestAction": "<what should be done next>"
   },
-  "callBrief": {
-    "openingLine": "<suggested opening line for phone call>",
-    "mustAsk": ["<question1>", "<question2>", "<question3>"],
-    "avoid": ["<topic1>", "<topic2>"],
-    "tone": "<professional|friendly|empathetic|direct>"
-  },
+    "callBrief": {
+      "openingLine": "<suggested opening line for phone call. Use 'Smile Design Turkey' or 'GuideHealth team' as the organization name. Example: 'Hello, this is [Your Name] from Smile Design Turkey...'>",
+      "mustAsk": ["<question1>", "<question2>", "<question3>"],
+      "avoid": ["<topic1>", "<topic2>"],
+      "tone": "Calm, confident, premium"
+    },
   "risk": {
     "priority": "hot|warm|cool",
     "reasons": ["<reason1>", "<reason2>"],
