@@ -30,7 +30,8 @@ interface LeadNote {
 
 export default function AdminPatientProfile() {
   const { isAuthenticated, user } = useAuthStore();
-  const [leadId, setLeadId] = useState<string | null>(null);
+  const params = useParams();
+  const leadId = params.id || null; // Route: /admin/patient/:id
   const [lead, setLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState<LeadNote[]>([]);
   const [newNoteContent, setNewNoteContent] = useState('');
