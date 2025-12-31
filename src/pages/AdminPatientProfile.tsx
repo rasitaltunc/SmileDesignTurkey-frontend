@@ -57,17 +57,27 @@ export default function AdminPatientProfile() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
-  // Extract leadId from URL
+  // Helper: Get access token
+  const getAccessToken = async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      throw new Error('Supabase client not configured');
+    }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      throw new Error('Session expired');
+    }
+    return token;
+  };
+
+  // leadId validation
   useEffect(() => {
-    const path = window.location.pathname;
-    const match = path.match(/\/admin\/patient\/([^/]+)/);
-    if (match && match[1]) {
-      setLeadId(match[1]);
-    } else {
+    if (!leadId) {
       setError('Invalid patient ID');
       setIsLoadingLead(false);
     }
-  }, []);
+  }, [leadId]);
 
   // Fetch lead data via API endpoint
   useEffect(() => {
@@ -251,22 +261,11 @@ export default function AdminPatientProfile() {
     const fetchTasks = async () => {
       setIsLoadingTasks(true);
       try {
-        const supabase = getSupabaseClient();
-        if (!supabase) {
-          throw new Error('Supabase client not configured');
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        if (!token) {
-          throw new Error('Session expired');
-        }
-
+        const token = await getAccessToken();
         const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
         const response = await fetch(`${apiUrl}/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
         });
