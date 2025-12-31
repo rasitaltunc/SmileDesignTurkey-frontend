@@ -41,6 +41,10 @@ export default function AdminPatientProfile() {
   // B2: AI Brief state
   const [briefData, setBriefData] = useState<BriefResponse | null>(null);
   const [isLoadingBrief, setIsLoadingBrief] = useState(false);
+  
+  // B3: Normalize Notes state
+  const [normalizeData, setNormalizeData] = useState<any | null>(null);
+  const [isLoadingNormalize, setIsLoadingNormalize] = useState(false);
 
   // Extract leadId from URL
   useEffect(() => {
@@ -250,6 +254,74 @@ export default function AdminPatientProfile() {
     }
   };
 
+  // B3: Normalize Notes
+  const handleNormalizeNotes = async () => {
+    if (!leadId || !isAuthenticated) return;
+
+    setIsLoadingNormalize(true);
+    setError(null);
+
+    const toastId = toast.loading('Normalizing notes...');
+
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('Supabase client not configured');
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        throw new Error('Session expired');
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/ai/normalize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ leadId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to normalize notes' }));
+        throw new Error(errorData.error || 'Failed to normalize notes');
+      }
+
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.error || 'Normalization failed');
+      }
+
+      if (result.normalized && result.data) {
+        setNormalizeData(result.data);
+        // Update briefData with normalized data if structure matches
+        if (result.data.snapshot && result.data.callBrief && result.data.risk) {
+          setBriefData({
+            ok: true,
+            hasOpenAI: true,
+            brief: {
+              snapshot: result.data.snapshot,
+              callBrief: result.data.callBrief,
+              risk: result.data.risk,
+            },
+          });
+        }
+        toast.success('Notes normalized successfully', { id: toastId });
+      } else {
+        throw new Error('Invalid normalization response');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to normalize notes';
+      setError(errorMessage);
+      toast.error('Normalization failed', { id: toastId, description: errorMessage });
+    } finally {
+      setIsLoadingNormalize(false);
+    }
+  };
+
   // Loading state
   if (isLoadingLead) {
     return (
@@ -336,37 +408,65 @@ export default function AdminPatientProfile() {
           <div className="lg:col-span-2 space-y-6">
             {/* AI Snapshot Section */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <Brain className="w-5 h-5 text-teal-600" />
                   AI Snapshot
                 </h2>
-                <button
-                  type="button"
-                  onClick={handleGenerateBrief}
-                  disabled={isLoadingBrief || !leadId}
-                  className={[
-                    "inline-flex items-center justify-center gap-2 h-9",
-                    "px-4 rounded-lg text-sm font-semibold",
-                    "border transition-all duration-200",
-                    "focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2",
-                    isLoadingBrief || !leadId
-                      ? "bg-gray-100 text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                      : "bg-gradient-to-r from-teal-600 to-cyan-600 text-white border-transparent hover:from-teal-700 hover:to-cyan-700 shadow-sm hover:shadow-md"
-                  ].join(" ")}
-                >
-                  {isLoadingBrief ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Generating snapshot...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="w-4 h-4" />
-                      <span>Generate Snapshot</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleNormalizeNotes}
+                    disabled={isLoadingNormalize || isLoadingBrief || !leadId}
+                    className={[
+                      "inline-flex items-center justify-center gap-2 h-9",
+                      "px-4 rounded-lg text-sm font-semibold",
+                      "border transition-all duration-200",
+                      "focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2",
+                      isLoadingNormalize || isLoadingBrief || !leadId
+                        ? "bg-gray-100 text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                        : "bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent hover:from-purple-700 hover:to-indigo-700 shadow-sm hover:shadow-md"
+                    ].join(" ")}
+                  >
+                    {isLoadingNormalize ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Normalizing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-4 h-4" />
+                        <span>Normalize Notes</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateBrief}
+                    disabled={isLoadingBrief || isLoadingNormalize || !leadId}
+                    className={[
+                      "inline-flex items-center justify-center gap-2 h-9",
+                      "px-4 rounded-lg text-sm font-semibold",
+                      "border transition-all duration-200",
+                      "focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2",
+                      isLoadingBrief || isLoadingNormalize || !leadId
+                        ? "bg-gray-100 text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                        : "bg-gradient-to-r from-teal-600 to-cyan-600 text-white border-transparent hover:from-teal-700 hover:to-cyan-700 shadow-sm hover:shadow-md"
+                    ].join(" ")}
+                  >
+                    {isLoadingBrief ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Generating snapshot...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="w-4 h-4" />
+                        <span>Generate Snapshot</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {briefData ? (
