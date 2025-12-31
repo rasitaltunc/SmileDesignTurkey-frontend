@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
@@ -303,17 +304,7 @@ export default function AdminPatientProfile() {
     if (!leadId || !isAuthenticated) return;
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured');
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        throw new Error('Session expired');
-      }
-
+      const token = await getAccessToken();
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const response = await fetch(`${apiUrl}/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
         method: 'POST',
@@ -333,13 +324,15 @@ export default function AdminPatientProfile() {
       }
 
       const result = await response.json();
-      if (result.ok) {
-        // Update local state
-        setTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? { ...t, status: 'done', completed_at: new Date().toISOString() } : t))
-        );
-        toast.success('Task marked as done');
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to mark task done');
       }
+
+      // Update local state
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: 'done', completed_at: new Date().toISOString() } : t))
+      );
+      toast.success('Task marked as done');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to mark task done';
       toast.error('Failed to mark task done', { description: errorMessage });

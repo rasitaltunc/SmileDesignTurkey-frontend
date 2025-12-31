@@ -40,12 +40,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Extract leadId from query
-    const leadId = req.query.leadId;
+    // Extract leadId from query (support both leadId and id for flexibility)
+    const leadId = req.query.leadId || req.query.id;
     if (!leadId) {
       return res.status(400).json({
         ok: false,
-        error: "Missing leadId parameter",
+        error: "MISSING_LEAD_ID",
         requestId,
       });
     }
