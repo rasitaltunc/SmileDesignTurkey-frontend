@@ -243,9 +243,9 @@ export default function AdminPatientProfile() {
               },
             });
           }
-          // Set memory vault data
-          if (result.data.memory) {
-            setMemoryData(result.data.memory);
+          // Set memory vault data (result.data is the full memory row, including synced_at)
+          if (result.data) {
+            setMemoryData(result.data);
           }
         }
       } catch (err) {
