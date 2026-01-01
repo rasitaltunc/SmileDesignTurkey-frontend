@@ -2224,7 +2224,7 @@ export default function AdminLeads() {
                           <tr 
                             key={lead.id} 
                             ref={(el) => { leadRowRefs.current[lead.id] = el; }}
-                            onClick={() => navigate(`/admin/patient/${lead.id}`)}
+                            onClick={() => navigate(`/admin/lead/${lead.id}`)}
                             className={`hover:bg-gray-50 group cursor-pointer transition-colors ${
                               activeLeadId === lead.id 
                                 ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" 
@@ -2286,7 +2286,7 @@ export default function AdminLeads() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.location.href = `/admin/patient/${lead.id}`;
+                                window.location.href = `/admin/lead/${lead.id}`;
                               }}
                               className="text-teal-600 hover:text-teal-700 hover:underline font-medium truncate block max-w-full"
                               title="Open Profile"

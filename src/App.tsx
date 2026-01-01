@@ -313,8 +313,8 @@ export default function App() {
         }
         return <AdminLeads />;
       default:
-        // Handle dynamic /admin/patient/:leadId route
-        if (currentPath.startsWith('/admin/patient/')) {
+        // Handle dynamic /admin/lead/:id route
+        if (currentPath.startsWith('/admin/lead/')) {
           if (isLoading || !role) {
             return (
               <div className="min-h-screen flex items-center justify-center">

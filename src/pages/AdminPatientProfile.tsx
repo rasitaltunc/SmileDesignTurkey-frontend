@@ -30,8 +30,17 @@ interface LeadNote {
 
 export default function AdminPatientProfile() {
   const { isAuthenticated, user } = useAuthStore();
-  const params = useParams();
-  const leadId = params.id || null; // Route: /admin/patient/:id
+  const { currentPath } = useContext(NavigationContext);
+  
+  // Extract leadId from URL (App.tsx uses custom routing, not React Router)
+  // Route: /admin/lead/:id
+  const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/);
+  const leadId = leadIdMatch ? leadIdMatch[1] : null;
+  
+  // Debug log
+  useEffect(() => {
+    console.log('ROUTE PARAMS', { currentPath, leadId });
+  }, [currentPath, leadId]);
   const [lead, setLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState<LeadNote[]>([]);
   const [newNoteContent, setNewNoteContent] = useState('');
