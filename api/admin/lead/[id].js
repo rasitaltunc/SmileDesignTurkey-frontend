@@ -74,7 +74,7 @@ module.exports = async function handler(req, res) {
       console.error("[admin/lead] Fetch error", requestId, fetchError);
       return res.status(404).json({
         ok: false,
-        error: "NOT_FOUND",
+        error: "LEAD_NOT_FOUND",
         requestId,
       });
     }
