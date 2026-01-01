@@ -36,20 +36,20 @@ DROP POLICY IF EXISTS "Allow authenticated update" ON public.lead_timeline_event
 CREATE POLICY "Allow authenticated select" ON public.lead_timeline_events
   FOR SELECT
   TO authenticated
-  USING (true);
+  USING (auth.uid() IS NOT NULL);
 
 -- Policy: Allow INSERT for authenticated users
 CREATE POLICY "Allow authenticated insert" ON public.lead_timeline_events
   FOR INSERT
   TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Policy: Allow UPDATE for authenticated users
 CREATE POLICY "Allow authenticated update" ON public.lead_timeline_events
   FOR UPDATE
   TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (auth.uid() IS NOT NULL)
+  WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Add comment to table
 COMMENT ON TABLE public.lead_timeline_events IS 'Tracks lead journey stages and events with actor roles and optional notes';
