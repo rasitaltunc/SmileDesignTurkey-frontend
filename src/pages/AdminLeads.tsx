@@ -834,6 +834,43 @@ export default function AdminLeads() {
       setIsLoading(false);
     }
   };
+  
+  // Load AI health for leads (bulk fetch)
+  const loadAIHealth = async (leadIds?: string[]) => {
+    if (!isAuthenticated || !user) return;
+    
+    const idsToFetch = leadIds || leads.map(l => l.id);
+    if (idsToFetch.length === 0) return;
+    
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) return;
+      
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return;
+      
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/admin/ai-health/${encodeURIComponent(idsToFetch[0])}?leadIds=${idsToFetch.join(',')}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        console.warn('[AdminLeads] Failed to load AI health:', response.status);
+        return;
+      }
+      
+      const result = await response.json();
+      if (result.ok && result.data) {
+        setAiHealthMap(result.data);
+      }
+    } catch (err) {
+      console.warn('[AdminLeads] Error loading AI health:', err);
+      // Silent fail - don't break the UI
+    }
+  };
 
   // Load employees (admin only)
   const loadEmployees = async () => {
