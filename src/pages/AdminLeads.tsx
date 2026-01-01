@@ -2218,6 +2218,9 @@ export default function AdminLeads() {
                                            priorityScore >= 70 ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
                                            priorityScore >= 40 ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
                                            { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' };
+                      
+                      // Determine if normalization is needed
+                      const needsNormalize = !canonical || (canonical as CanonicalV11).review_required === true;
 
                       return (
                         <>
@@ -2246,6 +2249,11 @@ export default function AdminLeads() {
                                 {isStale && (
                                   <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
                                     ⏳ {daysSinceActivity}d no activity
+                                  </span>
+                                )}
+                                {needsNormalize && (
+                                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                                    AI outdated
                                   </span>
                                 )}
                               </div>
