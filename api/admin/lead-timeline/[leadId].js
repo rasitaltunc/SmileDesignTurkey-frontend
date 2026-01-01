@@ -28,14 +28,20 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Token guard
+    // Auth guard: Accept either x-admin-token OR Authorization Bearer
+    const adminToken = req.headers["x-admin-token"] || req.headers["X-Admin-Token"];
     const authHeader = req.headers.authorization || req.headers.Authorization;
     const m = String(authHeader || "").match(/^Bearer\s+(.+)$/i);
     const jwt = m ? m[1] : null;
-    if (!jwt) {
+    
+    // Check if admin token matches
+    const adminTokenValid = adminToken && process.env.ADMIN_TOKEN && adminToken === process.env.ADMIN_TOKEN;
+    const bearerTokenValid = !!jwt;
+    
+    if (!adminTokenValid && !bearerTokenValid) {
       return res.status(401).json({
         ok: false,
-        error: "Missing Authorization Bearer token",
+        error: "Missing authentication: provide either x-admin-token header or Authorization Bearer token",
         requestId,
       });
     }
