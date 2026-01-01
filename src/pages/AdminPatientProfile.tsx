@@ -686,12 +686,12 @@ export default function AdminPatientProfile() {
                           {isLoadingNormalize ? (
                             <>
                               <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span className="text-white">Normalizing...</span>
+                              <span className="text-gray-700">Normalizing...</span>
                             </>
                           ) : (
                             <>
                               <FileText className="w-4 h-4" />
-                              <span className="text-white">{leadId ? "Normalize Notes" : "Select a lead first"}</span>
+                              <span className="text-gray-700">{leadId ? "Normalize Notes" : "Select a lead first"}</span>
                             </>
                           )}
                         </button>
@@ -710,12 +710,12 @@ export default function AdminPatientProfile() {
                           {isLoadingBrief ? (
                             <>
                               <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span className="text-white">Generating snapshot...</span>
+                              <span className="text-gray-700">Generating snapshot...</span>
                             </>
                           ) : (
                             <>
                               <Brain className="w-4 h-4" />
-                              <span className="text-white">{leadId ? "Generate Snapshot" : "Select a lead first"}</span>
+                              <span className="text-gray-700">{leadId ? "Generate Snapshot" : "Select a lead first"}</span>
                             </>
                           )}
                         </button>
@@ -1055,10 +1055,10 @@ export default function AdminPatientProfile() {
                         {isSyncingMemory ? (
                           <>
                             <RefreshCw className="w-3 h-3 animate-spin" />
-                            <span className="text-white">Syncing...</span>
+                            <span className="text-gray-700">Syncing...</span>
                           </>
                         ) : (
-                          <span className="text-white">Sync Memory</span>
+                          <span className="text-gray-700">Sync Memory</span>
                         )}
                       </button>
                     );
