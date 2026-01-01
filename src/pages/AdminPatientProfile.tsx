@@ -661,54 +661,66 @@ export default function AdminPatientProfile() {
                   AI Snapshot
                 </h2>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleNormalizeNotes}
-                    disabled={isLoadingNormalize || isLoadingBrief || !leadId}
-                    className={[
-                      "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 shadow-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-offset-2",
-                      (isLoadingNormalize || isLoadingBrief || !leadId)
-                        ? "bg-slate-400 text-white/80 border-slate-400 cursor-not-allowed"
-                        : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900 focus:ring-slate-400",
-                    ].join(" ")}
-                  >
-                    {isLoadingNormalize ? (
+                  {(() => {
+                    const btnBase =
+                      "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
+
+                    const normalizeDisabled = isLoadingNormalize || isLoadingBrief || !leadId;
+                    const snapshotDisabled = isLoadingBrief || isLoadingNormalize || !leadId;
+
+                    return (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Normalizing...</span>
+                        <button
+                          type="button"
+                          onClick={handleNormalizeNotes}
+                          disabled={normalizeDisabled}
+                          className={[
+                            btnBase,
+                            "focus:ring-slate-400",
+                            normalizeDisabled
+                              ? "bg-slate-200 text-slate-400 border-slate-200"
+                              : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800",
+                          ].join(" ")}
+                        >
+                          {isLoadingNormalize ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Normalizing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4" />
+                              <span>{leadId ? "Normalize Notes" : "Select a lead first"}</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleGenerateBrief}
+                          disabled={snapshotDisabled}
+                          className={[
+                            btnBase,
+                            "focus:ring-emerald-400",
+                            snapshotDisabled
+                              ? "bg-emerald-100 text-emerald-500 border-emerald-200"
+                              : "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700",
+                          ].join(" ")}
+                        >
+                          {isLoadingBrief ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Generating snapshot...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="w-4 h-4" />
+                              <span>{leadId ? "Generate Snapshot" : "Select a lead first"}</span>
+                            </>
+                          )}
+                        </button>
                       </>
-                    ) : (
-                      <>
-                        <FileText className="w-4 h-4" />
-                        <span>{!leadId ? "Select a lead first" : "Normalize Notes"}</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleGenerateBrief}
-                    disabled={isLoadingBrief || isLoadingNormalize || !leadId}
-                    className={[
-                      "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 shadow-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-offset-2",
-                      (isLoadingBrief || isLoadingNormalize || !leadId)
-                        ? "bg-emerald-300 text-white/80 border-emerald-300 cursor-not-allowed"
-                        : "bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600 focus:ring-emerald-400",
-                    ].join(" ")}
-                  >
-                    {isLoadingBrief ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Generating snapshot...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Brain className="w-4 h-4" />
-                        <span>{!leadId ? "Select a lead first" : "Generate Snapshot"}</span>
-                      </>
-                    )}
-                  </button>
+                    );
+                  })()}
                 </div>
               </div>
 
