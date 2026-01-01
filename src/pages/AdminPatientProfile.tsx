@@ -1030,30 +1030,39 @@ export default function AdminPatientProfile() {
                   {(memoryData as any)?.memory_json?.constraints?.timeline && (
                     <p className="text-xs text-gray-700"><span className="font-medium">Timeline:</span> {(memoryData as any).memory_json.constraints.timeline}</p>
                   )}
-                  <button
-                    type="button"
-                    onClick={handleSyncMemory}
-                    disabled={isSyncingMemory || isLoadingNormalize || !leadId || !briefData}
-                    className={[
-                      "mt-2 inline-flex items-center justify-center gap-2 h-8",
-                      "px-3 rounded-lg text-xs font-semibold",
-                      "border transition-all duration-200",
-                      "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2",
-                      isSyncingMemory || isLoadingNormalize || !leadId || !briefData
-                        ? "bg-gray-100 text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                        : "bg-blue-500 text-white border-transparent hover:bg-blue-600 shadow-sm hover:shadow-md"
-                    ].join(" ")}
-                    title={!briefData ? "Normalize notes first to enable memory sync" : ""}
-                  >
-                    {isSyncingMemory ? (
-                      <>
-                        <RefreshCw className="w-3 h-3 animate-spin" />
-                        <span>Syncing...</span>
-                      </>
-                    ) : (
-                      <span>Sync Memory</span>
-                    )}
-                  </button>
+                  {(() => {
+                    const syncBtnBase =
+                      "mt-2 inline-flex items-center justify-center gap-2 h-8 px-3 rounded-lg text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
+
+                    const syncDisabled = isSyncingMemory || isLoadingNormalize || !leadId || !briefData;
+
+                    const syncBtnClass = [
+                      syncBtnBase,
+                      "focus:ring-slate-400",
+                      syncDisabled
+                        ? "bg-slate-200 text-slate-400 border-slate-200"
+                        : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800",
+                    ].join(" ");
+
+                    return (
+                      <button
+                        type="button"
+                        onClick={handleSyncMemory}
+                        disabled={syncDisabled}
+                        className={syncBtnClass}
+                        title={!briefData ? "Normalize notes first to enable memory sync" : ""}
+                      >
+                        {isSyncingMemory ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <span>Syncing...</span>
+                          </>
+                        ) : (
+                          <span>Sync Memory</span>
+                        )}
+                      </button>
+                    );
+                  })()}
                 </div>
               ) : (
                 <p className="text-xs text-gray-600 break-words whitespace-normal">
