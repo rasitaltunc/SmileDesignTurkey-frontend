@@ -655,12 +655,13 @@ export default function AdminPatientProfile() {
           <div className="lg:col-span-2 space-y-6">
             {/* AI Snapshot Section */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
+              {/* Header with buttons - OUTSIDE gradient container */}
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <Brain className="w-5 h-5 text-teal-600" />
                   AI Snapshot
                 </h2>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 relative z-20">
                   {(() => {
                     const btnBase =
                       "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
@@ -724,10 +725,11 @@ export default function AdminPatientProfile() {
                 </div>
               </div>
 
+              {/* Content - gradient container (buttons are OUTSIDE) */}
               {briefData ? (
                 <div 
                   data-snapshot-section
-                  className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all max-w-full overflow-hidden"
+                  className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all max-w-full overflow-hidden relative z-0"
                 >
                   {/* Header */}
                   <div className="px-4 pt-4 pb-3 border-b border-gray-100 max-w-full">
