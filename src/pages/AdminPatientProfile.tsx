@@ -434,7 +434,8 @@ export default function AdminPatientProfile() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate snapshot';
       setError(errorMessage);
-      toast.error('Unable to generate snapshot', { id: toastId, description: errorMessage });
+      console.error('[Generate Snapshot] Error:', err);
+      toast.error('Something went wrong. Check logs.', { id: toastId });
     } finally {
       setIsLoadingBrief(false);
     }
@@ -495,14 +496,15 @@ export default function AdminPatientProfile() {
             },
           });
         }
-        toast.success('Notes normalized successfully', { id: toastId });
+        toast.success('Notes normalized', { id: toastId });
       } else {
         throw new Error('Invalid normalization response');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to normalize notes';
       setError(errorMessage);
-      toast.error('Normalization failed', { id: toastId, description: errorMessage });
+      console.error('[Normalize] Error:', err);
+      toast.error('Something went wrong. Check logs.', { id: toastId });
     } finally {
       setIsLoadingNormalize(false);
     }
@@ -559,11 +561,12 @@ export default function AdminPatientProfile() {
         setMemoryData(result.data.memory);
       }
 
-      toast.success('Memory vault synced', { id: toastId });
+      toast.success('Memory synced', { id: toastId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sync memory';
       setError(errorMessage);
-      toast.error('Sync failed', { id: toastId, description: errorMessage });
+      console.error('[Sync Memory] Error:', err);
+      toast.error('Something went wrong. Check logs.', { id: toastId });
     } finally {
       setIsSyncingMemory(false);
     }
