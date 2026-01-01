@@ -1601,7 +1601,7 @@
   }
 
   .text-white {
-    color: var(--color-white);
+    color: #fff;
   }
 
   .text-white\/80 {
