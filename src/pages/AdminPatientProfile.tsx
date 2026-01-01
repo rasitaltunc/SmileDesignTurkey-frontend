@@ -665,11 +665,13 @@ export default function AdminPatientProfile() {
                     type="button"
                     onClick={handleNormalizeNotes}
                     disabled={isLoadingNormalize || isLoadingBrief || !leadId}
-                    className={
-                      isLoadingNormalize || isLoadingBrief || !leadId
-                        ? "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-slate-400 text-white/80 border-slate-400 cursor-not-allowed shadow-sm"
-                        : "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-slate-900 text-white hover:bg-slate-800 border-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-                    }
+                    className={[
+                      "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 shadow-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-offset-2",
+                      (isLoadingNormalize || isLoadingBrief || !leadId)
+                        ? "bg-slate-400 text-white/80 border-slate-400 cursor-not-allowed"
+                        : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900 focus:ring-slate-400",
+                    ].join(" ")}
                   >
                     {isLoadingNormalize ? (
                       <>
@@ -679,7 +681,7 @@ export default function AdminPatientProfile() {
                     ) : (
                       <>
                         <FileText className="w-4 h-4" />
-                        <span>Normalize Notes</span>
+                        <span>{!leadId ? "Select a lead first" : "Normalize Notes"}</span>
                       </>
                     )}
                   </button>
@@ -687,11 +689,13 @@ export default function AdminPatientProfile() {
                     type="button"
                     onClick={handleGenerateBrief}
                     disabled={isLoadingBrief || isLoadingNormalize || !leadId}
-                    className={
-                      isLoadingBrief || isLoadingNormalize || !leadId
-                        ? "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-emerald-300 text-white/80 border-emerald-300 cursor-not-allowed shadow-sm"
-                        : "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2"
-                    }
+                    className={[
+                      "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 shadow-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-offset-2",
+                      (isLoadingBrief || isLoadingNormalize || !leadId)
+                        ? "bg-emerald-300 text-white/80 border-emerald-300 cursor-not-allowed"
+                        : "bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600 focus:ring-emerald-400",
+                    ].join(" ")}
                   >
                     {isLoadingBrief ? (
                       <>
@@ -701,7 +705,7 @@ export default function AdminPatientProfile() {
                     ) : (
                       <>
                         <Brain className="w-4 h-4" />
-                        <span>Generate Snapshot</span>
+                        <span>{!leadId ? "Select a lead first" : "Generate Snapshot"}</span>
                       </>
                     )}
                   </button>
