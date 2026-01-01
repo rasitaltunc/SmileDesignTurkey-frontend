@@ -2844,12 +2844,12 @@ export default function AdminLeads() {
                           {isNormalizing ? (
                             <>
                               <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Normalizing...</span>
+                              <span className="text-white">Normalizing...</span>
                             </>
                           ) : (
                             <>
                               <FileText className="w-4 h-4" />
-                              <span>Normalize Notes</span>
+                              <span className="text-white">Normalize Notes</span>
                             </>
                           )}
                         </button>

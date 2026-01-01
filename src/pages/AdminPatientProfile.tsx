@@ -691,7 +691,7 @@ export default function AdminPatientProfile() {
                           ) : (
                             <>
                               <FileText className="w-4 h-4" />
-                              <span>{leadId ? "Normalize Notes" : "Select a lead first"}</span>
+                              <span className="text-white">{leadId ? "Normalize Notes" : "Select a lead first"}</span>
                             </>
                           )}
                         </button>
@@ -710,12 +710,12 @@ export default function AdminPatientProfile() {
                           {isLoadingBrief ? (
                             <>
                               <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Generating snapshot...</span>
+                              <span className="text-white">Generating snapshot...</span>
                             </>
                           ) : (
                             <>
                               <Brain className="w-4 h-4" />
-                              <span>{leadId ? "Generate Snapshot" : "Select a lead first"}</span>
+                              <span className="text-white">{leadId ? "Generate Snapshot" : "Select a lead first"}</span>
                             </>
                           )}
                         </button>
@@ -1055,10 +1055,10 @@ export default function AdminPatientProfile() {
                         {isSyncingMemory ? (
                           <>
                             <RefreshCw className="w-3 h-3 animate-spin" />
-                            <span>Syncing...</span>
+                            <span className="text-white">Syncing...</span>
                           </>
                         ) : (
-                          <span>Sync Memory</span>
+                          <span className="text-white">Sync Memory</span>
                         )}
                       </button>
                     );
