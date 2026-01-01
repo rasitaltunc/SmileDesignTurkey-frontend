@@ -119,12 +119,12 @@ export default function AdminPatientProfile() {
 
         const result = await response.json();
         if (!result.ok || !result.lead) {
-          throw new Error('Patient not found');
+          throw new Error('Lead not found');
         }
 
         setLead(result.lead as Lead);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load patient';
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -578,7 +578,7 @@ export default function AdminPatientProfile() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Patient not found</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Lead not found</h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
             className="px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
@@ -595,7 +595,7 @@ export default function AdminPatientProfile() {
 
   if (!lead) return null;
 
-  const leadName = lead.name || lead.full_name || 'Unknown Patient';
+  const leadName = lead.name || lead.full_name || 'Unknown Lead';
   const leadCountry = lead.country || 'Unknown';
   const leadStatus = lead.status || 'new';
 
