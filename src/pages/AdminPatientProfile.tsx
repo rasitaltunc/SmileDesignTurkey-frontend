@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useContext } from 'react';
 import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
+import { NavigationContext } from '@/App';
 
 interface Lead {
   id: string;
