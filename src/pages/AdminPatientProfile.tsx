@@ -686,7 +686,7 @@ export default function AdminPatientProfile() {
                           {isLoadingNormalize ? (
                             <>
                               <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Normalizing...</span>
+                              <span className="text-white">Normalizing...</span>
                             </>
                           ) : (
                             <>
