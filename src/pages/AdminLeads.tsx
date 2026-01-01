@@ -493,6 +493,9 @@ export default function AdminLeads() {
 
   // Canonical note cache (for active/visible leads)
   const canonicalCacheRef = useRef<Map<string, CanonicalAny>>(new Map());
+  
+  // AI health cache (needs_normalize from lead_ai_health view)
+  const [aiHealthMap, setAiHealthMap] = useState<Record<string, { needs_normalize: boolean; last_normalized_at: string | null; review_required: boolean }>>({});
 
   // Lock body scroll when modal is open (position: fixed + overflow hidden - Safari-proof)
   useEffect(() => {
@@ -2219,8 +2222,9 @@ export default function AdminLeads() {
                                            priorityScore >= 40 ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
                                            { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' };
                       
-                      // Determine if normalization is needed
-                      const needsNormalize = !canonical || (canonical as CanonicalV11).review_required === true;
+                      // Determine if normalization is needed (prefer API health data, fallback to canonical check)
+                      const healthData = aiHealthMap[lead.id];
+                      const needsNormalize = healthData?.needs_normalize ?? (!canonical || (canonical as CanonicalV11).review_required === true);
 
                       return (
                         <>

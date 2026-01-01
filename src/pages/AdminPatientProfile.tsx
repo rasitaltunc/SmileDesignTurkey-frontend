@@ -65,6 +65,9 @@ export default function AdminPatientProfile() {
   // B5: AI Tasks state
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  
+  // AI Health state (from lead_ai_health view)
+  const [aiHealth, setAiHealth] = useState<{ needs_normalize: boolean; last_normalized_at: string | null; review_required: boolean } | null>(null);
 
   // Helper: Get access token
   const getAccessToken = async () => {
@@ -1000,9 +1003,8 @@ export default function AdminPatientProfile() {
                 <Brain className="w-4 h-4 text-gray-600" />
                 Memory Vault
                 {(() => {
-                  // Determine if normalization is needed
-                  // needs_normalize = true if: no normalizeData OR review_required = true
-                  const needsNormalize = !normalizeData || (normalizeData as any)?.review_required === true;
+                  // Determine if normalization is needed (prefer API health data, fallback to normalizeData check)
+                  const needsNormalize = aiHealth?.needs_normalize ?? (!normalizeData || (normalizeData as any)?.review_required === true);
                   return needsNormalize ? (
                     <span className="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
                       Outdated • Normalize again
@@ -1038,8 +1040,8 @@ export default function AdminPatientProfile() {
                           <p className="text-xs text-gray-600 break-words whitespace-normal flex items-center gap-2">
                             <span>Synced • {new Date((memoryData as any).synced_at).toLocaleDateString()}</span>
                             {(() => {
-                              // Determine if normalization is needed
-                              const needsNormalize = !normalizeData || (normalizeData as any)?.review_required === true;
+                              // Determine if normalization is needed (prefer API health data, fallback to normalizeData check)
+                              const needsNormalize = aiHealth?.needs_normalize ?? (!normalizeData || (normalizeData as any)?.review_required === true);
                               return needsNormalize ? (
                                 <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
                                   Outdated • Normalize again
