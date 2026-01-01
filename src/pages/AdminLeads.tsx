@@ -2831,12 +2831,13 @@ export default function AdminLeads() {
                           className={[
                             "inline-flex items-center justify-center gap-2 h-10",
                             "px-4 rounded-lg text-sm font-semibold",
-                            "border transition-all duration-200 min-w-[160px]",
-                            "focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2",
+                            "border transition-colors min-w-[160px] shadow-sm",
+                            "focus:outline-none focus:ring-2 focus:ring-offset-2",
                             "active:scale-[0.99] motion-reduce:active:scale-100",
+                            "disabled:cursor-not-allowed",
                             isNormalizing || !notesLeadId
-                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-gradient-to-r from-purple-600 to-indigo-600 !text-white border-transparent hover:from-purple-700 hover:to-indigo-700 shadow-sm hover:shadow-md"
+                              ? "bg-slate-200 text-slate-400 border-slate-200"
+                              : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800 focus:ring-slate-400"
                           ].join(" ")}
                           title={!notesLeadId ? "Select a lead first" : "Normalize notes into canonical JSON snapshot"}
                         >
