@@ -253,6 +253,7 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
         risk_json: normalizedData.risk || null,
         memory_json: normalizedData.memory || null,
         normalized_at: new Date().toISOString(),
+        synced_at: new Date().toISOString(),
         model: model,
         request_id: requestId,
       };
