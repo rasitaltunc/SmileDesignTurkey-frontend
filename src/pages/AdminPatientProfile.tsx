@@ -665,15 +665,11 @@ export default function AdminPatientProfile() {
                     type="button"
                     onClick={handleNormalizeNotes}
                     disabled={isLoadingNormalize || isLoadingBrief || !leadId}
-                    className={[
-                      "inline-flex items-center justify-center gap-2 h-9",
-                      "px-4 rounded-lg text-sm font-semibold",
-                      "border transition-all duration-200",
-                      "focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2",
+                    className={
                       isLoadingNormalize || isLoadingBrief || !leadId
-                        ? "bg-gray-100 text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                        : "bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent hover:from-purple-700 hover:to-indigo-700 shadow-sm hover:shadow-md"
-                    ].join(" ")}
+                        ? "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-slate-400 text-white/80 border-slate-400 cursor-not-allowed shadow-sm"
+                        : "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-slate-900 text-white hover:bg-slate-800 border-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+                    }
                   >
                     {isLoadingNormalize ? (
                       <>
@@ -691,15 +687,11 @@ export default function AdminPatientProfile() {
                     type="button"
                     onClick={handleGenerateBrief}
                     disabled={isLoadingBrief || isLoadingNormalize || !leadId}
-                    className={[
-                      "inline-flex items-center justify-center gap-2 h-9",
-                      "px-4 rounded-lg text-sm font-semibold",
-                      "border transition-all duration-200",
-                      "focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2",
+                    className={
                       isLoadingBrief || isLoadingNormalize || !leadId
-                        ? "bg-gray-100 text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                        : "bg-gradient-to-r from-teal-600 to-cyan-600 text-white border-transparent hover:from-teal-700 hover:to-cyan-700 shadow-sm hover:shadow-md"
-                    ].join(" ")}
+                        ? "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-emerald-300 text-white/80 border-emerald-300 cursor-not-allowed shadow-sm"
+                        : "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border transition-all duration-200 bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2"
+                    }
                   >
                     {isLoadingBrief ? (
                       <>
