@@ -1010,6 +1010,18 @@ export default function AdminPatientProfile() {
                   {(() => {
                     // Check if memory is synced by looking at synced_at field
                     const isSynced = !!(memoryData as any)?.synced_at;
+                    
+                    // Debug: Log memoryData shape once (only if synced_at is missing)
+                    if (!isSynced && memoryData) {
+                      console.log('[Memory Vault] memoryData shape:', {
+                        keys: Object.keys(memoryData),
+                        synced_at: (memoryData as any).synced_at,
+                        normalized_at: (memoryData as any).normalized_at,
+                        has_memory_json: !!(memoryData as any).memory_json,
+                        full: memoryData,
+                      });
+                    }
+                    
                     return (
                       <>
                         {isSynced ? (
