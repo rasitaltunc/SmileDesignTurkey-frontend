@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
-import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo } from 'lucide-react';
+import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo, Clock } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
@@ -68,6 +68,13 @@ export default function AdminPatientProfile() {
   
   // AI Health state (from lead_ai_health view)
   const [aiHealth, setAiHealth] = useState<{ needs_normalize: boolean; last_normalized_at: string | null; review_required: boolean } | null>(null);
+  
+  // B6: Timeline Events state
+  const [timelineEvents, setTimelineEvents] = useState<any[]>([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  const [newTimelineStage, setNewTimelineStage] = useState<string>('');
+  const [newTimelineNote, setNewTimelineNote] = useState<string>('');
+  const [isAddingTimelineEvent, setIsAddingTimelineEvent] = useState(false);
 
   // Helper: Get access token
   const getAccessToken = async () => {
@@ -310,6 +317,109 @@ export default function AdminPatientProfile() {
 
     fetchTasks();
   }, [leadId, isAuthenticated]);
+  
+  // B6: Fetch timeline events on page load
+  useEffect(() => {
+    if (!leadId || !isAuthenticated) return;
+    
+    const fetchTimeline = async () => {
+      setIsLoadingTimeline(true);
+      try {
+        const token = await getAccessToken();
+        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+        const response = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to load timeline' }));
+          // Don't show error if table doesn't exist (graceful degradation)
+          if (errorData.warning === 'Table not found') {
+            console.warn('[AdminPatientProfile] Timeline table not found');
+            return;
+          }
+          throw new Error(errorData.error || 'Failed to load timeline');
+        }
+        
+        const result = await response.json();
+        if (result.ok && Array.isArray(result.data)) {
+          setTimelineEvents(result.data);
+        }
+      } catch (err) {
+        console.warn('[AdminPatientProfile] Error loading timeline:', err);
+        // Silent fail - don't break the UI
+      } finally {
+        setIsLoadingTimeline(false);
+      }
+    };
+    
+    fetchTimeline();
+  }, [leadId, isAuthenticated]);
+  
+  // B6: Add timeline event
+  const handleAddTimelineEvent = async () => {
+    if (!leadId || !isAuthenticated || !newTimelineStage.trim() || isAddingTimelineEvent) return;
+    
+    setIsAddingTimelineEvent(true);
+    const toastId = toast.loading('Adding timeline event...');
+    
+    try {
+      const token = await getAccessToken();
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          stage: newTimelineStage,
+          note: newTimelineNote.trim() || null,
+          payload: {},
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to add timeline event' }));
+        throw new Error(errorData.error || 'Failed to add timeline event');
+      }
+      
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to add timeline event');
+      }
+      
+      // Clear form
+      setNewTimelineStage('');
+      setNewTimelineNote('');
+      
+      // Refetch timeline events
+      const refetchResponse = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (refetchResponse.ok) {
+        const refetchResult = await refetchResponse.json();
+        if (refetchResult.ok && Array.isArray(refetchResult.data)) {
+          setTimelineEvents(refetchResult.data);
+        }
+      }
+      
+      toast.success('Timeline event added', { id: toastId });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add timeline event';
+      console.error('[Add Timeline Event] Error:', err);
+      toast.error('Something went wrong. Check logs.', { id: toastId });
+    } finally {
+      setIsAddingTimelineEvent(false);
+    }
+  };
 
   // B5: Mark task as done
   const handleMarkTaskDone = async (taskId: string) => {
@@ -1104,6 +1214,112 @@ export default function AdminPatientProfile() {
                 <p className="text-xs text-gray-600 break-words whitespace-normal">
                   Not synced yet. Sync Memory will be available after normalization.
                 </p>
+              )}
+            </div>
+            
+            {/* Timeline Events */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gray-600" />
+                Timeline
+                {timelineEvents.length > 0 && timelineEvents[0]?.stage && (
+                  <span className="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-800">
+                    {timelineEvents[0].stage}
+                  </span>
+                )}
+              </h3>
+              
+              {isLoadingTimeline ? (
+                <div className="flex items-center justify-center py-4">
+                  <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-600 text-xs">Loading timeline...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Events List */}
+                  {timelineEvents.length > 0 ? (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {timelineEvents.slice(0, 10).map((event) => (
+                        <div key={event.id} className="border-l-2 border-gray-200 pl-3 py-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <span className="text-xs font-medium text-gray-900 break-words">
+                                  {event.stage}
+                                </span>
+                                <span className="text-xs text-gray-500 whitespace-nowrap">
+                                  {new Date(event.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+                              {event.note && (
+                                <p className="text-xs text-gray-600 break-words whitespace-normal mt-1">
+                                  {event.note}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 text-center py-4">
+                      No timeline events yet
+                    </p>
+                  )}
+                  
+                  {/* Add Event Controls */}
+                  <div className="border-t border-gray-200 pt-3 space-y-2">
+                    <select
+                      value={newTimelineStage}
+                      onChange={(e) => setNewTimelineStage(e.target.value)}
+                      disabled={isAddingTimelineEvent}
+                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select stage...</option>
+                      <option value="new">New</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="qualified">Qualified</option>
+                      <option value="consultation_scheduled">Consultation Scheduled</option>
+                      <option value="consultation_completed">Consultation Completed</option>
+                      <option value="quote_sent">Quote Sent</option>
+                      <option value="deposit_paid">Deposit Paid</option>
+                      <option value="appointment_set">Appointment Set</option>
+                      <option value="completed">Completed</option>
+                      <option value="lost">Lost</option>
+                    </select>
+                    <textarea
+                      value={newTimelineNote}
+                      onChange={(e) => setNewTimelineNote(e.target.value)}
+                      disabled={isAddingTimelineEvent}
+                      placeholder="Optional note..."
+                      rows={2}
+                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none break-words"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTimelineEvent}
+                      disabled={isAddingTimelineEvent || !newTimelineStage.trim()}
+                      className={[
+                        "w-full inline-flex items-center justify-center gap-2 h-8",
+                        "px-3 rounded-lg text-xs font-semibold",
+                        "border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2",
+                        "disabled:cursor-not-allowed",
+                        isAddingTimelineEvent || !newTimelineStage.trim()
+                          ? "bg-gray-100 text-gray-400 border-gray-200"
+                          : "bg-teal-600 text-white border-teal-600 hover:bg-teal-700",
+                      ].join(" ")}
+                    >
+                      {isAddingTimelineEvent ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>Adding...</span>
+                        </>
+                      ) : (
+                        <span>Add Event</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
