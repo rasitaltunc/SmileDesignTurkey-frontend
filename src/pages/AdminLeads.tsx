@@ -812,14 +812,20 @@ export default function AdminLeads() {
       }
 
       const result = await response.json();
-      setLeads(result.leads || []);
+      const loadedLeads = result.leads || [];
+      setLeads(loadedLeads);
 
       // ✅ Hydrate dropdown selections from DB values
       const initialSelections: Record<string, string> = {};
-      for (const l of (result.leads || [])) {
+      for (const l of loadedLeads) {
         if (l.assigned_to) initialSelections[l.id] = l.assigned_to;
       }
       setSelectedEmployeeByLead(prev => ({ ...prev, ...initialSelections }));
+      
+      // Fetch AI health for all leads (bulk)
+      if (loadedLeads.length > 0) {
+        await loadAIHealth(loadedLeads.map(l => l.id));
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
       setError(errorMessage);
