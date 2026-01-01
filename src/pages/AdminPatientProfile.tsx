@@ -981,15 +981,75 @@ export default function AdminPatientProfile() {
               </div>
             )}
 
-            {/* Memory Vault Placeholder */}
+            {/* Memory Vault */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
                 <Brain className="w-4 h-4 text-gray-600" />
                 Memory Vault
               </h3>
-              <p className="text-xs text-gray-600 break-words whitespace-normal">
-                Not synced yet. Sync Memory will be available after normalization.
-              </p>
+              {isLoadingMemory ? (
+                <div className="flex items-center justify-center py-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-600 text-xs">Loading memory...</span>
+                </div>
+              ) : memoryData ? (
+                <div className="space-y-3">
+                  {(() => {
+                    // Check if memory is synced by looking at synced_at field
+                    const isSynced = !!(memoryData as any)?.synced_at;
+                    return (
+                      <>
+                        {isSynced ? (
+                          <p className="text-xs text-gray-600 break-words whitespace-normal">
+                            Synced • {new Date((memoryData as any).synced_at).toLocaleDateString()}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-600 break-words whitespace-normal">
+                            Not synced yet. Sync Memory will be available after normalization.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
+                  {(memoryData as any)?.memory_json?.identity?.name && (
+                    <p className="text-xs text-gray-700"><span className="font-medium">Name:</span> {(memoryData as any).memory_json.identity.name}</p>
+                  )}
+                  {(memoryData as any)?.memory_json?.treatment?.type && (
+                    <p className="text-xs text-gray-700"><span className="font-medium">Treatment:</span> {(memoryData as any).memory_json.treatment.type}</p>
+                  )}
+                  {(memoryData as any)?.memory_json?.constraints?.timeline && (
+                    <p className="text-xs text-gray-700"><span className="font-medium">Timeline:</span> {(memoryData as any).memory_json.constraints.timeline}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSyncMemory}
+                    disabled={isSyncingMemory || isLoadingNormalize || !leadId || !briefData}
+                    className={[
+                      "mt-2 inline-flex items-center justify-center gap-2 h-8",
+                      "px-3 rounded-lg text-xs font-semibold",
+                      "border transition-all duration-200",
+                      "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2",
+                      isSyncingMemory || isLoadingNormalize || !leadId || !briefData
+                        ? "bg-gray-100 text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
+                        : "bg-blue-500 text-white border-transparent hover:bg-blue-600 shadow-sm hover:shadow-md"
+                    ].join(" ")}
+                    title={!briefData ? "Normalize notes first to enable memory sync" : ""}
+                  >
+                    {isSyncingMemory ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Syncing...</span>
+                      </>
+                    ) : (
+                      <span>Sync Memory</span>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-600 break-words whitespace-normal">
+                  Not synced yet. Sync Memory will be available after normalization.
+                </p>
+              )}
             </div>
           </div>
         </div>
