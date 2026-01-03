@@ -131,6 +131,7 @@ module.exports = async function handler(req, res) {
           "next_action",
           "contacted_at",
           "patient_id",
+          "doctor_id", // ✅ Admin/employee can assign doctor
         ];
 
         const allowedForAdminExtra = [
@@ -187,6 +188,33 @@ module.exports = async function handler(req, res) {
           // prevent spoofing
           filtered.assigned_by = user.id;
           filtered.assigned_at = new Date().toISOString();
+        }
+
+        // ✅ Doctor assignment: admin/employee can assign doctor
+        let doctorIdChanged = false;
+        let previousDoctorId = null;
+        let newDoctorId = null;
+        
+        if (Object.prototype.hasOwnProperty.call(filtered, "doctor_id")) {
+          // Get previous doctor_id before update
+          const leadIdForQuery = id || lead_uuid;
+          if (leadIdForQuery) {
+            const { data: existingLead } = await dbClient
+              .from("leads")
+              .select("doctor_id")
+              .eq(id ? "id" : "lead_uuid", leadIdForQuery)
+              .single();
+            
+            previousDoctorId = existingLead?.doctor_id || null;
+            newDoctorId = filtered.doctor_id || null;
+            
+            // Only create timeline event if assignment actually changed
+            doctorIdChanged = previousDoctorId !== newDoctorId;
+          }
+
+          // Auto-set doctor_assigned_at and doctor_assigned_by
+          filtered.doctor_assigned_at = new Date().toISOString();
+          filtered.doctor_assigned_by = user.id;
         }
 
         // ✅ Get existing lead before update (for status normalization)
@@ -330,6 +358,51 @@ module.exports = async function handler(req, res) {
               });
           } catch (timelineErr) {
             console.warn("[Leads PATCH] Timeline event insert failed for follow_up_at:", timelineErr, { requestId });
+          }
+        }
+
+        // ✅ Create timeline event if doctor_id changed
+        if (doctorIdChanged && data) {
+          try {
+            const leadIdForTimeline = data.id || id || lead_uuid;
+            
+            // Get doctor name if assigned
+            let doctorName = "Unassigned";
+            if (newDoctorId) {
+              const { data: doctorData } = await dbClient
+                .from("profiles")
+                .select("full_name")
+                .eq("id", newDoctorId)
+                .single();
+              
+              doctorName = doctorData?.full_name || `Doctor ${newDoctorId.slice(0, 8)}`;
+            }
+
+            // Insert timeline event
+            const timelineNote = newDoctorId 
+              ? `Assigned doctor ${doctorName}`
+              : "Doctor unassigned";
+            
+            // ✅ Use normalized status for timeline stage
+            const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+            
+            await dbClient
+              .from("lead_timeline_events")
+              .insert({
+                lead_id: leadIdForTimeline,
+                stage: stageForTimeline,
+                actor_role: "consultant",
+                note: timelineNote,
+                payload: {
+                  doctor_id: newDoctorId,
+                  doctor_assigned_by: user.id,
+                  doctor_assigned_at: filtered.doctor_assigned_at,
+                },
+                created_at: new Date().toISOString(),
+              });
+          } catch (timelineErr) {
+            // Don't fail the update if timeline insert fails
+            console.warn("[Leads PATCH] Timeline event insert failed for doctor_id:", timelineErr, { requestId });
           }
         }
 

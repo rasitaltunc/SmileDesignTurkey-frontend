@@ -139,6 +139,12 @@ export default function AdminPatientProfile() {
   const [isCalModalOpen, setIsCalModalOpen] = useState(false);
   const [isUpdatingBookingFlag, setIsUpdatingBookingFlag] = useState(false);
 
+  // Doctor assignment state
+  const [doctors, setDoctors] = useState<Array<{ id: string; full_name: string | null; role: string; created_at: string }>>([]);
+  const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [isUpdatingDoctor, setIsUpdatingDoctor] = useState(false);
+
   // Helper: Get access token
   const getAccessToken = async () => {
     if (!supabase) {
@@ -1687,6 +1693,76 @@ export default function AdminPatientProfile() {
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* F) Assign Doctor */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <h4 className="text-xs font-semibold text-gray-700 mb-3">Assign Doctor</h4>
+                  <select
+                    value={selectedDoctorId}
+                    onChange={(e) => setSelectedDoctorId(e.target.value)}
+                    onBlur={async () => {
+                      if (selectedDoctorId !== (lead?.doctor_id || '') && leadId) {
+                        setIsUpdatingDoctor(true);
+                        try {
+                          const token = await getAccessToken();
+                          console.log("token length", token?.length);
+                          const response = await fetch(`/api/leads`, {
+                            method: 'PATCH',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'Authorization': `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({
+                              id: leadId,
+                              doctor_id: selectedDoctorId || null,
+                            }),
+                          });
+
+                          const result = await response.json().catch(() => ({}));
+
+                          if (!response.ok || result.ok === false) {
+                            throw new Error(result.error || 'Failed to assign doctor');
+                          }
+
+                          if (result.lead) {
+                            setLead((prev) => prev ? { ...prev, doctor_id: result.lead.doctor_id } : null);
+                          }
+                          toast.success('Doctor assigned');
+                          
+                          // Refetch timeline to show new event
+                          const timelineResponse = await fetch(`${import.meta.env.VITE_API_URL || window.location.origin}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+                            method: 'GET',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                            },
+                          });
+                          const timelineResult = await timelineResponse.json().catch(() => ({}));
+                          if (timelineResult.ok && timelineResult.data) {
+                            setTimelineEvents(timelineResult.data);
+                          }
+                        } catch (err) {
+                          const errorMessage = err instanceof Error ? err.message : 'Failed to assign doctor';
+                          toast.error(errorMessage);
+                          setSelectedDoctorId(lead?.doctor_id || '');
+                        } finally {
+                          setIsUpdatingDoctor(false);
+                        }
+                      }
+                    }}
+                    disabled={isUpdatingDoctor || isLoadingDoctors || !leadId}
+                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Select doctor...</option>
+                    {doctors.map((doctor) => (
+                      <option key={doctor.id} value={doctor.id}>
+                        {doctor.full_name || `Doctor ${doctor.id.slice(0, 8)}`}
+                      </option>
+                    ))}
+                  </select>
+                  {isLoadingDoctors && (
+                    <p className="mt-1 text-xs text-gray-500">Loading doctors...</p>
+                  )}
                 </div>
               </div>
             )}
