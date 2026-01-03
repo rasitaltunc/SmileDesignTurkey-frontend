@@ -2899,25 +2899,89 @@ export default function AdminLeads() {
                           <div className="flex items-center gap-2 text-xs text-gray-600">
                             <span className="font-medium">Next:</span>
                             <button
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                if (nextAction.action === 'call' && lead.phone) {
-                                  window.location.href = `tel:${lead.phone}`;
-                                } else if (nextAction.action === 'whatsapp' && lead.phone) {
-                                  const wa = normalizePhoneToWhatsApp(lead.phone);
-                                  if (wa) {
-                                    const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                    window.open(url, "_blank", "noopener,noreferrer");
+                                try {
+                                  const supabase = getSupabaseClient();
+                                  if (supabase) {
+                                    const { data: sessionData } = await supabase.auth.getSession();
+                                    const token = sessionData?.session?.access_token;
+                                    if (token) {
+                                      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                                      
+                                      if (nextAction.action === 'call' && lead.phone) {
+                                        await fetch(`${apiUrl}/api/leads-contact-events`, {
+                                          method: 'POST',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`,
+                                          },
+                                          body: JSON.stringify({
+                                            lead_id: lead.id,
+                                            channel: 'phone',
+                                            note: 'Phone call initiated',
+                                            update_status: true,
+                                          }),
+                                        }).catch(() => {}); // Silent fail
+                                        window.location.href = `tel:${lead.phone}`;
+                                      } else if (nextAction.action === 'whatsapp' && lead.phone) {
+                                        const wa = normalizePhoneToWhatsApp(lead.phone);
+                                        if (wa) {
+                                          await fetch(`${apiUrl}/api/leads-contact-events`, {
+                                            method: 'POST',
+                                            headers: {
+                                              'Content-Type': 'application/json',
+                                              'Authorization': `Bearer ${token}`,
+                                            },
+                                            body: JSON.stringify({
+                                              lead_id: lead.id,
+                                              channel: 'whatsapp',
+                                              note: 'WhatsApp message sent',
+                                              update_status: true,
+                                            }),
+                                          }).catch(() => {}); // Silent fail
+                                          const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                          window.open(url, "_blank", "noopener,noreferrer");
+                                        }
+                                      } else if (nextAction.action === 'email' && lead.email) {
+                                        await fetch(`${apiUrl}/api/leads-contact-events`, {
+                                          method: 'POST',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`,
+                                          },
+                                          body: JSON.stringify({
+                                            lead_id: lead.id,
+                                            channel: 'email',
+                                            note: 'Email opened',
+                                            update_status: true,
+                                          }),
+                                        }).catch(() => {}); // Silent fail
+                                        window.location.href = `mailto:${lead.email}`;
+                                      } else if (nextAction.action === 'brief') {
+                                        handleOpenNotes(lead.id);
+                                        setTimeout(() => {
+                                          if (lead.id) runAIAnalysis(lead.id);
+                                        }, 500);
+                                      } else if (nextAction.action === 'note') {
+                                        handleOpenNotes(lead.id);
+                                      }
+                                    }
                                   }
-                                } else if (nextAction.action === 'email' && lead.email) {
-                                  window.location.href = `mailto:${lead.email}`;
-                                } else if (nextAction.action === 'brief') {
-                                  handleOpenNotes(lead.id);
-                                  setTimeout(() => {
-                                    if (lead.id) runAIAnalysis(lead.id);
-                                  }, 500);
-                                } else if (nextAction.action === 'note') {
-                                  handleOpenNotes(lead.id);
+                                } catch (err) {
+                                  console.warn('[AdminLeads] Error logging contact event:', err);
+                                  // Continue with action even if logging fails
+                                  if (nextAction.action === 'call' && lead.phone) {
+                                    window.location.href = `tel:${lead.phone}`;
+                                  } else if (nextAction.action === 'whatsapp' && lead.phone) {
+                                    const wa = normalizePhoneToWhatsApp(lead.phone);
+                                    if (wa) {
+                                      const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
+                                      window.open(url, "_blank", "noopener,noreferrer");
+                                    }
+                                  } else if (nextAction.action === 'email' && lead.email) {
+                                    window.location.href = `mailto:${lead.email}`;
+                                  }
                                 }
                               }}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"

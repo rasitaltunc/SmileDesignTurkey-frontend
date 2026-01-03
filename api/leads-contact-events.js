@@ -1,18 +1,63 @@
 // api/leads-contact-events.js
 // GET /api/leads-contact-events?lead_id=xxx (list events)
 // POST /api/leads-contact-events (add event)
-// Admin-only: requires x-admin-token
+// Auth: Bearer JWT or x-admin-token
 
 const { createClient } = require("@supabase/supabase-js");
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-admin-token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token");
+}
+
+function getAuthToken(req) {
+  const authHeader = req.headers["authorization"] || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.substring(7);
+  }
+  return null;
 }
 
 function getAdminToken(req) {
   return (req.headers["x-admin-token"] || "").toString();
+}
+
+async function verifyAuth(req) {
+  const bearerToken = getAuthToken(req);
+  const adminToken = getAdminToken(req);
+  const expectedAdminToken = process.env.ADMIN_TOKEN || "";
+
+  // If admin token matches, allow
+  if (expectedAdminToken && adminToken === expectedAdminToken) {
+    return { authenticated: true, userId: null };
+  }
+
+  // If bearer token, verify with Supabase
+  if (bearerToken) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return { authenticated: false, error: "Missing SUPABASE env" };
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser(bearerToken);
+      if (error || !user) {
+        return { authenticated: false, error: "Invalid token" };
+      }
+      return { authenticated: true, userId: user.id };
+    } catch (err) {
+      return { authenticated: false, error: "Token verification failed" };
+    }
+  }
+
+  return { authenticated: false, error: "No valid auth token" };
 }
 
 function pickString(v) {
@@ -28,20 +73,20 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Verify admin token
-  const adminToken = getAdminToken(req);
-  const expectedToken = process.env.ADMIN_TOKEN || "";
-
-  if (!expectedToken || adminToken !== expectedToken) {
-    return res.status(401).json({ error: "Invalid credentials" });
+  // Verify auth (Bearer JWT or x-admin-token)
+  const authResult = await verifyAuth(req);
+  if (!authResult.authenticated) {
+    return res.status(401).json({ error: authResult.error || "Invalid credentials" });
   }
+
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
   // Initialize Supabase client (service role)
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    return res.status(500).json({ error: "Missing SUPABASE env" });
+    return res.status(500).json({ error: "Missing SUPABASE env", requestId });
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -66,15 +111,16 @@ module.exports = async function handler(req, res) {
         .limit(Math.min(limit, 50)); // Cap at 50
 
       if (eventsError) {
-        console.error("[leads-contact-events] Error fetching events:", eventsError);
+        console.error("[leads-contact-events] Error fetching events:", eventsError, { requestId });
         return res.status(500).json({ 
           error: "Failed to fetch contact events",
           details: eventsError.message,
-          hint: eventsError.message.includes("relation") ? "Table 'lead_contact_events' may not exist. Run migration: supabase/migration_lead_contact_events.sql" : eventsError.message
+          hint: eventsError.message.includes("relation") ? "Table 'lead_contact_events' may not exist. Run migration: supabase/migration_lead_contact_events.sql" : eventsError.message,
+          requestId,
         });
       }
 
-      return res.status(200).json({ ok: true, events: events || [] });
+      return res.status(200).json({ ok: true, events: events || [], requestId });
     }
 
     // POST: Add new contact event
@@ -95,7 +141,6 @@ module.exports = async function handler(req, res) {
       }
 
       // Insert contact event
-      // Note: created_by is optional (can be null for service role inserts)
       const { data: event, error: insertError } = await supabase
         .from("lead_contact_events")
         .insert([
@@ -103,30 +148,65 @@ module.exports = async function handler(req, res) {
             lead_id: leadId,
             channel: channel,
             note: note || null,
-            created_by: null, // Service role insert, no user context
+            created_by: authResult.userId || null,
           },
         ])
         .select("*")
         .single();
 
       if (insertError) {
-        console.error("[leads-contact-events] Error inserting event:", insertError);
-        return res.status(500).json({ error: "Failed to create contact event", details: insertError.message });
+        console.error("[leads-contact-events] Error inserting event:", insertError, { requestId });
+        return res.status(500).json({ error: "Failed to create contact event", details: insertError.message, requestId });
       }
 
-      // Also update last_contacted_at on the lead
-      await supabase
-        .from("leads")
-        .update({ last_contacted_at: new Date().toISOString() })
-        .eq("id", leadId);
+      // Update last_contacted_at and optionally status to "contacted"
+      const updateData = {
+        last_contacted_at: new Date().toISOString(),
+      };
+      
+      // Optionally update status to "contacted" if not already in a later stage
+      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+      const updateStatus = body.update_status !== false; // Default: true
+      
+      if (updateStatus) {
+        // Get current lead status
+        const { data: currentLead } = await supabase
+          .from("leads")
+          .select("status")
+          .eq("id", leadId)
+          .single();
+        
+        // Only update to "contacted" if status is "new" or null
+        const currentStatus = (currentLead?.status || "").toLowerCase();
+        if (currentStatus === "new" || !currentStatus) {
+          updateData.status = "contacted";
+        }
+      }
 
-      return res.status(200).json({ ok: true, event });
+      const { data: updatedLead, error: updateError } = await supabase
+        .from("leads")
+        .update(updateData)
+        .eq("id", leadId)
+        .select("id, last_contacted_at, status")
+        .single();
+
+      if (updateError) {
+        console.error("[leads-contact-events] Error updating lead:", updateError, { requestId });
+        // Don't fail - event was created successfully
+      }
+
+      return res.status(200).json({ 
+        ok: true, 
+        event,
+        lead: updatedLead || null,
+        requestId,
+      });
     }
 
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ error: "Method not allowed", requestId });
   } catch (error) {
-    console.error("[leads-contact-events] Unhandled error:", error);
-    return res.status(500).json({ error: "Internal server error", details: error.message });
+    console.error("[leads-contact-events] Unhandled error:", error, { requestId });
+    return res.status(500).json({ error: "Internal server error", details: error.message, requestId });
   }
 };
 

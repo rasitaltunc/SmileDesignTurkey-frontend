@@ -111,6 +111,10 @@ export default function AdminPatientProfile() {
   const [followUpAt, setFollowUpAt] = useState<string>('');
   const [isUpdatingAction, setIsUpdatingAction] = useState(false);
 
+  // Contact Events state
+  const [contactEvents, setContactEvents] = useState<any[]>([]);
+  const [isLoadingContactEvents, setIsLoadingContactEvents] = useState(false);
+
   // Helper: Get access token
   const getAccessToken = async () => {
     const supabase = getSupabaseClient();
@@ -433,6 +437,89 @@ export default function AdminPatientProfile() {
     
     fetchTimeline();
   }, [leadId, isAuthenticated]);
+
+  // Contact Events: Fetch on page load
+  useEffect(() => {
+    if (!leadId || !isAuthenticated) return;
+    
+    const fetchContactEvents = async () => {
+      setIsLoadingContactEvents(true);
+      try {
+        const token = await getAccessToken();
+        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+        const response = await fetch(`${apiUrl}/api/leads-contact-events?lead_id=${encodeURIComponent(leadId)}&limit=10`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to load contact events' }));
+          // Don't show error if table doesn't exist (graceful degradation)
+          if (errorData.hint?.includes('Table') || errorData.error?.includes('relation')) {
+            console.warn('[AdminPatientProfile] Contact events table not found');
+            return;
+          }
+          throw new Error(errorData.error || 'Failed to load contact events');
+        }
+        
+        const result = await response.json();
+        if (result.ok && Array.isArray(result.events)) {
+          setContactEvents(result.events);
+        }
+      } catch (err) {
+        console.warn('[AdminPatientProfile] Error loading contact events:', err);
+        // Silent fail - don't break the UI
+      } finally {
+        setIsLoadingContactEvents(false);
+      }
+    };
+    
+    fetchContactEvents();
+  }, [leadId, isAuthenticated]);
+
+  // Helper: Log contact event
+  const logContactEvent = async (channel: 'whatsapp' | 'phone' | 'email', note?: string) => {
+    if (!leadId) return;
+    
+    try {
+      const token = await getAccessToken();
+      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const response = await fetch(`${apiUrl}/api/leads-contact-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          lead_id: leadId,
+          channel: channel,
+          note: note || null,
+          update_status: true, // Auto-update status to "contacted" if new
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to log contact event' }));
+        console.warn('[AdminPatientProfile] Failed to log contact event:', errorData);
+        return;
+      }
+      
+      const result = await response.json();
+      if (result.ok && result.event) {
+        // Add to local state
+        setContactEvents((prev) => [result.event, ...prev].slice(0, 10));
+        
+        // Update lead state if returned
+        if (result.lead) {
+          setLead((prev) => prev ? { ...prev, last_contacted_at: result.lead.last_contacted_at, status: result.lead.status || prev.status } : null);
+        }
+      }
+    } catch (err) {
+      console.warn('[AdminPatientProfile] Error logging contact event:', err);
+    }
+  };
   
   // B6: Add timeline event
   const handleAddTimelineEvent = async () => {
@@ -1220,8 +1307,9 @@ export default function AdminPatientProfile() {
                         <>
                           {waUrl && (
                             <button
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
+                                await logContactEvent('whatsapp', 'WhatsApp message sent');
                                 window.open(waUrl, '_blank', 'noopener,noreferrer');
                               }}
                               className="p-2 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors"
@@ -1231,8 +1319,9 @@ export default function AdminPatientProfile() {
                             </button>
                           )}
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
+                              await logContactEvent('phone', 'Phone call initiated');
                               window.location.href = `tel:${lead.phone}`;
                             }}
                             className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
@@ -1245,8 +1334,9 @@ export default function AdminPatientProfile() {
                     })()}
                     {lead.email && (
                       <button
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
+                          await logContactEvent('email', 'Email opened');
                           window.location.href = `mailto:${lead.email}`;
                         }}
                         className="p-2 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors"
@@ -1691,6 +1781,63 @@ export default function AdminPatientProfile() {
                       )}
                     </button>
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Contact Events Log */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Phone className="w-4 h-4 text-gray-600" />
+                Contact Log
+              </h3>
+              {isLoadingContactEvents ? (
+                <div className="flex items-center justify-center py-4">
+                  <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-600 text-xs">Loading contact events...</span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {contactEvents.length > 0 ? (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {contactEvents.map((event) => {
+                        const channelLabels: Record<string, string> = {
+                          phone: '📞 Phone',
+                          whatsapp: '💬 WhatsApp',
+                          email: '✉️ Email',
+                          sms: '📱 SMS',
+                          other: '📝 Other',
+                        };
+                        const channelLabel = channelLabels[event.channel] || `📝 ${event.channel}`;
+                        
+                        return (
+                          <div key={event.id} className="border-l-2 border-teal-200 pl-3 py-2 bg-teal-50/30 rounded-r">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className="text-xs font-medium text-gray-900">
+                                    {channelLabel}
+                                  </span>
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                                    {new Date(event.created_at).toLocaleString()}
+                                  </span>
+                                </div>
+                                {event.note && (
+                                  <p className="text-xs text-gray-600 break-words whitespace-normal mt-1">
+                                    {event.note}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 text-center py-4">
+                      No contact events yet. Click WhatsApp, Call, or Email buttons to log contacts.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
