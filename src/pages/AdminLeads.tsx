@@ -2500,13 +2500,21 @@ export default function AdminLeads() {
                         </div>
                       </td>
                       <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                          lead.source === 'onboarding' 
-                            ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' 
-                            : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-                        }`}>
-                          {lead.source}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          {lead.source === "whatsapp" && (
+                            <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-emerald-600 text-white leading-none whitespace-nowrap shrink-0">
+                              WhatsApp
+                            </span>
+                          )}
+                          {lead.source === "onboarding" && (
+                            <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap shrink-0">
+                              Onboarding
+                            </span>
+                          )}
+                          <span className="text-sm text-gray-700 truncate min-w-0">
+                            {lead.source_label ?? lead.source ?? "-"}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 truncate max-w-[180px]">
                         {lead.treatment || '-'}
