@@ -1586,8 +1586,7 @@ export default function AdminPatientProfile() {
                           setIsUpdatingAction(true);
                           try {
                             const token = await getAccessToken();
-                            const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-                            const response = await fetch(`${apiUrl}/api/leads`, {
+                            const response = await fetch(`/api/leads`, {
                               method: 'PATCH',
                               headers: {
                                 'Content-Type': 'application/json',
@@ -1598,13 +1597,13 @@ export default function AdminPatientProfile() {
                                 next_action: nextAction || null,
                               }),
                             });
-                            
-                            if (!response.ok) {
-                              const errorData = await response.json().catch(() => ({ error: 'Failed to update next action' }));
-                              throw new Error(errorData.error || 'Failed to update next action');
+
+                            const result = await response.json().catch(() => ({}));
+
+                            if (!response.ok || result.ok === false) {
+                              throw new Error(result.error || 'Failed to update next action');
                             }
-                            
-                            const result = await response.json();
+
                             if (result.lead) {
                               setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
                             }
@@ -1640,12 +1639,10 @@ export default function AdminPatientProfile() {
                             setIsUpdatingAction(true);
                             try {
                               const token = await getAccessToken();
-                              const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
                               // ✅ Convert datetime-local to ISO string
                               const followUpValue = followUpAt ? new Date(followUpAt).toISOString() : null;
                               
-                              // ✅ Only send follow_up_at, not status or other fields
-                              const response = await fetch(`${apiUrl}/api/leads`, {
+                              const response = await fetch(`/api/leads`, {
                                 method: 'PATCH',
                                 headers: {
                                   'Content-Type': 'application/json',
@@ -1656,16 +1653,15 @@ export default function AdminPatientProfile() {
                                   follow_up_at: followUpValue,
                                 }),
                               });
-                              
-                              if (!response.ok) {
-                                const errorData = await response.json().catch(() => ({ error: 'Failed to update follow-up' }));
-                                throw new Error(errorData.error || 'Failed to update follow-up');
+
+                              const result = await response.json().catch(() => ({}));
+
+                              if (!response.ok || result.ok === false) {
+                                throw new Error(result.error || 'Failed to update follow-up');
                               }
-                              
-                              const result = await response.json();
+
                               if (result.lead) {
                                 setLead((prev) => prev ? { ...prev, follow_up_at: result.lead.follow_up_at } : null);
-                                // Update local state with correct format
                                 setFollowUpAt(toDatetimeLocal(result.lead.follow_up_at));
                               }
                               toast.success('Follow-up date updated');
