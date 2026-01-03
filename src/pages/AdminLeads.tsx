@@ -141,6 +141,67 @@ function FormattedAIBrief({ content }: { content: string }) {
 }
 
 // Status options - CRM MVP Pipeline (3C: Appointment → Deposit)
+// Helper: Map lead status to timeline stage
+const statusToTimelineStage = (status: string | null | undefined): string | null => {
+  if (!status) return null;
+  const normalized = status.toLowerCase().trim();
+  
+  // Direct mappings
+  const mapping: Record<string, string> = {
+    'new': 'new_lead',
+    'contacted': 'contacted',
+    'qualified': 'qualified',
+    'consultation_scheduled': 'consultation_scheduled',
+    'consultation_completed': 'consultation_completed',
+    'quote_sent': 'quote_sent',
+    'deposit_paid': 'deposit_paid',
+    'appointment_set': 'appointment_set',
+    'treatment_in_progress': 'treatment_in_progress',
+    'treatment_completed': 'treatment_completed',
+    'completed': 'treatment_completed',
+    'lost': 'lost',
+    'arrived': 'treatment_in_progress', // Legacy mapping
+  };
+  
+  return mapping[normalized] || null;
+};
+
+// Helper: Add timeline event when status changes
+const addTimelineEventForStatus = async (
+  leadId: string,
+  status: string | null | undefined,
+  token: string,
+  note?: string
+): Promise<void> => {
+  const stage = statusToTimelineStage(status);
+  if (!stage) return; // No mapping, skip
+  
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const response = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        stage: stage,
+        note: note || `Status changed to ${status}`,
+        payload: {},
+      }),
+    });
+    
+    if (!response.ok) {
+      // Silent fail - don't break the flow if timeline event fails
+      console.warn('[Timeline] Failed to add event for status change:', await response.json().catch(() => ({})));
+      return;
+    }
+  } catch (err) {
+    // Silent fail - don't break the flow
+    console.warn('[Timeline] Error adding event for status change:', err);
+  }
+};
+
 const LEAD_STATUSES = [
   { value: 'new', label: 'New' },
   { value: 'contacted', label: 'Contacted' },
@@ -975,6 +1036,20 @@ export default function AdminLeads() {
         const updatedLeads = [...leads];
         updatedLeads[leadIndex] = result.lead;
         setLeads(updatedLeads);
+        
+        // B6.4: Auto-add timeline event when status changes
+        if (updates.status) {
+          const oldStatus = leads[leadIndex]?.status;
+          const newStatus = result.lead.status;
+          if (oldStatus !== newStatus) {
+            try {
+              await addTimelineEventForStatus(leadId, newStatus, token, `Status changed from ${oldStatus || 'new'} to ${newStatus}`);
+            } catch (err) {
+              // Silent fail - timeline event is optional
+              console.warn('[Update Lead] Failed to add timeline event:', err);
+            }
+          }
+        }
       }
 
       setError(null);
@@ -1329,10 +1404,26 @@ export default function AdminLeads() {
             ? {
                 ...lead,
                 last_contacted_at: result.last_contacted_at,
+                status: 'contacted', // Ensure status is set to contacted
               }
             : lead
         )
       );
+
+      // B6.4: Auto-add timeline event when marked as contacted
+      try {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          if (token) {
+            await addTimelineEventForStatus(leadId, 'contacted', token, 'Marked as contacted');
+          }
+        }
+      } catch (err) {
+        // Silent fail - timeline event is optional
+        console.warn('[Mark Contacted] Failed to add timeline event:', err);
+      }
 
       toast.success('Marked as contacted');
     } catch (err) {
