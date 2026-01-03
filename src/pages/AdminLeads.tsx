@@ -968,23 +968,39 @@ export default function AdminLeads() {
       // role admin değilse çekme
       if (role !== 'admin') return;
 
+      // Get JWT token from Supabase session
       const supabase = getSupabaseClient();
-      if (!supabase) throw new Error('Supabase client not configured.');
+      if (!supabase) {
+        console.warn('[AdminLeads] Supabase client not configured, skipping loadEmployees');
+        return;
+      }
 
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      
+      if (!token) {
+        console.warn('[AdminLeads] No token yet, skipping loadEmployees');
+        return;
+      }
 
+      // Use current origin if VITE_API_URL not set
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const url = `${apiUrl}/api/employees`;
-
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await fetch(`${apiUrl}/api/admin/employees`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
-      if (!res.ok) return;
-      const json = await res.json();
-      setEmployees(json.employees || []);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to load employees' }));
+        console.error('[AdminLeads] Error loading employees:', errorData.error || 'Failed to load employees');
+        return;
+      }
+
+      const result = await response.json();
+      if (result.ok && result.employees) {
+        setEmployees(result.employees);
+      }
     } catch (e) {
       // sessiz geç
     }
