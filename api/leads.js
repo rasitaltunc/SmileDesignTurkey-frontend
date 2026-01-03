@@ -123,6 +123,28 @@ module.exports = async function handler(req, res) {
           return res.status(400).json({ ok: false, error: "No allowed fields to update", requestId });
         }
 
+        // ✅ Status normalization (sigorta - hata tekrar asla çıkmasın)
+        if (filtered.status) {
+          const STATUS_MAP = {
+            new_lead: "new",
+            appointment: "appointment_set",
+            deposit: "deposit_paid",
+            contacted: "contacted",
+            arrived: "arrived",
+            completed: "completed",
+            lost: "lost",
+          };
+          const normalized = STATUS_MAP[String(filtered.status).toLowerCase()] || filtered.status;
+          filtered.status = normalized;
+          
+          // Validate against canonical values
+          const validStatuses = ["new", "contacted", "deposit_paid", "appointment_set", "arrived", "completed", "lost"];
+          if (!validStatuses.includes(filtered.status)) {
+            console.warn(`[api/leads] Invalid status value: ${filtered.status}, normalizing to 'new'`, { requestId });
+            filtered.status = "new";
+          }
+        }
+
         // 🔒 Only admin can change assignment
         let assignedToChanged = false;
         let previousAssignedTo = null;

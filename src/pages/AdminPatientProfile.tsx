@@ -48,6 +48,9 @@ interface Lead {
   created_at: string;
   treatment: string | null;
   source: string | null;
+  message?: string | null;
+  notes?: string | null;
+  meta?: any;
   next_action?: string | null;
   cal_booking_id?: string | null;
   cal_booking_uid?: string | null;
@@ -1617,8 +1620,10 @@ export default function AdminPatientProfile() {
                             try {
                               const token = await getAccessToken();
                               const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                              // ✅ Convert datetime-local to ISO string
                               const followUpValue = followUpAt ? new Date(followUpAt).toISOString() : null;
                               
+                              // ✅ Only send follow_up_at, not status or other fields
                               const response = await fetch(`${apiUrl}/api/leads`, {
                                 method: 'PATCH',
                                 headers: {
@@ -1639,6 +1644,8 @@ export default function AdminPatientProfile() {
                               const result = await response.json();
                               if (result.lead) {
                                 setLead((prev) => prev ? { ...prev, follow_up_at: result.lead.follow_up_at } : null);
+                                // Update local state with correct format
+                                setFollowUpAt(toDatetimeLocal(result.lead.follow_up_at));
                               }
                               toast.success('Follow-up date updated');
                             } catch (err) {

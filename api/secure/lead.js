@@ -68,6 +68,21 @@ module.exports = async function handler(req, res) {
     const { error } = await db.from("leads").insert([row]);
     if (error) return res.status(400).json({ ok: false, error: error.message });
 
+    // ✅ Save original message as a note (future-proof: never lose first contact)
+    if (row.message && String(row.message).trim()) {
+      try {
+        await db.from("lead_notes").insert({
+          lead_id: id,
+          note: String(row.message).trim(),
+          actor_role: "patient",
+          created_by: null,
+        });
+      } catch (noteErr) {
+        // Don't fail the lead insert if note insert fails (graceful degradation)
+        console.warn("[api/secure/lead] Failed to save message as note:", noteErr.message);
+      }
+    }
+
     return res.status(200).json({ ok: true, id });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "Server error" });
