@@ -135,7 +135,7 @@ module.exports = async function handler(req, res) {
           insertData.payload = typeof payload === "object" ? payload : {};
         }
 
-        const { data, error } = await supabase
+        const { data: insertedEvent, error } = await supabase
           .from("lead_timeline_events")
           .insert(insertData)
           .select()
@@ -155,8 +155,8 @@ module.exports = async function handler(req, res) {
           throw error;
         }
 
-        // PRO LEVEL: Auto-update lead status when timeline stage is set
-        // Stage values match LEAD_STATUS values (single source of truth)
+        // PRO LEVEL: Auto-update lead status when timeline stage is set (single source of truth)
+        // Stage values match LEAD_STATUS values
         // Valid stages: new_lead, contacted, qualified, consultation_scheduled, etc.
         const validStages = [
           'new_lead',
@@ -172,36 +172,42 @@ module.exports = async function handler(req, res) {
           'lost',
         ];
         
+        let updatedLead = null;
+        let leadUpdateError = null;
+        
         if (validStages.includes(stage)) {
-          try {
-            const { error: updateError } = await supabase
-              .from("leads")
-              .update({ status: stage })
-              .eq("id", leadId);
-            
-            if (updateError) {
-              // Log but don't fail - timeline event was created successfully
-              console.warn("[lead-timeline] Failed to update lead status", requestId, {
-                leadId,
-                stage,
-                error: updateError.message,
-              });
-            } else {
-              console.log("[lead-timeline] Auto-updated lead status", requestId, {
-                leadId,
-                stage,
-              });
-            }
-          } catch (updateErr) {
-            // Silent fail - timeline event is more important than status update
-            console.warn("[lead-timeline] Error updating lead status", requestId, updateErr);
+          // After inserting timeline event successfully, update lead status
+          const { data: updatedLeadData, error: leadUpdateErr } = await supabase
+            .from("leads")
+            .update({
+              status: stage, // e.g. "deposit_paid"
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", leadId)
+            .select("id,status,updated_at")
+            .single();
+
+          if (leadUpdateErr) {
+            leadUpdateError = leadUpdateErr;
+            console.error("LEAD_STATUS_UPDATE_ERROR", { requestId, leadId, stage, leadUpdateError });
+          } else {
+            updatedLead = updatedLeadData;
+            console.log("[lead-timeline] Auto-updated lead status", requestId, {
+              leadId,
+              stage,
+              updatedLead: updatedLead?.id,
+            });
           }
         }
 
         return res.status(200).json({
           ok: true,
-          data: data,
           requestId,
+          data: {
+            event: insertedEvent,
+            lead: updatedLead || null,
+          },
+          warning: leadUpdateError ? "LEAD_STATUS_UPDATE_FAILED" : undefined,
         });
       } catch (err) {
         console.error("[lead-timeline] POST error", requestId, err);
