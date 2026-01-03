@@ -231,6 +231,68 @@ module.exports = async function handler(req, res) {
         }
       }
 
+      // ✅ Create timeline event if next_action changed
+      const nextActionChanged = Object.prototype.hasOwnProperty.call(filtered, "next_action");
+      if (nextActionChanged && data) {
+        try {
+          const leadIdForTimeline = data.id || id || lead_uuid;
+          const newNextAction = filtered.next_action;
+          const actionLabels: Record<string, string> = {
+            send_whatsapp: "Send WhatsApp",
+            request_photos: "Request photos",
+            doctor_review: "Doctor review",
+            offer_sent: "Offer sent",
+            book_call: "Book call",
+          };
+          
+          const actionLabel = newNextAction ? (actionLabels[newNextAction] || newNextAction) : "No action";
+          const timelineNote = `Next action: ${actionLabel}`;
+          
+          await dbClient
+            .from("lead_timeline_events")
+            .insert({
+              lead_id: leadIdForTimeline,
+              stage: data.status || "contacted",
+              actor_role: "consultant",
+              note: timelineNote,
+              payload: {
+                next_action: newNextAction,
+              },
+              created_at: new Date().toISOString(),
+            });
+        } catch (timelineErr) {
+          console.warn("[Leads PATCH] Timeline event insert failed for next_action:", timelineErr);
+        }
+      }
+
+      // ✅ Create timeline event if follow_up_at changed
+      const followUpChanged = Object.prototype.hasOwnProperty.call(filtered, "follow_up_at");
+      if (followUpChanged && data) {
+        try {
+          const leadIdForTimeline = data.id || id || lead_uuid;
+          const newFollowUpAt = filtered.follow_up_at;
+          
+          const timelineNote = newFollowUpAt 
+            ? `Follow-up scheduled: ${new Date(newFollowUpAt).toLocaleString()}`
+            : "Follow-up removed";
+          
+          await dbClient
+            .from("lead_timeline_events")
+            .insert({
+              lead_id: leadIdForTimeline,
+              stage: data.status || "contacted",
+              actor_role: "consultant",
+              note: timelineNote,
+              payload: {
+                follow_up_at: newFollowUpAt,
+              },
+              created_at: new Date().toISOString(),
+            });
+        } catch (timelineErr) {
+          console.warn("[Leads PATCH] Timeline event insert failed for follow_up_at:", timelineErr);
+        }
+      }
+
       return res.status(200).json({ lead: data });
     } catch (e) {
       return res.status(500).json({ error: e?.message || "Server error" });

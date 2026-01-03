@@ -2474,6 +2474,44 @@ export default function AdminLeads() {
                                     AI outdated
                                   </span>
                                 )}
+                                {lead.next_action && (() => {
+                                  const actionLabels: Record<string, string> = {
+                                    send_whatsapp: "Send WhatsApp",
+                                    request_photos: "Request photos",
+                                    doctor_review: "Doctor review",
+                                    offer_sent: "Offer sent",
+                                    book_call: "Book call",
+                                  };
+                                  const label = actionLabels[lead.next_action] || lead.next_action;
+                                  return (
+                                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+                                      📋 {label}
+                                    </span>
+                                  );
+                                })()}
+                                {lead.follow_up_at && (() => {
+                                  const followUpDate = new Date(lead.follow_up_at);
+                                  const now = new Date();
+                                  const diffHours = (followUpDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                                  const isOverdue = diffHours < 0;
+                                  const isDueSoon = diffHours >= 0 && diffHours <= 24;
+                                  
+                                  if (isOverdue) {
+                                    return (
+                                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-100">
+                                        ⚠️ Overdue
+                                      </span>
+                                    );
+                                  }
+                                  if (isDueSoon) {
+                                    return (
+                                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100">
+                                        ⏰ Due soon
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                               {canonicalNBA && canonicalNBA.label && (
                                 <div className="text-xs text-gray-700 font-medium truncate max-w-[300px]" title={canonicalNBA.label}>

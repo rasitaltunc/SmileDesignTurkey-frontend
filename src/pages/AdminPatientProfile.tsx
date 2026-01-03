@@ -106,6 +106,11 @@ export default function AdminPatientProfile() {
   const [newTimelineNote, setNewTimelineNote] = useState<string>('');
   const [isAddingTimelineEvent, setIsAddingTimelineEvent] = useState(false);
 
+  // Next Action & Follow-up state
+  const [nextAction, setNextAction] = useState<string>('');
+  const [followUpAt, setFollowUpAt] = useState<string>('');
+  const [isUpdatingAction, setIsUpdatingAction] = useState(false);
+
   // Helper: Get access token
   const getAccessToken = async () => {
     const supabase = getSupabaseClient();
@@ -198,7 +203,20 @@ export default function AdminPatientProfile() {
           throw new Error('Lead not found');
         }
 
-        setLead(result.lead as Lead);
+        const loadedLead = result.lead as Lead;
+        setLead(loadedLead);
+        
+        // Initialize Next Action & Follow-up from loaded lead
+        setNextAction(loadedLead.next_action || '');
+        if (loadedLead.follow_up_at) {
+          const date = new Date(loadedLead.follow_up_at);
+          const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16);
+          setFollowUpAt(localDateTime);
+        } else {
+          setFollowUpAt('');
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
         setError(errorMessage);
@@ -1313,6 +1331,112 @@ export default function AdminPatientProfile() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+                
+                {/* D) Next Action & Follow-up */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <h4 className="text-xs font-semibold text-gray-700 mb-3">Next Action</h4>
+                  <div className="space-y-3">
+                    <select
+                      value={nextAction}
+                      onChange={(e) => setNextAction(e.target.value)}
+                      onBlur={async () => {
+                        if (nextAction !== (lead?.next_action || '') && leadId) {
+                          setIsUpdatingAction(true);
+                          try {
+                            const token = await getAccessToken();
+                            const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                            const response = await fetch(`${apiUrl}/api/leads`, {
+                              method: 'PATCH',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({
+                                id: leadId,
+                                next_action: nextAction || null,
+                              }),
+                            });
+                            
+                            if (!response.ok) {
+                              const errorData = await response.json().catch(() => ({ error: 'Failed to update next action' }));
+                              throw new Error(errorData.error || 'Failed to update next action');
+                            }
+                            
+                            const result = await response.json();
+                            if (result.lead) {
+                              setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
+                            }
+                            toast.success('Next action updated');
+                          } catch (err) {
+                            const errorMessage = err instanceof Error ? err.message : 'Failed to update next action';
+                            toast.error(errorMessage);
+                            setNextAction(lead?.next_action || '');
+                          } finally {
+                            setIsUpdatingAction(false);
+                          }
+                        }
+                      }}
+                      disabled={isUpdatingAction || !leadId}
+                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select next action...</option>
+                      <option value="send_whatsapp">Send WhatsApp</option>
+                      <option value="request_photos">Request photos</option>
+                      <option value="doctor_review">Doctor review</option>
+                      <option value="offer_sent">Offer sent</option>
+                      <option value="book_call">Book call</option>
+                    </select>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Follow-up Date</label>
+                      <input
+                        type="datetime-local"
+                        value={followUpAt}
+                        onChange={(e) => setFollowUpAt(e.target.value)}
+                        onBlur={async () => {
+                          if (leadId) {
+                            setIsUpdatingAction(true);
+                            try {
+                              const token = await getAccessToken();
+                              const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                              const followUpValue = followUpAt ? new Date(followUpAt).toISOString() : null;
+                              
+                              const response = await fetch(`${apiUrl}/api/leads`, {
+                                method: 'PATCH',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({
+                                  id: leadId,
+                                  follow_up_at: followUpValue,
+                                }),
+                              });
+                              
+                              if (!response.ok) {
+                                const errorData = await response.json().catch(() => ({ error: 'Failed to update follow-up' }));
+                                throw new Error(errorData.error || 'Failed to update follow-up');
+                              }
+                              
+                              const result = await response.json();
+                              if (result.lead) {
+                                setLead((prev) => prev ? { ...prev, follow_up_at: result.lead.follow_up_at } : null);
+                              }
+                              toast.success('Follow-up date updated');
+                            } catch (err) {
+                              const errorMessage = err instanceof Error ? err.message : 'Failed to update follow-up';
+                              toast.error(errorMessage);
+                            } finally {
+                              setIsUpdatingAction(false);
+                            }
+                          }
+                        }}
+                        disabled={isUpdatingAction || !leadId}
+                        className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
