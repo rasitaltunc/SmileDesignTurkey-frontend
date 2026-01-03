@@ -2500,25 +2500,47 @@ export default function AdminLeads() {
                         </div>
                       </td>
                       <td className="px-6 py-4 align-top text-sm text-gray-700 leading-5 w-40">
-                        <div className="min-w-0 overflow-hidden">
-                          {/* badges row */}
-                          <div className="flex flex-wrap items-center gap-1">
-                            {lead.source === "whatsapp" && (
-                              <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-emerald-600 text-white leading-none whitespace-nowrap">
-                                WhatsApp
-                              </span>
-                            )}
-                            {lead.source === "onboarding" && (
-                              <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap">
-                                Onboarding
-                              </span>
-                            )}
-                          </div>
-                          {/* label row */}
-                          <div className="mt-1 text-xs text-gray-500 truncate">
-                            {lead.source_label ?? lead.source ?? "-"}
-                          </div>
-                        </div>
+                        {(() => {
+                          // Normalize source key for badge detection
+                          const sourceKey = String(lead.source ?? lead.source_label ?? "")
+                            .trim()
+                            .toLowerCase();
+
+                          const isWhatsApp = sourceKey.includes("whatsapp");
+                          const isOnboarding = sourceKey.includes("onboarding");
+
+                          const sourceText =
+                            lead.source_label ??
+                            (lead.source ? String(lead.source) : "-");
+
+                          return (
+                            <div className="min-w-0 overflow-hidden">
+                              {/* badges */}
+                              <div className="flex flex-wrap items-center gap-1">
+                                {isWhatsApp && (
+                                  <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-emerald-600 text-white leading-none whitespace-nowrap">
+                                    WhatsApp
+                                  </span>
+                                )}
+                                {isOnboarding && (
+                                  <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap">
+                                    Onboarding
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* label: badge ile aynıysa basma */}
+                              <div className="mt-1 text-xs text-gray-500 truncate">
+                                {(() => {
+                                  const t = String(sourceText ?? "-").trim();
+                                  const tl = t.toLowerCase();
+                                  if ((isWhatsApp && tl === "whatsapp") || (isOnboarding && tl === "onboarding")) return "";
+                                  return t || "-";
+                                })()}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4 align-top w-44">
                         <div className="text-sm text-gray-900 truncate">{lead.treatment ?? "-"}</div>
