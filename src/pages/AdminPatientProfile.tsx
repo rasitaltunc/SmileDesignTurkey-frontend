@@ -976,6 +976,26 @@ export default function AdminPatientProfile() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Original Message Card */}
+        {(() => {
+          const originalMessage = 
+            lead.message?.trim() ||
+            lead.notes?.trim() ||
+            (lead.meta && (lead.meta.message || lead.meta.formMessage)) ||
+            "";
+          
+          if (!originalMessage) return null;
+          
+          return (
+            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="text-sm font-semibold text-gray-900 mb-2">Original Message (Patient)</div>
+              <div className="mt-2 whitespace-pre-wrap text-sm text-gray-700 break-words">
+                {originalMessage}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Main Content */}
           <div className="lg:col-span-2 space-y-6">
