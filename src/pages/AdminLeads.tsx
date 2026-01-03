@@ -238,16 +238,6 @@ const addTimelineEventForStatus = async (
   }
 };
 
-const LEAD_STATUSES = [
-  { value: 'new', label: 'New' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'appointment_set', label: 'Appointment Set' },
-  { value: 'deposit_paid', label: 'Deposit Paid' },
-  { value: 'arrived', label: 'Arrived' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'lost', label: 'Lost' },
-] as const;
-
 // Priority Score Helper (0-100)
 function computePriority(
   lead: Lead,
