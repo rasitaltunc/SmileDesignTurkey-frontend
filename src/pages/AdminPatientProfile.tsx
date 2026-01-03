@@ -226,15 +226,14 @@ export default function AdminPatientProfile() {
         
         // Initialize Next Action & Follow-up from loaded lead
         setNextAction(loadedLead.next_action || '');
-        if (loadedLead.follow_up_at) {
-          const date = new Date(loadedLead.follow_up_at);
-          const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-            .toISOString()
-            .slice(0, 16);
-          setFollowUpAt(localDateTime);
-        } else {
-          setFollowUpAt('');
-        }
+        // Helper: Convert ISO timestamp to datetime-local format
+        const toDatetimeLocal = (ts?: string | null): string => {
+          if (!ts) return "";
+          const d = new Date(ts);
+          const pad = (n: number) => String(n).padStart(2, "0");
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+        setFollowUpAt(toDatetimeLocal(loadedLead.follow_up_at));
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
         setError(errorMessage);
