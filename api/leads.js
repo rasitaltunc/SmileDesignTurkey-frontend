@@ -86,8 +86,9 @@ module.exports = async function handler(req, res) {
     const role = String(prof?.role || "").trim().toLowerCase();
     const isAdmin = role === "admin";
     const isEmployee = role === "employee";
-    if (!isAdmin && !isEmployee) {
-      return res.status(403).json({ ok: false, error: "Forbidden: leads access is admin/employee only", requestId });
+    const isDoctor = role === "doctor";
+    if (!isAdmin && !isEmployee && !isDoctor) {
+      return res.status(403).json({ ok: false, error: "Forbidden: leads access is admin/employee/doctor only", requestId });
     }
 
     // GET /api/leads
@@ -101,6 +102,9 @@ module.exports = async function handler(req, res) {
 
       // employee sees only assigned leads
       if (isEmployee) q = q.eq("assigned_to", user.id);
+      
+      // doctor sees only leads assigned to them
+      if (isDoctor) q = q.eq("doctor_id", user.id);
 
       const { data, error } = await q;
       if (error) return res.status(500).json({ ok: false, error: error.message, requestId });
@@ -123,7 +127,7 @@ module.exports = async function handler(req, res) {
         if (!id && !lead_uuid) return res.status(400).json({ ok: false, error: "Missing id or lead_uuid", requestId });
         if (!Object.keys(updates).length) return res.status(400).json({ ok: false, error: "No updates provided", requestId });
 
-        // ✅ Admin: her şeyi yapabilir; Employee: assignment alanlarını değiştiremez
+        // ✅ Admin: her şeyi yapabilir; Employee: assignment alanlarını değiştiremez; Doctor: sadece review alanları
         const allowedForAll = [
           "status",
           "notes",
@@ -140,7 +144,19 @@ module.exports = async function handler(req, res) {
           "assigned_by",
         ];
 
-        const allowed = isAdmin ? [...allowedForAll, ...allowedForAdminExtra] : allowedForAll;
+        const allowedForDoctor = [
+          "doctor_review_status",
+          "doctor_review_notes",
+        ];
+
+        let allowed;
+        if (isDoctor) {
+          allowed = allowedForDoctor;
+        } else if (isAdmin) {
+          allowed = [...allowedForAll, ...allowedForAdminExtra];
+        } else {
+          allowed = allowedForAll;
+        }
 
         const filtered = Object.fromEntries(
           Object.entries(updates).filter(([k]) => allowed.includes(k))
@@ -403,6 +419,61 @@ module.exports = async function handler(req, res) {
           } catch (timelineErr) {
             // Don't fail the update if timeline insert fails
             console.warn("[Leads PATCH] Timeline event insert failed for doctor_id:", timelineErr, { requestId });
+          }
+        }
+
+        // ✅ Doctor review automation: Update next_action based on review_status
+        const reviewStatusChanged = Object.prototype.hasOwnProperty.call(filtered, "doctor_review_status");
+        if (reviewStatusChanged && isDoctor && data) {
+          try {
+            const newReviewStatus = filtered.doctor_review_status;
+            let autoNextAction = null;
+            let timelineNote = "";
+
+            if (newReviewStatus === "approved_for_booking") {
+              autoNextAction = "ready_for_booking";
+              timelineNote = "Doctor approved for booking";
+            } else if (newReviewStatus === "needs_info") {
+              autoNextAction = "request_photos";
+              timelineNote = "Doctor requested more info";
+            }
+
+            // Auto-update next_action if review status requires it
+            if (autoNextAction) {
+              const { data: updatedLead } = await dbClient
+                .from("leads")
+                .update({ next_action: autoNextAction })
+                .eq("id", data.id)
+                .select("next_action")
+                .single();
+              
+              // Update local data for response
+              if (updatedLead) {
+                data.next_action = updatedLead.next_action;
+              }
+            }
+
+            // Create timeline event for review status change
+            if (timelineNote) {
+              const leadIdForTimeline = data.id || id || lead_uuid;
+              const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+              
+              await dbClient
+                .from("lead_timeline_events")
+                .insert({
+                  lead_id: leadIdForTimeline,
+                  stage: stageForTimeline,
+                  actor_role: "doctor",
+                  note: timelineNote,
+                  payload: {
+                    doctor_review_status: newReviewStatus,
+                    next_action: autoNextAction,
+                  },
+                  created_at: new Date().toISOString(),
+                });
+            }
+          } catch (reviewErr) {
+            console.warn("[Leads PATCH] Doctor review automation failed:", reviewErr, { requestId });
           }
         }
 

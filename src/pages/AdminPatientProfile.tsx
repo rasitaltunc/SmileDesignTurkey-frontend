@@ -68,14 +68,23 @@ interface LeadNote {
   created_by: string | null;
 }
 
-export default function AdminPatientProfile() {
-  const { isAuthenticated, user } = useAuthStore();
+interface AdminPatientProfileProps {
+  doctorMode?: boolean;
+  leadId?: string | null;
+}
+
+export default function AdminPatientProfile({ doctorMode = false, leadId: propLeadId = null }: AdminPatientProfileProps = {}) {
+  const { isAuthenticated, user, role } = useAuthStore();
   const { currentPath } = useContext(NavigationContext);
   
   // Extract leadId from URL (App.tsx uses custom routing, not React Router)
-  // Route: /admin/lead/:id
+  // Route: /admin/lead/:id OR from prop (doctor mode)
   const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/);
-  const leadId = leadIdMatch ? leadIdMatch[1] : null;
+  const urlLeadId = leadIdMatch ? leadIdMatch[1] : null;
+  const leadId = propLeadId || urlLeadId;
+  
+  // In doctor mode, use doctor role
+  const isDoctorMode = doctorMode || role === 'doctor';
   
   // Debug log
   useEffect(() => {
@@ -144,6 +153,11 @@ export default function AdminPatientProfile() {
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [isUpdatingDoctor, setIsUpdatingDoctor] = useState(false);
+
+  // Doctor review state
+  const [doctorReviewStatus, setDoctorReviewStatus] = useState<string>('');
+  const [doctorReviewNotes, setDoctorReviewNotes] = useState<string>('');
+  const [isUpdatingReview, setIsUpdatingReview] = useState(false);
 
   // Helper: Get access token
   const getAccessToken = async () => {
@@ -245,6 +259,10 @@ export default function AdminPatientProfile() {
         
         // Initialize Doctor assignment from loaded lead
         setSelectedDoctorId((loadedLead as any).doctor_id || '');
+        
+        // Initialize Doctor review from loaded lead
+        setDoctorReviewStatus((loadedLead as any).doctor_review_status || '');
+        setDoctorReviewNotes((loadedLead as any).doctor_review_notes || '');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
         setError(errorMessage);
@@ -1511,8 +1529,8 @@ export default function AdminPatientProfile() {
                   </div>
                 </div>
                 
-                {/* D) Booking Section */}
-                {(() => {
+                {/* D) Booking Section (Admin/Employee only) */}
+                {!isDoctorMode && (() => {
                   // Show booking section if:
                   // 1. next_action === 'ready_for_booking' (doctor review sonrası, booking öncesi)
                   // 2. status === 'appointment_set' (booking olduktan sonra)
@@ -1627,9 +1645,10 @@ export default function AdminPatientProfile() {
                   );
                 })()}
 
-                {/* E) Next Action & Follow-up */}
-                <div className="mb-4 pb-4 border-b border-gray-100">
-                  <h4 className="text-xs font-semibold text-gray-700 mb-3">Next Action</h4>
+                {/* E) Next Action & Follow-up (Admin/Employee only) */}
+                {!isDoctorMode && (
+                  <div className="mb-4 pb-4 border-b border-gray-100">
+                    <h4 className="text-xs font-semibold text-gray-700 mb-3">Next Action</h4>
                   <div className="space-y-3">
                     <select
                       value={nextAction}
@@ -1735,9 +1754,10 @@ export default function AdminPatientProfile() {
                   </div>
                 </div>
 
-                {/* F) Assign Doctor */}
-                <div className="mb-4 pb-4 border-b border-gray-100">
-                  <h4 className="text-xs font-semibold text-gray-700 mb-3">Assign Doctor</h4>
+                {/* F) Assign Doctor (Admin/Employee only) */}
+                {!isDoctorMode && (
+                  <div className="mb-4 pb-4 border-b border-gray-100">
+                    <h4 className="text-xs font-semibold text-gray-700 mb-3">Assign Doctor</h4>
                   <select
                     value={selectedDoctorId}
                     onChange={(e) => setSelectedDoctorId(e.target.value)}
@@ -1804,6 +1824,133 @@ export default function AdminPatientProfile() {
                     <p className="mt-1 text-xs text-gray-500">Loading doctors...</p>
                   )}
                 </div>
+                )}
+
+                {/* G) Doctor Review (Doctor mode only) */}
+                {isDoctorMode && (
+                  <div className="mb-4 pb-4 border-b border-gray-100">
+                    <h4 className="text-xs font-semibold text-gray-700 mb-3">Review</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Review Status</label>
+                        <select
+                          value={doctorReviewStatus}
+                          onChange={(e) => setDoctorReviewStatus(e.target.value)}
+                          onBlur={async () => {
+                            if (doctorReviewStatus !== ((lead as any)?.doctor_review_status || '') && leadId) {
+                              setIsUpdatingReview(true);
+                              try {
+                                const token = await getAccessToken();
+                                console.log("token length", token?.length);
+                                const response = await fetch(`/api/leads`, {
+                                  method: 'PATCH',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`,
+                                  },
+                                  body: JSON.stringify({
+                                    id: leadId,
+                                    doctor_review_status: doctorReviewStatus || null,
+                                  }),
+                                });
+
+                                const result = await response.json().catch(() => ({}));
+
+                                if (!response.ok || result.ok === false) {
+                                  throw new Error(result.error || 'Failed to update review status');
+                                }
+
+                                if (result.lead) {
+                                  setLead((prev) => prev ? { ...prev, doctor_review_status: (result.lead as any).doctor_review_status } : null);
+                                  // Auto-update next_action if review status changed (backend handles this)
+                                  if (result.lead.next_action) {
+                                    setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
+                                  }
+                                }
+                                toast.success('Review status updated');
+                                
+                                // Refetch timeline to show new event
+                                const timelineResponse = await fetch(`${import.meta.env.VITE_API_URL || window.location.origin}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+                                  method: 'GET',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                  },
+                                });
+                                const timelineResult = await timelineResponse.json().catch(() => ({}));
+                                if (timelineResult.ok && timelineResult.data) {
+                                  setTimelineEvents(timelineResult.data);
+                                }
+                              } catch (err) {
+                                const errorMessage = err instanceof Error ? err.message : 'Failed to update review status';
+                                toast.error(errorMessage);
+                                setDoctorReviewStatus((lead as any)?.doctor_review_status || '');
+                              } finally {
+                                setIsUpdatingReview(false);
+                              }
+                            }
+                          }}
+                          disabled={isUpdatingReview || !leadId}
+                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        >
+                          <option value="">Select status...</option>
+                          <option value="pending">Pending</option>
+                          <option value="needs_info">Needs Info</option>
+                          <option value="approved_for_booking">Approved for Booking</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Review Notes</label>
+                        <textarea
+                          value={doctorReviewNotes}
+                          onChange={(e) => setDoctorReviewNotes(e.target.value)}
+                          onBlur={async () => {
+                            if (doctorReviewNotes !== ((lead as any)?.doctor_review_notes || '') && leadId) {
+                              setIsUpdatingReview(true);
+                              try {
+                                const token = await getAccessToken();
+                                console.log("token length", token?.length);
+                                const response = await fetch(`/api/leads`, {
+                                  method: 'PATCH',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`,
+                                  },
+                                  body: JSON.stringify({
+                                    id: leadId,
+                                    doctor_review_notes: doctorReviewNotes || null,
+                                  }),
+                                });
+
+                                const result = await response.json().catch(() => ({}));
+
+                                if (!response.ok || result.ok === false) {
+                                  throw new Error(result.error || 'Failed to update review notes');
+                                }
+
+                                if (result.lead) {
+                                  setLead((prev) => prev ? { ...prev, doctor_review_notes: (result.lead as any).doctor_review_notes } : null);
+                                }
+                                toast.success('Review notes updated');
+                              } catch (err) {
+                                const errorMessage = err instanceof Error ? err.message : 'Failed to update review notes';
+                                toast.error(errorMessage);
+                                setDoctorReviewNotes((lead as any)?.doctor_review_notes || '');
+                              } finally {
+                                setIsUpdatingReview(false);
+                              }
+                            }
+                          }}
+                          disabled={isUpdatingReview || !leadId}
+                          placeholder="Add review notes..."
+                          rows={4}
+                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             
@@ -2060,12 +2207,13 @@ export default function AdminPatientProfile() {
               )}
             </div>
 
-            {/* Contact Events Log */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <Phone className="w-4 h-4 text-gray-600" />
-                Contact Log
-              </h3>
+            {/* Contact Events Log (Admin/Employee only) */}
+            {!isDoctorMode && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-gray-600" />
+                  Contact Log
+                </h3>
               {isLoadingContactEvents ? (
                 <div className="flex items-center justify-center py-4">
                   <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />

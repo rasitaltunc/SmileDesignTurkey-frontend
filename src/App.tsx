@@ -325,7 +325,7 @@ export default function App() {
               </div>
             );
           }
-          if (role !== 'admin') {
+          if (role !== 'admin' && role !== 'employee') {
             return (
               <div className="min-h-screen flex items-center justify-center p-6">
                 <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
@@ -344,6 +344,41 @@ export default function App() {
             );
           }
           return <AdminPatientProfile />;
+        }
+        
+        // Handle dynamic /doctor/lead/:id route (for doctor mode)
+        if (currentPath.startsWith('/doctor/lead/')) {
+          if (isLoading || !role) {
+            return (
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Loading...</p>
+                </div>
+              </div>
+            );
+          }
+          if (role !== 'doctor') {
+            return (
+              <div className="min-h-screen flex items-center justify-center p-6">
+                <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
+                  <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
+                  <p className="mt-2 text-gray-600">
+                    You don't have permission to access the doctor panel.
+                  </p>
+                  <button
+                    className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
+                    onClick={() => navigate('/')}
+                  >
+                    Go back home
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          const leadIdMatch = currentPath.match(/\/doctor\/lead\/([^/]+)/);
+          const leadId = leadIdMatch ? leadIdMatch[1] : null;
+          return <AdminPatientProfile doctorMode={true} leadId={leadId} />;
         }
         return <Home />;
     }
