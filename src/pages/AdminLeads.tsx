@@ -2532,7 +2532,7 @@ export default function AdminLeads() {
                       </td>
                       <td className="px-6 py-4 align-top text-sm text-gray-700">
                         {isOnboardingLead(lead) ? (
-                          <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap">
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-900 ring-1 ring-inset ring-blue-200">
                             Onboarding
                           </span>
                         ) : (
