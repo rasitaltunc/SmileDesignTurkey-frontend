@@ -6,51 +6,40 @@
 -- 2. Paste this entire file and run it
 -- 3. This migration is idempotent (safe to run multiple times)
 
+-- Create extension if not exists
+create extension if not exists pgcrypto;
+
 -- Create table if not exists
-CREATE TABLE IF NOT EXISTS public.lead_timeline_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_id TEXT NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE,
-  stage TEXT NOT NULL,
-  actor_role TEXT NOT NULL DEFAULT 'consultant',
-  note TEXT,
-  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+create table if not exists public.lead_timeline_events (
+  id uuid primary key default gen_random_uuid(),
+  lead_id text not null,
+  stage text not null,
+  actor_role text not null default 'consultant',
+  note text null,
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid null,
+  created_at timestamptz not null default now()
 );
 
 -- Create indexes
-CREATE INDEX IF NOT EXISTS idx_lead_timeline_events_lead_id_created_at 
-  ON public.lead_timeline_events(lead_id, created_at DESC);
+create index if not exists lead_timeline_events_lead_id_created_at_idx
+  on public.lead_timeline_events (lead_id, created_at desc);
 
-CREATE INDEX IF NOT EXISTS idx_lead_timeline_events_stage 
-  ON public.lead_timeline_events(stage);
+create index if not exists lead_timeline_events_stage_idx
+  on public.lead_timeline_events (stage);
 
 -- Enable Row Level Security
-ALTER TABLE public.lead_timeline_events ENABLE ROW LEVEL SECURITY;
+alter table public.lead_timeline_events enable row level security;
 
 -- Drop existing policies if they exist (for idempotency)
-DROP POLICY IF EXISTS "Allow authenticated select" ON public.lead_timeline_events;
-DROP POLICY IF EXISTS "Allow authenticated insert" ON public.lead_timeline_events;
-DROP POLICY IF EXISTS "Allow authenticated update" ON public.lead_timeline_events;
+drop policy if exists "timeline_select_authenticated" on public.lead_timeline_events;
 
 -- Policy: Allow SELECT for authenticated users
-CREATE POLICY "Allow authenticated select" ON public.lead_timeline_events
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() IS NOT NULL);
-
--- Policy: Allow INSERT for authenticated users
-CREATE POLICY "Allow authenticated insert" ON public.lead_timeline_events
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() IS NOT NULL);
-
--- Policy: Allow UPDATE for authenticated users
-CREATE POLICY "Allow authenticated update" ON public.lead_timeline_events
-  FOR UPDATE
-  TO authenticated
-  USING (auth.uid() IS NOT NULL)
-  WITH CHECK (auth.uid() IS NOT NULL);
+create policy "timeline_select_authenticated"
+  on public.lead_timeline_events
+  for select
+  to authenticated
+  using ((select auth.uid()) is not null);
 
 -- Add comment to table
-COMMENT ON TABLE public.lead_timeline_events IS 'Tracks lead journey stages and events with actor roles and optional notes';
-
+comment on table public.lead_timeline_events is 'Tracks lead journey stages and events with actor roles and optional notes';
