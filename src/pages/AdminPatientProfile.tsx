@@ -80,6 +80,15 @@ export default function AdminPatientProfile() {
   useEffect(() => {
     console.log('ROUTE PARAMS', { currentPath, leadId });
   }, [currentPath, leadId]);
+
+  // Helper: Convert ISO timestamp to datetime-local format
+  const toDatetimeLocal = (ts?: string | null): string => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const [lead, setLead] = useState<Lead | null>(null);
   const [notes, setNotes] = useState<LeadNote[]>([]);
   const [newNoteContent, setNewNoteContent] = useState('');
@@ -226,13 +235,6 @@ export default function AdminPatientProfile() {
         
         // Initialize Next Action & Follow-up from loaded lead
         setNextAction(loadedLead.next_action || '');
-        // Helper: Convert ISO timestamp to datetime-local format
-        const toDatetimeLocal = (ts?: string | null): string => {
-          if (!ts) return "";
-          const d = new Date(ts);
-          const pad = (n: number) => String(n).padStart(2, "0");
-          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        };
         setFollowUpAt(toDatetimeLocal(loadedLead.follow_up_at));
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
