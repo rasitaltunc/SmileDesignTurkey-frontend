@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo, Clock, User, Phone, Mail, MessageCircle, FolderOpen, Image, FileText as FileTextIcon, FileCheck, File, Calendar } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
@@ -140,15 +141,11 @@ export default function AdminPatientProfile() {
 
   // Helper: Get access token
   const getAccessToken = async () => {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      throw new Error('Supabase client not configured');
-    }
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    if (!token) {
-      throw new Error('Session expired');
-    }
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+
+    const token = data.session?.access_token;
+    if (!token) throw new Error("Session missing. Please login again.");
     return token;
   };
 
@@ -375,6 +372,7 @@ export default function AdminPatientProfile() {
       setIsLoadingTasks(true);
       try {
         const token = await getAccessToken();
+        console.log("token length", token?.length);
         const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
         const response = await fetch(`${apiUrl}/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
           method: 'GET',
@@ -420,6 +418,7 @@ export default function AdminPatientProfile() {
       setIsLoadingTimeline(true);
       try {
         const token = await getAccessToken();
+        console.log("token length", token?.length);
         const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
         const response = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
           method: 'GET',
@@ -461,6 +460,7 @@ export default function AdminPatientProfile() {
       setIsLoadingContactEvents(true);
       try {
         const token = await getAccessToken();
+        console.log("token length", token?.length);
         const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
         const response = await fetch(`${apiUrl}/api/leads-contact-events?lead_id=${encodeURIComponent(leadId)}&limit=10`, {
           method: 'GET',
@@ -500,6 +500,7 @@ export default function AdminPatientProfile() {
     
     try {
       const token = await getAccessToken();
+      console.log("token length", token?.length);
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const response = await fetch(`${apiUrl}/api/leads-contact-events`, {
         method: 'POST',
@@ -545,6 +546,7 @@ export default function AdminPatientProfile() {
     
     try {
       const token = await getAccessToken();
+      console.log("token length", token?.length);
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const response = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
         method: 'POST',
@@ -624,6 +626,7 @@ export default function AdminPatientProfile() {
 
     try {
       const token = await getAccessToken();
+      console.log("token length", token?.length);
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
       const response = await fetch(`${apiUrl}/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
         method: 'POST',
@@ -1492,6 +1495,7 @@ export default function AdminPatientProfile() {
                                   
                                   try {
                                     const token = await getAccessToken();
+                                    console.log("token length", token?.length);
                                     const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
                                     const response = await fetch(`${apiUrl}/api/leads`, {
                                       method: 'PATCH',
@@ -1586,6 +1590,7 @@ export default function AdminPatientProfile() {
                           setIsUpdatingAction(true);
                           try {
                             const token = await getAccessToken();
+                            console.log("token length", token?.length);
                             const response = await fetch(`/api/leads`, {
                               method: 'PATCH',
                               headers: {
@@ -1639,6 +1644,7 @@ export default function AdminPatientProfile() {
                             setIsUpdatingAction(true);
                             try {
                               const token = await getAccessToken();
+                              console.log("token length", token?.length);
                               // ✅ Convert datetime-local to ISO string
                               const followUpValue = followUpAt ? new Date(followUpAt).toISOString() : null;
                               

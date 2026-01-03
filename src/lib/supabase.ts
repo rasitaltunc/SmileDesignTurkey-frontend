@@ -46,6 +46,12 @@ export function isSupabaseConfigured(): boolean {
   return getSupabaseClient() !== null;
 }
 
+/**
+ * Export supabase client instance (for direct use)
+ * Note: This may be null if env vars are not configured
+ */
+export const supabase = getSupabaseClient();
+
 import { submitLead } from './submitLead';
 
 export async function saveLeadToSupabase(lead: {
