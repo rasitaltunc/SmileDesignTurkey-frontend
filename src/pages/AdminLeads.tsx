@@ -2396,6 +2396,34 @@ export default function AdminLeads() {
                       const healthData = aiHealthMap[lead.id];
                       const needsNormalize = healthData?.needs_normalize ?? (!canonical || (canonical as CanonicalV11).review_required === true);
 
+                      // Helper: Normalize phone for WhatsApp
+                      const normalizePhoneForWa = (raw?: string | null) => {
+                        if (!raw) return null;
+                        let digits = String(raw).replace(/[^\d]/g, "");
+                        if (!digits) return null;
+                        if (digits.length === 11 && digits.startsWith("0")) digits = "90" + digits.slice(1);
+                        return digits;
+                      };
+
+                      // Helper: Get WhatsApp URL
+                      const getWhatsAppUrl = (phone?: string | null) => {
+                        const p = normalizePhoneForWa(phone);
+                        if (!p) return null;
+                        return `https://wa.me/${p}`;
+                      };
+
+                      // Helper: Check if lead is WhatsApp source
+                      const isWhatsAppLead = (lead: any) => {
+                        const s = `${lead?.source ?? ""} ${lead?.source_label ?? ""}`.toLowerCase();
+                        return s.includes("whatsapp");
+                      };
+
+                      // Helper: Check if lead is Onboarding source
+                      const isOnboardingLead = (lead: any) => {
+                        const s = `${lead?.source ?? ""} ${lead?.source_label ?? ""}`.toLowerCase();
+                        return s.includes("onboarding");
+                      };
+
                       return (
                         <>
                           <tr 
@@ -2479,68 +2507,37 @@ export default function AdminLeads() {
                       <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 whitespace-nowrap truncate max-w-[200px]">
                         {lead.email || '-'}
                       </td>
-                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
-                        <div className="flex items-center justify-start gap-2">
-                          <span className="truncate max-w-[120px]">{lead.phone || '-'}</span>
-                          {(() => {
-                            const wa = normalizePhoneToWhatsApp(lead.phone);
-                            return wa ? (
-                              <button
-                                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100 transition-colors"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                  window.open(url, "_blank", "noopener,noreferrer");
-                                }}
-                              >
-                                WhatsApp
-                              </button>
-                            ) : null;
-                          })()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-gray-700 leading-5 w-40">
+                      <td className="px-6 py-4 align-top text-sm text-gray-700">
                         {(() => {
-                          // Normalize source key for badge detection
-                          const sourceKey = String(lead.source ?? lead.source_label ?? "")
-                            .trim()
-                            .toLowerCase();
+                          const phoneText = lead.phone ?? "-";
+                          const waUrl = isWhatsAppLead(lead) ? getWhatsAppUrl(lead.phone) : null;
 
-                          const isWhatsApp = sourceKey.includes("whatsapp");
-                          const isOnboarding = sourceKey.includes("onboarding");
-
-                          const sourceText =
-                            lead.source_label ??
-                            (lead.source ? String(lead.source) : "-");
+                          if (!waUrl || phoneText === "-") {
+                            return <span className="text-sm text-gray-700">{phoneText}</span>;
+                          }
 
                           return (
-                            <div className="min-w-0 overflow-hidden">
-                              {/* badges */}
-                              <div className="flex flex-wrap items-center gap-1">
-                                {isWhatsApp && (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-emerald-600 text-white leading-none whitespace-nowrap">
-                                    WhatsApp
-                                  </span>
-                                )}
-                                {isOnboarding && (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap">
-                                    Onboarding
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* label: badge ile aynıysa basma */}
-                              <div className="mt-1 text-xs text-gray-500 truncate">
-                                {(() => {
-                                  const t = String(sourceText ?? "-").trim();
-                                  const tl = t.toLowerCase();
-                                  if ((isWhatsApp && tl === "whatsapp") || (isOnboarding && tl === "onboarding")) return "";
-                                  return t || "-";
-                                })()}
-                              </div>
-                            </div>
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-sm text-gray-900 hover:text-teal-700 underline decoration-teal-300 underline-offset-2"
+                              title="Open WhatsApp"
+                            >
+                              {phoneText}
+                            </a>
                           );
                         })()}
+                      </td>
+                      <td className="px-6 py-4 align-top text-sm text-gray-700">
+                        {isOnboardingLead(lead) ? (
+                          <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap">
+                            Onboarding
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 align-top w-44">
                         <div className="text-sm text-gray-900 truncate">{lead.treatment ?? "-"}</div>
