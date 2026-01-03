@@ -826,7 +826,7 @@ export default function AdminLeads() {
   // Modal uses overlay scroll architecture, so body scroll lock is not needed
 
   // Employee assignment state
-  const [employees, setEmployees] = useState<Array<{ id: string; full_name: string | null }>>([]);
+  const [employees, setEmployees] = useState<Array<{ id: string; full_name: string | null; role: string | null; created_at: string | null }>>([]);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
   const [selectedEmployeeByLead, setSelectedEmployeeByLead] = useState<Record<string, string>>({});
 
