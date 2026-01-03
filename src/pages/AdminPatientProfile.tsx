@@ -7,6 +7,7 @@ import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
 import { NavigationContext } from '@/App';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
+import CalEmbed from '../components/CalEmbed';
 
 // Import single source of truth from AdminLeads
 // Note: In a real refactor, this would be in a shared constants file
