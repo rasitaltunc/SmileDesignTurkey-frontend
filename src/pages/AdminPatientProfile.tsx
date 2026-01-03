@@ -461,6 +461,43 @@ export default function AdminPatientProfile() {
     fetchTimeline();
   }, [leadId, isAuthenticated]);
 
+  // Doctors: Fetch on page load
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const fetchDoctors = async () => {
+      setIsLoadingDoctors(true);
+      try {
+        const token = await getAccessToken();
+        console.log("token length", token?.length);
+        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+        const response = await fetch(`${apiUrl}/api/admin/doctors`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || result.ok === false) {
+          console.warn('[AdminPatientProfile] Failed to fetch doctors:', result.error);
+          return;
+        }
+
+        if (result.doctors) {
+          setDoctors(result.doctors);
+        }
+      } catch (err) {
+        console.error('[AdminPatientProfile] Error fetching doctors:', err);
+      } finally {
+        setIsLoadingDoctors(false);
+      }
+    };
+
+    fetchDoctors();
+  }, [isAuthenticated]);
+
   // Contact Events: Fetch on page load
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
