@@ -322,6 +322,7 @@ module.exports = async function handler(req, res) {
       name: patientName || null,
       phone: patientPhone || null,
       notes: notes || null,
+      status: leadData.status || "new", // ✅ Canonical value (never use "new_lead")
     };
     console.log(`[cal-webhook] Inserting new lead id=${newLeadData.id}`);
     result = await supabaseAdmin.from("leads").insert(newLeadData).select().single();

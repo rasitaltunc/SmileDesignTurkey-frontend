@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
 
     const row = {
       id,
-      status: "new",
+      status: "new", // ✅ Canonical value (never use "new_lead")
       // sende zaten kolonlar var: name/email/phone/utm/message/meta vs.
       name: (body.name || "").trim() || null,
       email: email || null,
