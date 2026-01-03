@@ -229,6 +229,7 @@ module.exports = async function handler(req, res) {
   const endTime = payload.endTime || payload.end || null;
   const attendees = payload.attendees || [];
   const patientEmail = attendees[0]?.email || payload.email || null;
+  const patientPhone = attendees[0]?.phone || payload.phone || null;
   const patientName =
     attendees[0]?.name ||
     payload.name ||
@@ -238,7 +239,7 @@ module.exports = async function handler(req, res) {
   const notes = payload.additionalNotes || payload.notes || payload.description || null;
   const calStatus = payload.status || "confirmed";
 
-  console.log(`[cal-webhook] Extracted: uid=${calBookingUid}, email=${patientEmail}, name=${patientName}`);
+  console.log(`[cal-webhook] Extracted: uid=${calBookingUid}, email=${patientEmail}, name=${patientName}, phone=${patientPhone}`);
 
   // Validate required fields
   if (!calBookingUid) {
@@ -250,15 +251,15 @@ module.exports = async function handler(req, res) {
   const leadData = {
     cal_booking_uid: calBookingUid,
     cal_booking_id: calBookingId,
-    source: "cal.com",
-    status: eventType === "booking.rescheduled" ? "booked" : "booked",
-    email: patientEmail || null,
-    name: patientName || null,
     meeting_start: startTime || null,
     meeting_end: endTime || null,
-    notes: notes || null,
     updated_at: new Date().toISOString(),
   };
+
+  // Only update status if it's a new booking (not rescheduled)
+  if (eventType === "booking.created") {
+    leadData.status = "appointment_set";
+  }
 
   // Remove null/undefined fields to avoid overwriting existing data with null
   Object.keys(leadData).forEach((key) => {
@@ -270,11 +271,36 @@ module.exports = async function handler(req, res) {
   console.log(`[cal-webhook] Upserting lead with cal_booking_uid=${calBookingUid}`);
 
   // First, try to find existing lead by cal_booking_uid
-  const { data: existingLead } = await supabaseAdmin
+  let existingLead = null;
+  const { data: leadByUid } = await supabaseAdmin
     .from("leads")
     .select("id")
     .eq("cal_booking_uid", calBookingUid)
     .single();
+  
+  if (leadByUid?.id) {
+    existingLead = leadByUid;
+  } else if (patientEmail || patientPhone) {
+    // Try to find lead by email or phone (for existing leads that got booked)
+    const { data: leadByContact } = await supabaseAdmin
+      .from("leads")
+      .select("id")
+      .or(
+        patientEmail && patientPhone
+          ? `email.eq.${patientEmail},phone.eq.${patientPhone}`
+          : patientEmail
+          ? `email.eq.${patientEmail}`
+          : `phone.eq.${patientPhone}`
+      )
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (leadByContact?.id) {
+      existingLead = leadByContact;
+      console.log(`[cal-webhook] Found existing lead by contact info: id=${existingLead.id}`);
+    }
+  }
 
   let result;
   if (existingLead?.id) {
@@ -288,11 +314,17 @@ module.exports = async function handler(req, res) {
       .single();
   } else {
     // Insert new lead (generate ID if not provided)
-    if (!leadData.id) {
-      leadData.id = `cal_${calBookingUid}_${Date.now()}`;
-    }
-    console.log(`[cal-webhook] Inserting new lead id=${leadData.id}`);
-    result = await supabaseAdmin.from("leads").insert(leadData).select().single();
+    const newLeadData = {
+      ...leadData,
+      id: leadData.id || `cal_${calBookingUid}_${Date.now()}`,
+      source: "cal.com",
+      email: patientEmail || null,
+      name: patientName || null,
+      phone: patientPhone || null,
+      notes: notes || null,
+    };
+    console.log(`[cal-webhook] Inserting new lead id=${newLeadData.id}`);
+    result = await supabaseAdmin.from("leads").insert(newLeadData).select().single();
   }
 
   const { data, error } = result;

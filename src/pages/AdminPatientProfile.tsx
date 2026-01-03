@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
-import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo, Clock, User, Phone, Mail, MessageCircle, FolderOpen, Image, FileText as FileTextIcon, FileCheck, File } from 'lucide-react';
+import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo, Clock, User, Phone, Mail, MessageCircle, FolderOpen, Image, FileText as FileTextIcon, FileCheck, File, Calendar } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
@@ -114,6 +114,11 @@ export default function AdminPatientProfile() {
   // Contact Events state
   const [contactEvents, setContactEvents] = useState<any[]>([]);
   const [isLoadingContactEvents, setIsLoadingContactEvents] = useState(false);
+
+  // Cal.com Booking state
+  const [readyForBooking, setReadyForBooking] = useState<boolean>(false);
+  const [isCalModalOpen, setIsCalModalOpen] = useState(false);
+  const [isUpdatingBookingFlag, setIsUpdatingBookingFlag] = useState(false);
 
   // Helper: Get access token
   const getAccessToken = async () => {
@@ -1844,6 +1849,16 @@ export default function AdminPatientProfile() {
           </div>
         </div>
       </div>
+
+      {/* Cal.com Embed Modal */}
+      <CalEmbed
+        calLink={process.env.VITE_CAL_LINK || 'smiledesignturkey/consultation'}
+        isOpen={isCalModalOpen}
+        onClose={() => setIsCalModalOpen(false)}
+        leadName={lead?.name || lead?.full_name || undefined}
+        leadEmail={lead?.email || undefined}
+        leadPhone={lead?.phone || undefined}
+      />
     </div>
   );
 }
