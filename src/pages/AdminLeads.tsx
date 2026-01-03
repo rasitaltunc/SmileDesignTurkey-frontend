@@ -2312,8 +2312,8 @@ export default function AdminLeads() {
                     <col style={{ width: '150px' }} /> {/* Name */}
                     <col style={{ width: '180px' }} /> {/* Email */}
                     <col style={{ width: '150px' }} /> {/* Phone */}
-                    <col style={{ width: '100px' }} /> {/* Source */}
-                    <col style={{ width: '120px' }} /> {/* Treatment */}
+                    <col style={{ width: '160px' }} /> {/* Source */}
+                    <col style={{ width: '176px' }} /> {/* Treatment */}
                     <col style={{ width: '120px' }} /> {/* Status */}
                     <col style={{ width: '140px' }} /> {/* Follow-up */}
                     <col style={{ width: '140px' }} /> {/* Assigned To */}
