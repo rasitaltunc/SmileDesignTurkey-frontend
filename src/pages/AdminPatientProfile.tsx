@@ -429,33 +429,18 @@ export default function AdminPatientProfile() {
         throw new Error(`${result.error || 'Failed to add timeline event'} (id: ${requestId})`);
       }
       
-      // PRO LEVEL: Auto-update lead status when timeline stage is set (UI-level guarantee)
-      // API already does this, but we also update in UI to ensure sync
-      if (newTimelineStage && LEAD_STATUS.includes(newTimelineStage as any)) {
-        try {
-          const updateResponse = await fetch(`${apiUrl}/api/leads`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              id: leadId,
-              status: newTimelineStage,
-            }),
-          });
-          
-          if (updateResponse.ok) {
-            const updateResult = await updateResponse.json();
-            if (updateResult.lead) {
-              // Update local lead state
-              setLead((prev) => prev ? { ...prev, status: newTimelineStage } : null);
-            }
-          }
-        } catch (updateErr) {
-          // Silent fail - API already updated, this is just UI sync
-          console.warn('[Timeline] UI-level status update failed (non-critical):', updateErr);
-        }
+      // PRO LEVEL: Update local lead state from API response (single source of truth)
+      // API already updated lead.status, so we sync UI state from response
+      if (result.data?.lead) {
+        setLead((prev) => prev ? { ...prev, status: result.data.lead.status, updated_at: result.data.lead.updated_at } : null);
+      } else if (newTimelineStage && LEAD_STATUS.includes(newTimelineStage as any)) {
+        // Fallback: If API didn't return lead, update optimistically
+        setLead((prev) => prev ? { ...prev, status: newTimelineStage } : null);
+      }
+      
+      // Show warning if lead status update failed
+      if (result.warning === 'LEAD_STATUS_UPDATE_FAILED') {
+        console.warn('[Timeline] Lead status update failed (timeline event created successfully)', result.requestId);
       }
       
       // Clear form
