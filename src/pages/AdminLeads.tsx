@@ -2412,21 +2412,21 @@ export default function AdminLeads() {
                             <div className="flex flex-col gap-1.5 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-xs text-gray-500">{new Date(lead.created_at).toLocaleString()}</span>
-                                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${priorityBadge.color}`}>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${priorityBadge.color}`}>
                                   {priorityBadge.emoji} {priorityBadge.label}
                                 </span>
                                 {canonicalRisk !== null && canonicalRisk !== undefined && (
-                                  <span className="text-xs text-gray-600">
+                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-100">
                                     Risk {canonicalRisk}
                                   </span>
                                 )}
                                 {isStale && (
-                                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-100">
                                     ⏳ {daysSinceActivity}d no activity
                                   </span>
                                 )}
                                 {needsNormalize && (
-                                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-orange-50 text-orange-700 ring-1 ring-orange-100">
                                     AI outdated
                                   </span>
                                 )}
@@ -2439,12 +2439,12 @@ export default function AdminLeads() {
                               {canonicalMissing.length > 0 && (
                                 <div className="flex flex-wrap gap-1 max-w-[300px]">
                                   {canonicalMissing.slice(0, 3).map((field, idx) => (
-                                    <span key={idx} className="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded">
+                                    <span key={idx} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100">
                                       {field}
                                     </span>
                                   ))}
                                   {canonicalMissing.length > 3 && (
-                                    <span className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-100">
                                       +{canonicalMissing.length - 3}
                                     </span>
                                   )}
@@ -2587,14 +2587,14 @@ export default function AdminLeads() {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-600 truncate block">
+                          <span className="text-sm text-gray-700 truncate block">
                             {lead.follow_up_at 
                               ? new Date(lead.follow_up_at).toLocaleString()
                               : '-'}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 truncate overflow-hidden whitespace-nowrap">
+                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 truncate max-w-[150px]">
                         {role === 'admin' && (
                           <div className="flex items-center gap-2 min-w-0">
                             <select
