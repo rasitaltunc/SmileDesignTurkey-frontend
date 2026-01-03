@@ -155,6 +155,49 @@ module.exports = async function handler(req, res) {
           throw error;
         }
 
+        // PRO LEVEL: Auto-update lead status when timeline stage is set
+        // Stage values match LEAD_STATUS values (single source of truth)
+        // Valid stages: new_lead, contacted, qualified, consultation_scheduled, etc.
+        const validStages = [
+          'new_lead',
+          'contacted',
+          'qualified',
+          'consultation_scheduled',
+          'consultation_completed',
+          'quote_sent',
+          'deposit_paid',
+          'appointment_set',
+          'treatment_in_progress',
+          'treatment_completed',
+          'lost',
+        ];
+        
+        if (validStages.includes(stage)) {
+          try {
+            const { error: updateError } = await supabase
+              .from("leads")
+              .update({ status: stage })
+              .eq("id", leadId);
+            
+            if (updateError) {
+              // Log but don't fail - timeline event was created successfully
+              console.warn("[lead-timeline] Failed to update lead status", requestId, {
+                leadId,
+                stage,
+                error: updateError.message,
+              });
+            } else {
+              console.log("[lead-timeline] Auto-updated lead status", requestId, {
+                leadId,
+                stage,
+              });
+            }
+          } catch (updateErr) {
+            // Silent fail - timeline event is more important than status update
+            console.warn("[lead-timeline] Error updating lead status", requestId, updateErr);
+          }
+        }
+
         return res.status(200).json({
           ok: true,
           data: data,
