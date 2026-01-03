@@ -516,7 +516,8 @@ export default function AdminLeads() {
         case 'due_today':
           return filtered.filter(l => isDueTodayISO(l.follow_up_at));
         case 'appointment_set':
-          return filtered.filter(l => l.status === 'appointment_set');
+          // Appointment filter: appointment_set OR consultation_scheduled
+          return filtered.filter(l => l.status === 'appointment_set' || l.status === 'consultation_scheduled');
         case 'deposit_paid':
           return filtered.filter(l => l.status === 'deposit_paid');
         case 'all':
@@ -530,7 +531,8 @@ export default function AdminLeads() {
         case 'due_today':
           return myLeads.filter(l => isDueTodayISO(l.follow_up_at));
         case 'appointment_set':
-          return myLeads.filter(l => l.status === 'appointment_set');
+          // Appointment filter: appointment_set OR consultation_scheduled
+          return myLeads.filter(l => l.status === 'appointment_set' || l.status === 'consultation_scheduled');
         case 'deposit_paid':
           return myLeads.filter(l => l.status === 'deposit_paid');
         case 'all':

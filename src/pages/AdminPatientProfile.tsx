@@ -23,6 +23,9 @@ const TIMELINE_STAGES = [
   "lost",
 ] as const;
 
+// LEAD_STATUS for validation (matches TIMELINE_STAGES)
+const LEAD_STATUS = TIMELINE_STAGES;
+
 const TIMELINE_STAGE_LABEL: Record<string, string> = {
   new_lead: "New Lead",
   contacted: "Contacted",
@@ -408,19 +411,51 @@ export default function AdminPatientProfile() {
         },
         body: JSON.stringify({
           stage: newTimelineStage,
-          note: newTimelineNote.trim() || null,
+          // Auto-generate note if empty: "Status updated to {label}"
+          note: newTimelineNote.trim() || `Status updated to ${TIMELINE_STAGE_LABEL[newTimelineStage] || newTimelineStage}`,
           payload: {},
         }),
       });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to add timeline event' }));
-        throw new Error(errorData.error || 'Failed to add timeline event');
+        const requestId = errorData.requestId || 'unknown';
+        throw new Error(`${errorData.error || 'Failed to add timeline event'} (id: ${requestId})`);
       }
       
       const result = await response.json();
       if (!result.ok) {
-        throw new Error(result.error || 'Failed to add timeline event');
+        const requestId = result.requestId || 'unknown';
+        throw new Error(`${result.error || 'Failed to add timeline event'} (id: ${requestId})`);
+      }
+      
+      // PRO LEVEL: Auto-update lead status when timeline stage is set (UI-level guarantee)
+      // API already does this, but we also update in UI to ensure sync
+      if (newTimelineStage && LEAD_STATUS.includes(newTimelineStage as any)) {
+        try {
+          const updateResponse = await fetch(`${apiUrl}/api/leads`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              id: leadId,
+              status: newTimelineStage,
+            }),
+          });
+          
+          if (updateResponse.ok) {
+            const updateResult = await updateResponse.json();
+            if (updateResult.lead) {
+              // Update local lead state
+              setLead((prev) => prev ? { ...prev, status: newTimelineStage } : null);
+            }
+          }
+        } catch (updateErr) {
+          // Silent fail - API already updated, this is just UI sync
+          console.warn('[Timeline] UI-level status update failed (non-critical):', updateErr);
+        }
       }
       
       // Clear form
@@ -446,7 +481,10 @@ export default function AdminPatientProfile() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to add timeline event';
       console.error('[Add Timeline Event] Error:', err);
-      toast.error('Something went wrong. Check logs.', { id: toastId });
+      // Extract requestId from error message if present
+      const requestIdMatch = errorMessage.match(/\(id: ([^)]+)\)/);
+      const requestId = requestIdMatch ? requestIdMatch[1] : null;
+      toast.error(requestId ? `Something went wrong. Check logs. (id: ${requestId})` : 'Something went wrong. Check logs.', { id: toastId });
     } finally {
       setIsAddingTimelineEvent(false);
     }
@@ -553,7 +591,8 @@ export default function AdminPatientProfile() {
       const result = await briefLead(leadId);
       
       if (!result.ok) {
-        throw new Error(result.error || 'Failed to generate snapshot');
+        const requestId = result.requestId || 'unknown';
+        throw new Error(`${result.error || 'Failed to generate snapshot'} (id: ${requestId})`);
       }
 
       setBriefData(result);
@@ -579,7 +618,10 @@ export default function AdminPatientProfile() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate snapshot';
       setError(errorMessage);
       console.error('[Generate Snapshot] Error:', err);
-      toast.error('Something went wrong. Check logs.', { id: toastId });
+      // Extract requestId from error message if present
+      const requestIdMatch = errorMessage.match(/\(id: ([^)]+)\)/);
+      const requestId = requestIdMatch ? requestIdMatch[1] : null;
+      toast.error(requestId ? `Something went wrong. Check logs. (id: ${requestId})` : 'Something went wrong. Check logs.', { id: toastId });
     } finally {
       setIsLoadingBrief(false);
     }
@@ -618,12 +660,14 @@ export default function AdminPatientProfile() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to normalize notes' }));
-        throw new Error(errorData.error || 'Failed to normalize notes');
+        const requestId = errorData.requestId || 'unknown';
+        throw new Error(`${errorData.error || 'Failed to normalize notes'} (id: ${requestId})`);
       }
 
       const result = await response.json();
       if (!result.ok) {
-        throw new Error(result.error || 'Normalization failed');
+        const requestId = result.requestId || 'unknown';
+        throw new Error(`${result.error || 'Normalization failed'} (id: ${requestId})`);
       }
 
       if (result.normalized && result.data) {
@@ -648,7 +692,10 @@ export default function AdminPatientProfile() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to normalize notes';
       setError(errorMessage);
       console.error('[Normalize] Error:', err);
-      toast.error('Something went wrong. Check logs.', { id: toastId });
+      // Extract requestId from error message if present
+      const requestIdMatch = errorMessage.match(/\(id: ([^)]+)\)/);
+      const requestId = requestIdMatch ? requestIdMatch[1] : null;
+      toast.error(requestId ? `Something went wrong. Check logs. (id: ${requestId})` : 'Something went wrong. Check logs.', { id: toastId });
     } finally {
       setIsLoadingNormalize(false);
     }
@@ -690,15 +737,17 @@ export default function AdminPatientProfile() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to sync memory' }));
+        const requestId = errorData.requestId || 'unknown';
         if (errorData.error === 'TABLE_NOT_FOUND') {
-          throw new Error('AI memory table not found. Please run migration.');
+          throw new Error(`AI memory table not found. Please run migration. (id: ${requestId})`);
         }
-        throw new Error(errorData.error || 'Failed to sync memory');
+        throw new Error(`${errorData.error || 'Failed to sync memory'} (id: ${requestId})`);
       }
 
       const result = await response.json();
       if (!result.ok) {
-        throw new Error(result.error || 'Sync failed');
+        const requestId = result.requestId || 'unknown';
+        throw new Error(`${result.error || 'Sync failed'} (id: ${requestId})`);
       }
 
       if (result.data?.memory) {
@@ -710,7 +759,10 @@ export default function AdminPatientProfile() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sync memory';
       setError(errorMessage);
       console.error('[Sync Memory] Error:', err);
-      toast.error('Something went wrong. Check logs.', { id: toastId });
+      // Extract requestId from error message if present
+      const requestIdMatch = errorMessage.match(/\(id: ([^)]+)\)/);
+      const requestId = requestIdMatch ? requestIdMatch[1] : null;
+      toast.error(requestId ? `Something went wrong. Check logs. (id: ${requestId})` : 'Something went wrong. Check logs.', { id: toastId });
     } finally {
       setIsSyncingMemory(false);
     }
