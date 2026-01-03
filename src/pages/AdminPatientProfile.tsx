@@ -141,6 +141,9 @@ export default function AdminPatientProfile() {
 
   // Helper: Get access token
   const getAccessToken = async () => {
+    if (!supabase) {
+      throw new Error('Supabase client not configured');
+    }
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
 
