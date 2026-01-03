@@ -2408,7 +2408,7 @@ export default function AdminLeads() {
                                 : ""
                             }`}
                           >
-                          <td className="px-6 py-4 text-sm text-gray-900 truncate overflow-hidden">
+                          <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
                             <div className="flex flex-col gap-1.5 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-xs text-gray-500">{new Date(lead.created_at).toLocaleString()}</span>
@@ -2463,7 +2463,7 @@ export default function AdminLeads() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
+                          <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -2476,18 +2476,19 @@ export default function AdminLeads() {
                               {lead.name || '-'}
                             </button>
                           </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 whitespace-nowrap truncate max-w-[200px]">
                         {lead.email || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center gap-2">
-                          <span>{lead.phone || '-'}</span>
+                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
+                        <div className="flex items-center justify-start gap-2">
+                          <span className="truncate max-w-[120px]">{lead.phone || '-'}</span>
                           {(() => {
                             const wa = normalizePhoneToWhatsApp(lead.phone);
                             return wa ? (
                               <button
-                                className="text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-                                onClick={() => {
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 hover:bg-emerald-100 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
                                   window.open(url, "_blank", "noopener,noreferrer");
                                 }}
@@ -2498,19 +2499,19 @@ export default function AdminLeads() {
                           })()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 truncate overflow-hidden whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
                           lead.source === 'onboarding' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-green-100 text-green-800'
+                            ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' 
+                            : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
                         }`}>
                           {lead.source}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 truncate overflow-hidden whitespace-nowrap">
+                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 truncate max-w-[180px]">
                         {lead.treatment || '-'}
                       </td>
-                      <td className="px-6 py-4 truncate overflow-hidden whitespace-nowrap">
+                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
                         {editingLead?.id === lead.id ? (
                           <div className="flex flex-col gap-2">
                             <select
@@ -2542,20 +2543,22 @@ export default function AdminLeads() {
                             </div>
                           </div>
                         ) : (
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            (lead.status?.toLowerCase() || 'new') === 'new' ? 'bg-yellow-100 text-yellow-800' :
-                            lead.status?.toLowerCase() === 'contacted' ? 'bg-blue-100 text-blue-800' :
-                            lead.status?.toLowerCase() === 'booked' ? 'bg-purple-100 text-purple-800' :
-                            lead.status?.toLowerCase() === 'paid' ? 'bg-green-100 text-green-800' :
-                            lead.status?.toLowerCase() === 'completed' ? 'bg-emerald-100 text-emerald-800' :
-                            'bg-gray-100 text-gray-800'
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                            (lead.status?.toLowerCase() || 'new') === 'new' ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100' :
+                            lead.status?.toLowerCase() === 'contacted' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
+                            lead.status?.toLowerCase() === 'deposit_paid' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
+                            lead.status?.toLowerCase() === 'appointment_set' ? 'bg-purple-50 text-purple-700 ring-1 ring-purple-100' :
+                            lead.status?.toLowerCase() === 'arrived' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100' :
+                            lead.status?.toLowerCase() === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
+                            lead.status?.toLowerCase() === 'lost' ? 'bg-gray-50 text-gray-700 ring-1 ring-gray-100' :
+                            'bg-gray-50 text-gray-700 ring-1 ring-gray-100'
                           }`}>
                             {LEAD_STATUS_LABEL[lead.status?.toLowerCase() || 'new'] || 
                              (lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1).replace(/_/g, ' ') : 'New Lead')}
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 truncate overflow-hidden whitespace-nowrap">
+                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 truncate max-w-[180px]">
                         {editingLead?.id === lead.id ? (
                           <div className="flex flex-col gap-2">
                             <input
