@@ -30,9 +30,17 @@ module.exports = async function handler(req, res) {
 
     // Auth guard: Accept either x-admin-token OR Authorization Bearer
     const adminToken = req.headers["x-admin-token"] || req.headers["X-Admin-Token"];
-    const authHeader = req.headers.authorization || req.headers.Authorization;
-    const m = String(authHeader || "").match(/^Bearer\s+(.+)$/i);
-    const jwt = m ? m[1] : null;
+    
+    function getBearerToken(req) {
+      const h = req.headers.authorization; // ✅ Node'da hep lowercase gelir
+      if (!h) return null;
+
+      const [type, token] = String(h).split(" ");
+      if (!type || type.toLowerCase() !== "bearer") return null;
+      return token || null;
+    }
+    
+    const jwt = getBearerToken(req);
     
     // Check if admin token matches
     const adminTokenValid = adminToken && process.env.ADMIN_TOKEN && adminToken === process.env.ADMIN_TOKEN;

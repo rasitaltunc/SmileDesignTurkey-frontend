@@ -2,10 +2,12 @@
 const { createClient } = require("@supabase/supabase-js");
 
 function getBearerToken(req) {
-  const h = req.headers["authorization"] || req.headers["Authorization"];
+  const h = req.headers.authorization; // ✅ Node'da hep lowercase gelir
   if (!h) return null;
-  const m = h.match(/^Bearer\s+(.+)$/i);
-  return m ? m[1] : null;
+
+  const [type, token] = String(h).split(" ");
+  if (!type || type.toLowerCase() !== "bearer") return null;
+  return token || null;
 }
 
 function setCors(res) {

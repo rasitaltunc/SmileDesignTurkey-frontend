@@ -2,11 +2,12 @@
 const { createClient } = require("@supabase/supabase-js");
 
 function getBearerToken(req) {
-  const h = req.headers["authorization"] || req.headers["Authorization"];
+  const h = req.headers.authorization; // ✅ Node'da hep lowercase gelir
   if (!h) return null;
-  const parts = String(h).split(" ");
-  if (parts.length === 2 && parts[0].toLowerCase() === "bearer") return parts[1];
-  return null;
+
+  const [type, token] = String(h).split(" ");
+  if (!type || type.toLowerCase() !== "bearer") return null;
+  return token || null;
 }
 
 module.exports = async function handler(req, res) {

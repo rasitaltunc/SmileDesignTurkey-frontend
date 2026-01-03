@@ -11,12 +11,13 @@ function setCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token");
 }
 
-function getAuthToken(req) {
-  const authHeader = req.headers["authorization"] || "";
-  if (authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7);
-  }
-  return null;
+function getBearerToken(req) {
+  const h = req.headers.authorization; // ✅ Node'da hep lowercase gelir
+  if (!h) return null;
+
+  const [type, token] = String(h).split(" ");
+  if (!type || type.toLowerCase() !== "bearer") return null;
+  return token || null;
 }
 
 function getAdminToken(req) {
@@ -24,7 +25,7 @@ function getAdminToken(req) {
 }
 
 async function verifyAuth(req) {
-  const bearerToken = getAuthToken(req);
+  const bearerToken = getBearerToken(req);
   const adminToken = getAdminToken(req);
   const expectedAdminToken = process.env.ADMIN_TOKEN || "";
 

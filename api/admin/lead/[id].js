@@ -34,9 +34,16 @@ module.exports = async function handler(req, res) {
     }
 
     // Token guard
-    const authHeader = req.headers.authorization || req.headers.Authorization;
-    const m = String(authHeader || "").match(/^Bearer\s+(.+)$/i);
-    const jwt = m ? m[1] : null;
+    function getBearerToken(req) {
+      const h = req.headers.authorization; // ✅ Node'da hep lowercase gelir
+      if (!h) return null;
+
+      const [type, token] = String(h).split(" ");
+      if (!type || type.toLowerCase() !== "bearer") return null;
+      return token || null;
+    }
+    
+    const jwt = getBearerToken(req);
     if (!jwt) {
       return res.status(401).json({
         ok: false,
