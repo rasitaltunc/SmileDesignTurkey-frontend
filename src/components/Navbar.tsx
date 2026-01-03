@@ -235,10 +235,10 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
           )}
 
           {/* Desktop CTAs */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2 md:gap-3">
             <button
               onClick={toggleLanguage}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium text-gray-700 hover:text-teal-600 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium text-gray-700 hover:text-teal-600 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
               aria-label={`Switch to ${lang === 'en' ? 'Turkish' : 'English'}`}
             >
               <Globe className="w-4 h-4" />
@@ -249,7 +249,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               <>
                 <button
                   onClick={handleWhatsAppClick}
-                  className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium text-teal-600 border border-teal-600 hover:bg-teal-50 transition-colors"
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-teal-600 border border-teal-600 hover:bg-teal-50 transition-colors whitespace-nowrap shrink-0"
                   aria-label={content.whatsapp.ctaText}
                 >
                   <MessageCircle className="w-4 h-4" />
@@ -258,7 +258,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
 
                 <Link
                   to="/onboarding"
-                  className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                  className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors whitespace-nowrap shrink-0"
                   onClick={() => trackEvent({ type: 'cta_click', where: 'navbar', cta: 'free_consultation', lang })}
                 >
                   {content.cta.primary}
@@ -270,7 +270,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
             {!isAuthenticated ? (
               <button
                 onClick={openAuth}
-                className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
               >
                 <User className="w-4 h-4" />
                 Login
@@ -280,18 +280,18 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                 {roleLabel && role ? (
                   <Link
                     to={role === 'admin' ? '/admin/leads' : '/employee/leads'}
-                    className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                    className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
                   >
                     {roleLabel}
                   </Link>
                 ) : roleLabel ? (
-                  <span className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-500">
+                  <span className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-500 whitespace-nowrap shrink-0">
                     {roleLabel}
                   </span>
                 ) : null}
                 <button
                   onClick={handleLogout}
-                  className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
                   aria-label="Logout"
                 >
                   <LogOut className="w-4 h-4" />
@@ -461,13 +461,13 @@ function AuthModal(props: {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <button
-        className="absolute inset-0 bg-black/30"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         aria-label="Close login modal"
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="relative w-[min(92vw,720px)] max-w-xl rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <div className="text-sm text-gray-500">Sign in</div>
             <div className="text-lg font-semibold text-gray-900">
@@ -479,8 +479,8 @@ function AuthModal(props: {
           </button>
         </div>
 
-        <div className="px-5 pt-4">
-          <div className="flex gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100">
+        <div className="px-6 pt-4 pb-6">
+          <div className="flex gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100 max-w-xl">
             <button
               type="button"
               onClick={() => {
