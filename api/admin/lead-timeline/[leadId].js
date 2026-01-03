@@ -173,6 +173,7 @@ module.exports = async function handler(req, res) {
         
         if (validStages.includes(stage)) {
           // After inserting timeline event successfully, update lead status
+          console.log("[lead-timeline] Updating lead status", { requestId, leadId, stage });
           const { data: updatedLeadData, error: leadUpdateErr } = await supabase
             .from("leads")
             .update({
@@ -188,12 +189,15 @@ module.exports = async function handler(req, res) {
             console.error("LEAD_STATUS_UPDATE_ERROR", { requestId, leadId, stage, leadUpdateError });
           } else {
             updatedLead = updatedLeadData;
-            console.log("[lead-timeline] Auto-updated lead status", requestId, {
+            console.log("[lead-timeline] ✅ Auto-updated lead status", requestId, {
               leadId,
               stage,
-              updatedLead: updatedLead?.id,
+              updatedStatus: updatedLead?.status,
+              updatedAt: updatedLead?.updated_at,
             });
           }
+        } else {
+          console.warn("[lead-timeline] Stage not in validStages, skipping lead update", { requestId, leadId, stage, validStages });
         }
 
         return res.status(200).json({
