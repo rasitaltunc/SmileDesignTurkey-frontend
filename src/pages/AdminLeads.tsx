@@ -2326,8 +2326,8 @@ export default function AdminLeads() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Treatment</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Source</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">Treatment</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
@@ -2499,25 +2499,32 @@ export default function AdminLeads() {
                           })()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {lead.source === "whatsapp" && (
-                            <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-emerald-600 text-white leading-none whitespace-nowrap shrink-0">
-                              WhatsApp
-                            </span>
-                          )}
-                          {lead.source === "onboarding" && (
-                            <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap shrink-0">
-                              Onboarding
-                            </span>
-                          )}
-                          <span className="text-sm text-gray-700 truncate min-w-0">
+                      <td className="px-6 py-4 align-top text-sm text-gray-700 leading-5 w-40">
+                        <div className="min-w-0 overflow-hidden">
+                          {/* badges row */}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {lead.source === "whatsapp" && (
+                              <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-emerald-600 text-white leading-none whitespace-nowrap">
+                                WhatsApp
+                              </span>
+                            )}
+                            {lead.source === "onboarding" && (
+                              <span className="inline-flex items-center h-5 px-2 rounded-md text-[11px] font-semibold bg-blue-600 text-white leading-none whitespace-nowrap">
+                                Onboarding
+                              </span>
+                            )}
+                          </div>
+                          {/* label row */}
+                          <div className="mt-1 text-xs text-gray-500 truncate">
                             {lead.source_label ?? lead.source ?? "-"}
-                          </span>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 truncate max-w-[180px]">
-                        {lead.treatment || '-'}
+                      <td className="px-6 py-4 align-top w-44">
+                        <div className="text-sm text-gray-900 truncate">{lead.treatment ?? "-"}</div>
+                        {lead.treatment_type && (
+                          <div className="mt-1 text-xs text-gray-500 truncate">{lead.treatment_type}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
                         {editingLead?.id === lead.id ? (
