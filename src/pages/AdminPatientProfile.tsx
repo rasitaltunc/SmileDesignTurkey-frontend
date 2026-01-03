@@ -6,6 +6,9 @@ import { toast } from 'sonner';
 import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
 import { NavigationContext } from '@/App';
 
+// Import single source of truth from AdminLeads
+// Note: In a real refactor, this would be in a shared constants file
+// For now, we keep it in sync with AdminLeads.tsx
 const TIMELINE_STAGES = [
   "new_lead",
   "contacted",

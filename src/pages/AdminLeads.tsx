@@ -140,30 +140,66 @@ function FormattedAIBrief({ content }: { content: string }) {
   );
 }
 
-// Status options - CRM MVP Pipeline (3C: Appointment → Deposit)
-// Helper: Map lead status to timeline stage
+// Single source of truth: Lead Status (matches Timeline Stages)
+export const LEAD_STATUS = [
+  'new_lead',
+  'contacted',
+  'qualified',
+  'consultation_scheduled',
+  'consultation_completed',
+  'quote_sent',
+  'deposit_paid',
+  'appointment_set',
+  'treatment_in_progress',
+  'treatment_completed',
+  'lost',
+] as const;
+
+// Status labels for UI
+const LEAD_STATUS_LABEL: Record<string, string> = {
+  new_lead: 'New Lead',
+  contacted: 'Contacted',
+  qualified: 'Qualified',
+  consultation_scheduled: 'Consultation Scheduled',
+  consultation_completed: 'Consultation Completed',
+  quote_sent: 'Quote Sent',
+  deposit_paid: 'Deposit Paid',
+  appointment_set: 'Appointment Set',
+  treatment_in_progress: 'Treatment In Progress',
+  treatment_completed: 'Treatment Completed',
+  lost: 'Lost',
+};
+
+// Legacy: Derived from LEAD_STATUS for backward compatibility
+const LEAD_STATUSES = LEAD_STATUS.map((status) => ({
+  value: status,
+  label: LEAD_STATUS_LABEL[status] || status,
+}));
+
+// Helper: Map lead status to timeline stage (1:1 mapping since they share the same source)
 const statusToTimelineStage = (status: string | null | undefined): string | null => {
   if (!status) return null;
   const normalized = status.toLowerCase().trim();
   
-  // Direct mappings
-  const mapping: Record<string, string> = {
+  // Direct 1:1 mapping (status and timeline stage are the same)
+  // Legacy mappings for old status values
+  const legacyMapping: Record<string, string> = {
     'new': 'new_lead',
-    'contacted': 'contacted',
-    'qualified': 'qualified',
-    'consultation_scheduled': 'consultation_scheduled',
-    'consultation_completed': 'consultation_completed',
-    'quote_sent': 'quote_sent',
-    'deposit_paid': 'deposit_paid',
-    'appointment_set': 'appointment_set',
-    'treatment_in_progress': 'treatment_in_progress',
-    'treatment_completed': 'treatment_completed',
     'completed': 'treatment_completed',
-    'lost': 'lost',
-    'arrived': 'treatment_in_progress', // Legacy mapping
+    'arrived': 'treatment_in_progress',
   };
   
-  return mapping[normalized] || null;
+  // Check if it's a valid LEAD_STATUS
+  if (LEAD_STATUS.includes(normalized as any)) {
+    return normalized;
+  }
+  
+  // Check legacy mappings
+  if (legacyMapping[normalized]) {
+    return legacyMapping[normalized];
+  }
+  
+  return null;
 };
 
 // Helper: Add timeline event when status changes
@@ -1066,8 +1102,10 @@ export default function AdminLeads() {
   // Handle edit start
   const handleEditStart = (lead: Lead) => {
     setEditingLead(lead);
-    // Normalize status to lowercase (handle any case variations from DB)
-    setEditStatus((lead.status || 'new').toLowerCase());
+    // Normalize status to lowercase, validate against LEAD_STATUS (default to 'new_lead')
+    const currentStatus = (lead.status || 'new_lead').toLowerCase();
+    const validStatus = LEAD_STATUS.includes(currentStatus as any) ? currentStatus : 'new_lead';
+    setEditStatus(validStatus);
     setEditNotes(lead.notes || '');
     // Format follow_up_at for datetime-local input (YYYY-MM-DDTHH:mm)
     if (lead.follow_up_at) {
@@ -1086,13 +1124,18 @@ export default function AdminLeads() {
     if (!editingLead) return;
 
     const updates: any = {};
-    // Normalize status: trim, lowercase, default to 'new' if empty
-    const normalizedEditStatus = (editStatus || 'new').trim().toLowerCase() || 'new';
-    const normalizedCurrentStatus = (editingLead.status || 'new').toLowerCase();
+    // Normalize status: trim, lowercase, default to 'new_lead' if empty
+    const normalizedEditStatus = (editStatus || 'new_lead').trim().toLowerCase() || 'new_lead';
+    const normalizedCurrentStatus = (editingLead.status || 'new_lead').toLowerCase();
+    
+    // Validate against LEAD_STATUS (fallback to 'new_lead' if invalid)
+    const validStatus = LEAD_STATUS.includes(normalizedEditStatus as any) 
+      ? normalizedEditStatus 
+      : 'new_lead';
     
     // Always send lowercase canonical value
-    if (normalizedEditStatus !== normalizedCurrentStatus) {
-      updates.status = normalizedEditStatus; // Always lowercase, never empty
+    if (validStatus !== normalizedCurrentStatus) {
+      updates.status = validStatus; // Always lowercase, always valid LEAD_STATUS value
     }
     if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
     
@@ -2514,8 +2557,8 @@ export default function AdminLeads() {
                             lead.status?.toLowerCase() === 'completed' ? 'bg-emerald-100 text-emerald-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
-                            {LEAD_STATUSES.find(s => s.value === lead.status?.toLowerCase())?.label || 
-                             (lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1).toLowerCase() : 'New')}
+                            {LEAD_STATUS_LABEL[lead.status?.toLowerCase() || 'new_lead'] || 
+                             (lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1).replace(/_/g, ' ') : 'New Lead')}
                           </span>
                         )}
                       </td>
