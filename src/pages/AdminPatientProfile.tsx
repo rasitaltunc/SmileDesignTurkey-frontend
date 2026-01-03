@@ -1,10 +1,12 @@
 import { useState, useEffect, useContext } from 'react';
-import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo, Clock } from 'lucide-react';
+import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo, Clock, User, Phone, Mail, MessageCircle, FolderOpen, Image, FileText as FileTextIcon, FileCheck, File } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
 import { NavigationContext } from '@/App';
+import { getWhatsAppUrl } from '@/lib/whatsapp';
+import { BRAND } from '@/config';
 
 // Import single source of truth from AdminLeads
 // Note: In a real refactor, this would be in a shared constants file
@@ -116,6 +118,33 @@ export default function AdminPatientProfile() {
       throw new Error('Session expired');
     }
     return token;
+  };
+
+  // Helper: Normalize phone to WhatsApp format
+  const normalizePhoneToWhatsApp = (phone?: string | null) => {
+    if (!phone) return null;
+    let p = String(phone).trim().replace(/[^\d+]/g, "");
+    if (p.startsWith("0")) p = "+90" + p.slice(1);
+    if (!p.startsWith("+") && p.length === 10) p = "+90" + p;
+    if (!p.startsWith("+")) p = "+" + p;
+    const digits = p.replace(/\+/g, "");
+    if (p.replace(/\D/g, "").length < 11) return null;
+    return digits;
+  };
+
+  // Helper: WhatsApp message for lead
+  const waMessageEN = (lead: Lead) => {
+    return (
+      `Hi ${lead?.name || lead?.full_name || ""}! 👋\n` +
+      `This is Smile Design Turkey.\n\n` +
+      `I'm reaching out about your request:\n` +
+      `• Treatment: ${lead?.treatment || "-"}\n` +
+      `• Timeline: ${lead?.timeline || "-"}\n\n` +
+      `To prepare your plan, could you send:\n` +
+      `1) A clear smile photo\n` +
+      `2) A short video (front + side)\n` +
+      `3) Any x-ray if available 😊`
+    );
   };
 
   // leadId validation
@@ -1127,6 +1156,168 @@ export default function AdminPatientProfile() {
 
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
+            {/* Premium Patient Profile Card */}
+            {lead && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                {/* A) Top Row: Avatar + Name + Country/Language + Status + Quick Actions */}
+                <div className="flex items-start justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {/* Avatar */}
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-semibold text-lg shrink-0">
+                      {lead.name || lead.full_name ? (lead.name || lead.full_name)!.charAt(0).toUpperCase() : <User className="w-6 h-6" />}
+                    </div>
+                    
+                    {/* Name + Country/Language + Status */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-gray-900 truncate">{lead.name || lead.full_name || 'Unknown'}</h3>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {lead.country && (
+                          <span className="text-xs text-gray-600">{lead.country}</span>
+                        )}
+                        {lead.lang && (
+                          <span className="text-xs text-gray-500">• {lead.lang.toUpperCase()}</span>
+                        )}
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          (lead.status?.toLowerCase() || 'new') === 'new' ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100' :
+                          lead.status?.toLowerCase() === 'contacted' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
+                          lead.status?.toLowerCase() === 'deposit_paid' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
+                          lead.status?.toLowerCase() === 'appointment_set' ? 'bg-purple-50 text-purple-700 ring-1 ring-purple-100' :
+                          lead.status?.toLowerCase() === 'arrived' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100' :
+                          lead.status?.toLowerCase() === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
+                          lead.status?.toLowerCase() === 'lost' ? 'bg-gray-50 text-gray-700 ring-1 ring-gray-100' :
+                          'bg-gray-50 text-gray-700 ring-1 ring-gray-100'
+                        }`}>
+                          {TIMELINE_STAGE_LABEL[lead.status?.toLowerCase() || 'new'] || 'New Lead'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Quick Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {lead.phone && (() => {
+                      const waPhone = normalizePhoneToWhatsApp(lead.phone);
+                      const waUrl = waPhone ? getWhatsAppUrl({ phoneE164: `+${waPhone}`, text: waMessageEN(lead) }) : null;
+                      return (
+                        <>
+                          {waUrl && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(waUrl, '_blank', 'noopener,noreferrer');
+                              }}
+                              className="p-2 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors"
+                              title="WhatsApp"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.location.href = `tel:${lead.phone}`;
+                            }}
+                            className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
+                            title="Call"
+                          >
+                            <Phone className="w-4 h-4" />
+                          </button>
+                        </>
+                      );
+                    })()}
+                    {lead.email && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `mailto:${lead.email}`;
+                        }}
+                        className="p-2 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors"
+                        title="Email"
+                      >
+                        <Mail className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.info('Files feature coming soon');
+                      }}
+                      className="p-2 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors"
+                      title="Open Files"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                {/* B) Documents / Files Mini Grid */}
+                <div className="mb-4 pb-4 border-b border-gray-100">
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2">Documents</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { icon: Image, label: 'Photos', count: 0, color: 'blue' },
+                      { icon: FileCheck, label: 'X-rays', count: 0, color: 'purple' },
+                      { icon: File, label: 'Passport/ID', count: 0, color: 'green' },
+                      { icon: FileTextIcon, label: 'Treatment Plan', count: 0, color: 'teal' },
+                    ].map((doc, idx) => (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast.info(`${doc.label} feature coming soon`);
+                        }}
+                        className="group flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all bg-white hover:bg-gray-50"
+                      >
+                        <doc.icon className={`w-5 h-5 ${
+                          doc.color === 'blue' ? 'text-blue-600' :
+                          doc.color === 'purple' ? 'text-purple-600' :
+                          doc.color === 'green' ? 'text-green-600' :
+                          'text-teal-600'
+                        } group-hover:scale-110 transition-transform`} />
+                        <span className="text-xs font-medium text-gray-700">{doc.label}</span>
+                        {doc.count > 0 && (
+                          <span className="text-xs text-gray-500">({doc.count})</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* C) Patient Journey Mini Progress */}
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-700 mb-3">Patient Journey</h4>
+                  <div className="space-y-2">
+                    {[
+                      { stage: 'new', label: 'New' },
+                      { stage: 'contacted', label: 'Contacted' },
+                      { stage: 'deposit_paid', label: 'Deposit' },
+                      { stage: 'appointment_set', label: 'Appointment' },
+                      { stage: 'completed', label: 'Completed' },
+                    ].map((step) => {
+                      const currentStatus = lead.status?.toLowerCase() || 'new';
+                      const stepIndex = TIMELINE_STAGES.indexOf(step.stage as any);
+                      const currentIndex = TIMELINE_STAGES.indexOf(currentStatus as any);
+                      const isActive = stepIndex <= currentIndex;
+                      const isCurrent = stepIndex === currentIndex;
+                      
+                      return (
+                        <div key={step.stage} className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${
+                            isActive ? 'bg-teal-600' : 'bg-gray-300'
+                          } ${isCurrent ? 'ring-2 ring-teal-200 ring-offset-1' : ''}`} />
+                          <span className={`text-xs flex-1 ${
+                            isActive ? 'text-gray-900 font-medium' : 'text-gray-400'
+                          }`}>
+                            {step.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Recommended Next Step */}
             {briefData?.brief.snapshot?.nextBestAction && (
               <div className="bg-white rounded-lg border border-gray-200 p-4">
