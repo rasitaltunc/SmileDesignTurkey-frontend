@@ -2,6 +2,31 @@
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
+// ✅ Status normalization (sigorta - hata tekrar asla çıkmasın)
+const STATUS_MAP = {
+  new_lead: "new",
+  appointment: "appointment_set",
+  deposit: "deposit_paid",
+};
+
+const VALID_STATUSES = new Set([
+  "new",
+  "contacted",
+  "deposit_paid",
+  "appointment_set",
+  "arrived",
+  "completed",
+  "lost",
+]);
+
+function normalizeStatus(input) {
+  if (input === null || input === undefined) return null;
+  const raw = String(input).trim().toLowerCase();
+  if (!raw) return null;
+  const mapped = STATUS_MAP[raw] || raw;
+  return VALID_STATUSES.has(mapped) ? mapped : "new"; // ✅ safe fallback
+}
+
 function getBearerToken(req) {
   const h = req.headers.authorization; // ✅ Node'da hep lowercase gelir
   if (!h) return null;
@@ -126,24 +151,7 @@ module.exports = async function handler(req, res) {
 
         // ✅ Status normalization (sigorta - hata tekrar asla çıkmasın)
         if (filtered.status) {
-          const STATUS_MAP = {
-            new_lead: "new",
-            appointment: "appointment_set",
-            deposit: "deposit_paid",
-            contacted: "contacted",
-            arrived: "arrived",
-            completed: "completed",
-            lost: "lost",
-          };
-          const normalized = STATUS_MAP[String(filtered.status).toLowerCase()] || filtered.status;
-          filtered.status = normalized;
-          
-          // Validate against canonical values
-          const validStatuses = ["new", "contacted", "deposit_paid", "appointment_set", "arrived", "completed", "lost"];
-          if (!validStatuses.includes(filtered.status)) {
-            console.warn(`[api/leads] Invalid status value: ${filtered.status}, normalizing to 'new'`, { requestId });
-            filtered.status = "new";
-          }
+          filtered.status = normalizeStatus(filtered.status);
         }
 
         // 🔒 Only admin can change assignment
@@ -165,7 +173,7 @@ module.exports = async function handler(req, res) {
           if (leadIdForQuery) {
             const { data: existingLead } = await dbClient
               .from("leads")
-              .select("assigned_to")
+              .select("assigned_to, status")
               .eq(id ? "id" : "lead_uuid", leadIdForQuery)
               .single();
             
@@ -180,6 +188,21 @@ module.exports = async function handler(req, res) {
           filtered.assigned_by = user.id;
           filtered.assigned_at = new Date().toISOString();
         }
+
+        // ✅ Get existing lead before update (for status normalization)
+        const leadIdForQuery = id || lead_uuid;
+        let existingLead = null;
+        if (leadIdForQuery) {
+          const { data: existingLeadData } = await dbClient
+            .from("leads")
+            .select("status")
+            .eq(id ? "id" : "lead_uuid", leadIdForQuery)
+            .single();
+          existingLead = existingLeadData;
+        }
+        
+        // ✅ Normalize existing status (DB'de bozuk status varsa düzelt)
+        const existingStatus = normalizeStatus(existingLead?.status) || "new";
 
         // ✅ UPDATE query: limit yok, single ile net
         let q = dbClient
@@ -219,11 +242,14 @@ module.exports = async function handler(req, res) {
               ? `Assigned to ${employeeName}`
               : "Unassigned";
             
+            // ✅ Use normalized status for timeline stage
+            const stageForTimeline = normalizeStatus(filtered.status ?? existingStatus) || "new";
+            
             await dbClient
               .from("lead_timeline_events")
               .insert({
                 lead_id: leadIdForTimeline,
-                stage: "contacted", // Use existing stage or create "assigned" if needed
+                stage: stageForTimeline,
                 actor_role: "consultant",
                 note: timelineNote,
                 payload: {
@@ -256,11 +282,14 @@ module.exports = async function handler(req, res) {
             const actionLabel = newNextAction ? (actionLabels[newNextAction] || newNextAction) : "No action";
             const timelineNote = `Next action: ${actionLabel}`;
             
+            // ✅ Use normalized status for timeline stage
+            const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+            
             await dbClient
               .from("lead_timeline_events")
               .insert({
                 lead_id: leadIdForTimeline,
-                stage: data.status || "contacted",
+                stage: stageForTimeline,
                 actor_role: "consultant",
                 note: timelineNote,
                 payload: {
@@ -284,11 +313,14 @@ module.exports = async function handler(req, res) {
               ? `Follow-up scheduled: ${new Date(newFollowUpAt).toLocaleString()}`
               : "Follow-up removed";
             
+            // ✅ Use normalized status for timeline stage
+            const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+            
             await dbClient
               .from("lead_timeline_events")
               .insert({
                 lead_id: leadIdForTimeline,
-                stage: data.status || "contacted",
+                stage: stageForTimeline,
                 actor_role: "consultant",
                 note: timelineNote,
                 payload: {
