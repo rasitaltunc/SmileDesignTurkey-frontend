@@ -1435,74 +1435,119 @@ export default function AdminPatientProfile() {
                 </div>
                 
                 {/* D) Booking Section */}
-                {lead.status?.toLowerCase() === 'appointment_set' && (
-                  <div className="mb-4 pb-4 border-b border-gray-100">
-                    <h4 className="text-xs font-semibold text-gray-700 mb-3">Booking</h4>
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={readyForBooking}
-                          onChange={async (e) => {
-                            const newValue = e.target.checked;
-                            setReadyForBooking(newValue);
-                            setIsUpdatingBookingFlag(true);
+                {(() => {
+                  // Show booking section if:
+                  // 1. next_action === 'ready_for_booking' (doctor review sonrası, booking öncesi)
+                  // 2. status === 'appointment_set' (booking olduktan sonra)
+                  // 3. cal_booking_id or meeting_start exists (booking details var)
+                  const shouldShowBooking = 
+                    lead.next_action === 'ready_for_booking' ||
+                    lead.status?.toLowerCase() === 'appointment_set' ||
+                    !!(lead.cal_booking_id || lead.cal_booking_uid || lead.meeting_start);
+                  
+                  if (!shouldShowBooking) return null;
+
+                  const hasBooking = !!(lead.cal_booking_id || lead.cal_booking_uid || lead.meeting_start);
+
+                  return (
+                    <div className="mb-4 pb-4 border-b border-gray-100">
+                      <h4 className="text-xs font-semibold text-gray-700 mb-3">Booking</h4>
+                      <div className="space-y-3">
+                        {!hasBooking ? (
+                          <>
+                            {/* Pre-booking: Ready for booking toggle + Book button */}
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={readyForBooking}
+                                onChange={async (e) => {
+                                  const newValue = e.target.checked;
+                                  setReadyForBooking(newValue);
+                                  setIsUpdatingBookingFlag(true);
+                                  
+                                  try {
+                                    const token = await getAccessToken();
+                                    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                                    const response = await fetch(`${apiUrl}/api/leads`, {
+                                      method: 'PATCH',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${token}`,
+                                      },
+                                      body: JSON.stringify({
+                                        id: leadId,
+                                        next_action: newValue ? 'ready_for_booking' : null,
+                                      }),
+                                    });
+                                    
+                                    if (!response.ok) {
+                                      const errorData = await response.json().catch(() => ({ error: 'Failed to update booking flag' }));
+                                      throw new Error(errorData.error || 'Failed to update booking flag');
+                                    }
+                                    
+                                    const result = await response.json();
+                                    if (result.lead) {
+                                      setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
+                                    }
+                                    
+                                    if (newValue) {
+                                      toast.success('Ready for booking');
+                                    }
+                                  } catch (err) {
+                                    const errorMessage = err instanceof Error ? err.message : 'Failed to update booking flag';
+                                    toast.error(errorMessage);
+                                    setReadyForBooking(!newValue); // Revert on error
+                                  } finally {
+                                    setIsUpdatingBookingFlag(false);
+                                  }
+                                }}
+                                disabled={isUpdatingBookingFlag || !leadId}
+                                className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                              />
+                              <span className="text-xs text-gray-700">Ready for booking</span>
+                            </label>
                             
-                            try {
-                              const token = await getAccessToken();
-                              const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-                              const response = await fetch(`${apiUrl}/api/leads`, {
-                                method: 'PATCH',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({
-                                  id: leadId,
-                                  next_action: newValue ? 'ready_for_booking' : null,
-                                }),
-                              });
-                              
-                              if (!response.ok) {
-                                const errorData = await response.json().catch(() => ({ error: 'Failed to update booking flag' }));
-                                throw new Error(errorData.error || 'Failed to update booking flag');
-                              }
-                              
-                              const result = await response.json();
-                              if (result.lead) {
-                                setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
-                              }
-                              
-                              if (newValue) {
-                                toast.success('Ready for booking');
-                              }
-                            } catch (err) {
-                              const errorMessage = err instanceof Error ? err.message : 'Failed to update booking flag';
-                              toast.error(errorMessage);
-                              setReadyForBooking(!newValue); // Revert on error
-                            } finally {
-                              setIsUpdatingBookingFlag(false);
-                            }
-                          }}
-                          disabled={isUpdatingBookingFlag || !leadId}
-                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                        />
-                        <span className="text-xs text-gray-700">Ready for booking</span>
-                      </label>
-                      
-                      {readyForBooking && (
-                        <button
-                          onClick={() => setIsCalModalOpen(true)}
-                          disabled={!readyForBooking || !leadId}
-                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                        >
-                          <Calendar className="w-4 h-4" />
-                          Book Consultation
-                        </button>
-                      )}
+                            {readyForBooking && (
+                              <button
+                                onClick={() => setIsCalModalOpen(true)}
+                                disabled={!readyForBooking || !leadId}
+                                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                              >
+                                <Calendar className="w-4 h-4" />
+                                Book Consultation
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {/* Post-booking: Show booking details */}
+                            <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-emerald-900">Booked ✅</p>
+                                {lead.meeting_start && (
+                                  <p className="text-xs text-emerald-700 mt-1">
+                                    {new Date(lead.meeting_start).toLocaleString()}
+                                  </p>
+                                )}
+                                {lead.meeting_end && lead.meeting_start && (
+                                  <p className="text-xs text-emerald-600 mt-0.5">
+                                    Duration: {Math.round((new Date(lead.meeting_end).getTime() - new Date(lead.meeting_start).getTime()) / (1000 * 60))} minutes
+                                  </p>
+                                )}
+                                {lead.cal_booking_id && (
+                                  <p className="text-xs text-emerald-600 mt-0.5">
+                                    Booking ID: {lead.cal_booking_id}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* E) Next Action & Follow-up */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
