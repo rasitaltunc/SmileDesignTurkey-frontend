@@ -1429,7 +1429,77 @@ export default function AdminPatientProfile() {
                   </div>
                 </div>
                 
-                {/* D) Next Action & Follow-up */}
+                {/* D) Booking Section */}
+                {lead.status?.toLowerCase() === 'appointment_set' && (
+                  <div className="mb-4 pb-4 border-b border-gray-100">
+                    <h4 className="text-xs font-semibold text-gray-700 mb-3">Booking</h4>
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={readyForBooking}
+                          onChange={async (e) => {
+                            const newValue = e.target.checked;
+                            setReadyForBooking(newValue);
+                            setIsUpdatingBookingFlag(true);
+                            
+                            try {
+                              const token = await getAccessToken();
+                              const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                              const response = await fetch(`${apiUrl}/api/leads`, {
+                                method: 'PATCH',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({
+                                  id: leadId,
+                                  next_action: newValue ? 'ready_for_booking' : null,
+                                }),
+                              });
+                              
+                              if (!response.ok) {
+                                const errorData = await response.json().catch(() => ({ error: 'Failed to update booking flag' }));
+                                throw new Error(errorData.error || 'Failed to update booking flag');
+                              }
+                              
+                              const result = await response.json();
+                              if (result.lead) {
+                                setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
+                              }
+                              
+                              if (newValue) {
+                                toast.success('Ready for booking');
+                              }
+                            } catch (err) {
+                              const errorMessage = err instanceof Error ? err.message : 'Failed to update booking flag';
+                              toast.error(errorMessage);
+                              setReadyForBooking(!newValue); // Revert on error
+                            } finally {
+                              setIsUpdatingBookingFlag(false);
+                            }
+                          }}
+                          disabled={isUpdatingBookingFlag || !leadId}
+                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                        />
+                        <span className="text-xs text-gray-700">Ready for booking</span>
+                      </label>
+                      
+                      {readyForBooking && (
+                        <button
+                          onClick={() => setIsCalModalOpen(true)}
+                          disabled={!readyForBooking || !leadId}
+                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                          <Calendar className="w-4 h-4" />
+                          Book Consultation
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* E) Next Action & Follow-up */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
                   <h4 className="text-xs font-semibold text-gray-700 mb-3">Next Action</h4>
                   <div className="space-y-3">
