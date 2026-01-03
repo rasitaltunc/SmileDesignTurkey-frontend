@@ -47,6 +47,11 @@ interface Lead {
   created_at: string;
   treatment: string | null;
   source: string | null;
+  next_action?: string | null;
+  cal_booking_id?: string | null;
+  cal_booking_uid?: string | null;
+  meeting_start?: string | null;
+  meeting_end?: string | null;
 }
 
 interface LeadNote {
