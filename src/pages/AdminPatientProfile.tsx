@@ -9,34 +9,28 @@ import { NavigationContext } from '@/App';
 // Import single source of truth from AdminLeads
 // Note: In a real refactor, this would be in a shared constants file
 // For now, we keep it in sync with AdminLeads.tsx
+// DB constraint: CHECK (status IN ('new', 'contacted', 'deposit_paid', 'appointment_set', 'arrived', 'completed', 'lost'))
+// Label güzel, value canonical (DB'nin istediği değer)
 const TIMELINE_STAGES = [
-  "new_lead",
+  "new",
   "contacted",
-  "qualified",
-  "consultation_scheduled",
-  "consultation_completed",
-  "quote_sent",
   "deposit_paid",
   "appointment_set",
-  "treatment_in_progress",
-  "treatment_completed",
+  "arrived",
+  "completed",
   "lost",
 ] as const;
 
-// LEAD_STATUS for validation (matches TIMELINE_STAGES)
+// LEAD_STATUS for validation (matches TIMELINE_STAGES - DB canonical values)
 const LEAD_STATUS = TIMELINE_STAGES;
 
 const TIMELINE_STAGE_LABEL: Record<string, string> = {
-  new_lead: "New Lead",
+  new: "New Lead",
   contacted: "Contacted",
-  qualified: "Qualified",
-  consultation_scheduled: "Consultation Scheduled",
-  consultation_completed: "Consultation Completed",
-  quote_sent: "Quote Sent",
   deposit_paid: "Deposit Paid",
   appointment_set: "Appointment Set",
-  treatment_in_progress: "Treatment In Progress",
-  treatment_completed: "Treatment Completed",
+  arrived: "Arrived",
+  completed: "Completed",
   lost: "Lost",
 };
 

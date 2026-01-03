@@ -156,19 +156,15 @@ module.exports = async function handler(req, res) {
         }
 
         // PRO LEVEL: Auto-update lead status when timeline stage is set (single source of truth)
-        // Stage values match LEAD_STATUS values
-        // Valid stages: new_lead, contacted, qualified, consultation_scheduled, etc.
+        // Stage values match DB constraint: CHECK (status IN ('new', 'contacted', 'deposit_paid', 'appointment_set', 'arrived', 'completed', 'lost'))
+        // Valid stages: DB canonical values only
         const validStages = [
-          'new_lead',
+          'new',
           'contacted',
-          'qualified',
-          'consultation_scheduled',
-          'consultation_completed',
-          'quote_sent',
           'deposit_paid',
           'appointment_set',
-          'treatment_in_progress',
-          'treatment_completed',
+          'arrived',
+          'completed',
           'lost',
         ];
         

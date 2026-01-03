@@ -140,33 +140,27 @@ function FormattedAIBrief({ content }: { content: string }) {
   );
 }
 
-// Single source of truth: Lead Status (matches Timeline Stages)
+// Single source of truth: Lead Status (DB canonical values - matches DB constraint)
+// DB constraint: CHECK (status IN ('new', 'contacted', 'deposit_paid', 'appointment_set', 'arrived', 'completed', 'lost'))
+// Label güzel, value canonical (DB'nin istediği değer)
 export const LEAD_STATUS = [
-  'new_lead',
+  'new',
   'contacted',
-  'qualified',
-  'consultation_scheduled',
-  'consultation_completed',
-  'quote_sent',
   'deposit_paid',
   'appointment_set',
-  'treatment_in_progress',
-  'treatment_completed',
+  'arrived',
+  'completed',
   'lost',
 ] as const;
 
-// Status labels for UI
+// Status labels for UI (güzel görünsün, value DB canonical)
 const LEAD_STATUS_LABEL: Record<string, string> = {
-  new_lead: 'New Lead',
+  new: 'New Lead',
   contacted: 'Contacted',
-  qualified: 'Qualified',
-  consultation_scheduled: 'Consultation Scheduled',
-  consultation_completed: 'Consultation Completed',
-  quote_sent: 'Quote Sent',
   deposit_paid: 'Deposit Paid',
   appointment_set: 'Appointment Set',
-  treatment_in_progress: 'Treatment In Progress',
-  treatment_completed: 'Treatment Completed',
+  arrived: 'Arrived',
+  completed: 'Completed',
   lost: 'Lost',
 };
 
@@ -182,19 +176,26 @@ const statusToTimelineStage = (status: string | null | undefined): string | null
   const normalized = status.toLowerCase().trim();
   
   // Direct 1:1 mapping (status and timeline stage are the same)
-  // Legacy mappings for old status values
+  // Legacy mappings for old status values (backward compatibility)
   const legacyMapping: Record<string, string> = {
-    'new': 'new_lead',
-    'completed': 'treatment_completed',
-    'arrived': 'treatment_in_progress',
+    'new_lead': 'new',
+    'qualified': 'contacted',
+    'consultation_scheduled': 'appointment_set',
+    'consultation_completed': 'appointment_set',
+    'quote_sent': 'appointment_set',
+    'booked': 'appointment_set',
+    'paid': 'deposit_paid',
+    'treatment_in_progress': 'arrived',
+    'treatment_completed': 'completed',
+    'closed': 'completed',
   };
   
-  // Check if it's a valid LEAD_STATUS
+  // Check if it's a valid LEAD_STATUS (DB canonical)
   if (LEAD_STATUS.includes(normalized as any)) {
     return normalized;
   }
   
-  // Check legacy mappings
+  // Check legacy mappings (map old values to DB canonical)
   if (legacyMapping[normalized]) {
     return legacyMapping[normalized];
   }
@@ -531,8 +532,8 @@ export default function AdminLeads() {
         case 'due_today':
           return myLeads.filter(l => isDueTodayISO(l.follow_up_at));
         case 'appointment_set':
-          // Appointment filter: appointment_set OR consultation_scheduled
-          return myLeads.filter(l => l.status === 'appointment_set' || l.status === 'consultation_scheduled');
+          // Appointment filter: appointment_set only (DB canonical value)
+          return myLeads.filter(l => l.status === 'appointment_set');
         case 'deposit_paid':
           return myLeads.filter(l => l.status === 'deposit_paid');
         case 'all':
@@ -1094,9 +1095,9 @@ export default function AdminLeads() {
   // Handle edit start
   const handleEditStart = (lead: Lead) => {
     setEditingLead(lead);
-    // Normalize status to lowercase, validate against LEAD_STATUS (default to 'new_lead')
-    const currentStatus = (lead.status || 'new_lead').toLowerCase();
-    const validStatus = LEAD_STATUS.includes(currentStatus as any) ? currentStatus : 'new_lead';
+    // Normalize status to lowercase, validate against LEAD_STATUS (default to 'new' - DB canonical)
+    const currentStatus = (lead.status || 'new').toLowerCase();
+    const validStatus = LEAD_STATUS.includes(currentStatus as any) ? currentStatus : 'new';
     setEditStatus(validStatus);
     setEditNotes(lead.notes || '');
     // Format follow_up_at for datetime-local input (YYYY-MM-DDTHH:mm)
@@ -1116,18 +1117,18 @@ export default function AdminLeads() {
     if (!editingLead) return;
 
     const updates: any = {};
-    // Normalize status: trim, lowercase, default to 'new_lead' if empty
-    const normalizedEditStatus = (editStatus || 'new_lead').trim().toLowerCase() || 'new_lead';
-    const normalizedCurrentStatus = (editingLead.status || 'new_lead').toLowerCase();
+    // Normalize status: trim, lowercase, default to 'new' if empty (DB canonical)
+    const normalizedEditStatus = (editStatus || 'new').trim().toLowerCase() || 'new';
+    const normalizedCurrentStatus = (editingLead.status || 'new').toLowerCase();
     
-    // Validate against LEAD_STATUS (fallback to 'new_lead' if invalid)
+    // Validate against LEAD_STATUS (DB constraint values, fallback to 'new' if invalid)
     const validStatus = LEAD_STATUS.includes(normalizedEditStatus as any) 
       ? normalizedEditStatus 
-      : 'new_lead';
+      : 'new';
     
-    // Always send lowercase canonical value
+    // Always send lowercase canonical value (DB constraint compatible)
     if (validStatus !== normalizedCurrentStatus) {
-      updates.status = validStatus; // Always lowercase, always valid LEAD_STATUS value
+      updates.status = validStatus; // Always lowercase, always valid LEAD_STATUS value (DB canonical)
     }
     if (editNotes !== (editingLead.notes || '')) updates.notes = editNotes;
     
@@ -2549,7 +2550,7 @@ export default function AdminLeads() {
                             lead.status?.toLowerCase() === 'completed' ? 'bg-emerald-100 text-emerald-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
-                            {LEAD_STATUS_LABEL[lead.status?.toLowerCase() || 'new_lead'] || 
+                            {LEAD_STATUS_LABEL[lead.status?.toLowerCase() || 'new'] || 
                              (lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1).replace(/_/g, ' ') : 'New Lead')}
                           </span>
                         )}
