@@ -140,12 +140,32 @@ module.exports = async function handler(req, res) {
       }
 
       // 🔒 Only admin can change assignment
+      let assignedToChanged = false;
+      let previousAssignedTo = null;
+      let newAssignedTo = null;
+      
       if (Object.prototype.hasOwnProperty.call(filtered, "assigned_to")) {
         if (!isAdmin) {
           return res.status(403).json({
             error: "Only admins can change assigned_to",
             debug: { roleRaw, role, uid: user.id, email: user.email }
           });
+        }
+
+        // Get previous assigned_to before update
+        const leadIdForQuery = id || lead_uuid;
+        if (leadIdForQuery) {
+          const { data: existingLead } = await dbClient
+            .from("leads")
+            .select("assigned_to")
+            .eq(id ? "id" : "lead_uuid", leadIdForQuery)
+            .single();
+          
+          previousAssignedTo = existingLead?.assigned_to || null;
+          newAssignedTo = filtered.assigned_to || null;
+          
+          // Only create timeline event if assignment actually changed
+          assignedToChanged = previousAssignedTo !== newAssignedTo;
         }
 
         // prevent spoofing
@@ -167,6 +187,48 @@ module.exports = async function handler(req, res) {
 
       if (error) {
         return res.status(500).json({ error: error.message, hint: error.hint || null });
+      }
+
+      // ✅ Create timeline event if assignment changed
+      if (assignedToChanged && data) {
+        try {
+          const leadIdForTimeline = data.id || id || lead_uuid;
+          
+          // Get employee name if assigned
+          let employeeName = "Unassigned";
+          if (newAssignedTo) {
+            const { data: employeeData } = await dbClient
+              .from("profiles")
+              .select("full_name")
+              .eq("id", newAssignedTo)
+              .single();
+            
+            employeeName = employeeData?.full_name || `Employee ${newAssignedTo.slice(0, 8)}`;
+          }
+
+          // Insert timeline event
+          const timelineNote = newAssignedTo 
+            ? `Assigned to ${employeeName}`
+            : "Unassigned";
+          
+          await dbClient
+            .from("lead_timeline_events")
+            .insert({
+              lead_id: leadIdForTimeline,
+              stage: "contacted", // Use existing stage or create "assigned" if needed
+              actor_role: "consultant",
+              note: timelineNote,
+              payload: {
+                assigned_to: newAssignedTo,
+                assigned_by: user.id,
+                assigned_at: filtered.assigned_at,
+              },
+              created_at: new Date().toISOString(),
+            });
+        } catch (timelineErr) {
+          // Don't fail the update if timeline insert fails
+          console.warn("[Leads PATCH] Timeline event insert failed:", timelineErr);
+        }
       }
 
       return res.status(200).json({ lead: data });
