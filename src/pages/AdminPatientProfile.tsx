@@ -242,6 +242,9 @@ export default function AdminPatientProfile() {
         // Initialize Next Action & Follow-up from loaded lead
         setNextAction(loadedLead.next_action || '');
         setFollowUpAt(toDatetimeLocal(loadedLead.follow_up_at));
+        
+        // Initialize Doctor assignment from loaded lead
+        setSelectedDoctorId((loadedLead as any).doctor_id || '');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
         setError(errorMessage);
