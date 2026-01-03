@@ -6,6 +6,34 @@ import { toast } from 'sonner';
 import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
 import { NavigationContext } from '@/App';
 
+const TIMELINE_STAGES = [
+  "new_lead",
+  "contacted",
+  "qualified",
+  "consultation_scheduled",
+  "consultation_completed",
+  "quote_sent",
+  "deposit_paid",
+  "appointment_set",
+  "treatment_in_progress",
+  "treatment_completed",
+  "lost",
+] as const;
+
+const TIMELINE_STAGE_LABEL: Record<string, string> = {
+  new_lead: "New Lead",
+  contacted: "Contacted",
+  qualified: "Qualified",
+  consultation_scheduled: "Consultation Scheduled",
+  consultation_completed: "Consultation Completed",
+  quote_sent: "Quote Sent",
+  deposit_paid: "Deposit Paid",
+  appointment_set: "Appointment Set",
+  treatment_in_progress: "Treatment In Progress",
+  treatment_completed: "Treatment Completed",
+  lost: "Lost",
+};
+
 interface Lead {
   id: string;
   name: string | null;
@@ -1224,7 +1252,7 @@ export default function AdminPatientProfile() {
                 Timeline
                 {timelineEvents.length > 0 && timelineEvents[0]?.stage && (
                   <span className="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-teal-100 text-teal-800">
-                    {timelineEvents[0].stage}
+                    {TIMELINE_STAGE_LABEL[timelineEvents[0].stage] || timelineEvents[0].stage}
                   </span>
                 )}
               </h3>
@@ -1245,7 +1273,7 @@ export default function AdminPatientProfile() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="text-xs font-medium text-gray-900 break-words">
-                                  {event.stage}
+                                  {TIMELINE_STAGE_LABEL[event.stage] || event.stage}
                                 </span>
                                 <span className="text-xs text-gray-500 whitespace-nowrap">
                                   {new Date(event.created_at).toLocaleDateString()}
@@ -1276,16 +1304,11 @@ export default function AdminPatientProfile() {
                       className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                     >
                       <option value="">Select stage...</option>
-                      <option value="new">New</option>
-                      <option value="contacted">Contacted</option>
-                      <option value="qualified">Qualified</option>
-                      <option value="consultation_scheduled">Consultation Scheduled</option>
-                      <option value="consultation_completed">Consultation Completed</option>
-                      <option value="quote_sent">Quote Sent</option>
-                      <option value="deposit_paid">Deposit Paid</option>
-                      <option value="appointment_set">Appointment Set</option>
-                      <option value="completed">Completed</option>
-                      <option value="lost">Lost</option>
+                      {TIMELINE_STAGES.map((s) => (
+                        <option key={s} value={s}>
+                          {TIMELINE_STAGE_LABEL[s]}
+                        </option>
+                      ))}
                     </select>
                     <textarea
                       value={newTimelineNote}
