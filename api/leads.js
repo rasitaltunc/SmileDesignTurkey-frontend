@@ -310,7 +310,7 @@ module.exports = async function handler(req, res) {
               ? `Assigned to ${employeeName}`
               : "Unassigned";
             
-            // ✅ Use normalized status for timeline stage
+            // ✅ Use normalized status for timeline stage (safe fallback chain)
             const stageForTimeline = normalizeStatus(filtered.status ?? existingStatus) || "new";
             
             await dbClient
@@ -350,8 +350,8 @@ module.exports = async function handler(req, res) {
             const actionLabel = newNextAction ? (actionLabels[newNextAction] || newNextAction) : "No action";
             const timelineNote = `Next action: ${actionLabel}`;
             
-            // ✅ Use normalized status for timeline stage
-            const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+            // ✅ Use normalized status for timeline stage (safe fallback chain)
+            const stageForTimeline = normalizeStatus(filtered.status ?? updatedLead?.status ?? existingStatus) || "new";
             
             await dbClient
               .from("lead_timeline_events")
@@ -381,8 +381,8 @@ module.exports = async function handler(req, res) {
               ? `Follow-up scheduled: ${new Date(newFollowUpAt).toLocaleString()}`
               : "Follow-up removed";
             
-            // ✅ Use normalized status for timeline stage
-            const stageForTimeline = normalizeStatus(updatedLead.status ?? existingStatus) || "new";
+            // ✅ Use normalized status for timeline stage (safe fallback chain)
+            const stageForTimeline = normalizeStatus(filtered.status ?? updatedLead?.status ?? existingStatus) || "new";
             
             await dbClient
               .from("lead_timeline_events")
@@ -423,8 +423,8 @@ module.exports = async function handler(req, res) {
               ? `Assigned doctor ${doctorName}`
               : "Doctor unassigned";
             
-            // ✅ Use normalized status for timeline stage
-            const stageForTimeline = normalizeStatus(updatedLead.status ?? existingStatus) || "new";
+            // ✅ Use normalized status for timeline stage (safe fallback chain)
+            const stageForTimeline = normalizeStatus(filtered.status ?? updatedLead?.status ?? existingStatus) || "new";
             
             await dbClient
               .from("lead_timeline_events")
