@@ -51,6 +51,9 @@ function RequireRole({
 
   // Check if user's role is in allowed roles
   if (!roles.includes(role)) {
+    if (import.meta.env.DEV) {
+      console.log("RequireRole blocked:", { role, allowed: roles });
+    }
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
