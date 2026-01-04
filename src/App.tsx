@@ -262,7 +262,7 @@ export default function App() {
         );
       case '/doctor/portal':
         return (
-          <RequireRole roles={['doctor']} navigate={navigate}>
+          <RequireRole roles={['doctor', 'admin']} navigate={navigate} isLoading={isLoading}>
             <DoctorPortal />
           </RequireRole>
         );
@@ -301,7 +301,7 @@ export default function App() {
           const leadIdMatch = currentPath.match(/\/doctor\/lead\/([^/]+)/);
           const leadId = leadIdMatch ? leadIdMatch[1] : null;
           return (
-            <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
+            <RequireRole roles={['doctor', 'admin']} navigate={navigate} isLoading={isLoading}>
               <AdminPatientProfile doctorMode={true} leadId={leadId} />
             </RequireRole>
           );
