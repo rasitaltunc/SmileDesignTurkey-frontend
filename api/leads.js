@@ -162,6 +162,18 @@ module.exports = async function handler(req, res) {
           Object.entries(updates).filter(([k]) => allowed.includes(k))
         );
 
+        // ✅ Doctor can only update review fields - reject if other fields are sent
+        if (isDoctor) {
+          const disallowedFields = Object.keys(updates).filter((k) => !allowed.includes(k));
+          if (disallowedFields.length > 0) {
+            return res.status(403).json({ 
+              ok: false, 
+              error: `Doctor can only update doctor_review_status and doctor_review_notes. Disallowed fields: ${disallowedFields.join(", ")}`, 
+              requestId 
+            });
+          }
+        }
+
         if (Object.keys(filtered).length === 0) {
           return res.status(400).json({ ok: false, error: "No allowed fields to update", requestId });
         }
