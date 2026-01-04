@@ -265,9 +265,9 @@ module.exports = async function handler(req, res) {
         }
 
         // ✅ Create timeline event if assignment changed
-        if (assignedToChanged && data) {
+        if (assignedToChanged && updatedLead) {
           try {
-            const leadIdForTimeline = data.id || id || lead_uuid;
+            const leadIdForTimeline = updatedLead.id || id || lead_uuid;
             
             // Get employee name if assigned
             let employeeName = "Unassigned";
@@ -311,9 +311,9 @@ module.exports = async function handler(req, res) {
 
         // ✅ Create timeline event if next_action changed
         const nextActionChanged = Object.prototype.hasOwnProperty.call(filtered, "next_action");
-        if (nextActionChanged && data) {
+        if (nextActionChanged && updatedLead) {
           try {
-            const leadIdForTimeline = data.id || id || lead_uuid;
+            const leadIdForTimeline = updatedLead.id || id || lead_uuid;
             const newNextAction = filtered.next_action;
             const actionLabels = {
               send_whatsapp: "Send WhatsApp",
@@ -348,9 +348,9 @@ module.exports = async function handler(req, res) {
 
         // ✅ Create timeline event if follow_up_at changed
         const followUpChanged = Object.prototype.hasOwnProperty.call(filtered, "follow_up_at");
-        if (followUpChanged && data) {
+        if (followUpChanged && updatedLead) {
           try {
-            const leadIdForTimeline = data.id || id || lead_uuid;
+            const leadIdForTimeline = updatedLead.id || id || lead_uuid;
             const newFollowUpAt = filtered.follow_up_at;
             
             const timelineNote = newFollowUpAt 
@@ -358,7 +358,7 @@ module.exports = async function handler(req, res) {
               : "Follow-up removed";
             
             // ✅ Use normalized status for timeline stage
-            const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+            const stageForTimeline = normalizeStatus(updatedLead.status ?? existingStatus) || "new";
             
             await dbClient
               .from("lead_timeline_events")
@@ -378,9 +378,9 @@ module.exports = async function handler(req, res) {
         }
 
         // ✅ Create timeline event if doctor_id changed
-        if (doctorIdChanged && data) {
+        if (doctorIdChanged && updatedLead) {
           try {
-            const leadIdForTimeline = data.id || id || lead_uuid;
+            const leadIdForTimeline = updatedLead.id || id || lead_uuid;
             
             // Get doctor name if assigned
             let doctorName = "Unassigned";
@@ -400,7 +400,7 @@ module.exports = async function handler(req, res) {
               : "Doctor unassigned";
             
             // ✅ Use normalized status for timeline stage
-            const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+            const stageForTimeline = normalizeStatus(updatedLead.status ?? existingStatus) || "new";
             
             await dbClient
               .from("lead_timeline_events")
@@ -422,9 +422,9 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // ✅ Doctor review automation: Update next_action based on review_status
+        // ✅ 3) DOCTOR REVIEW AUTOMATION (doctor only, after timeline events)
         const reviewStatusChanged = Object.prototype.hasOwnProperty.call(filtered, "doctor_review_status");
-        if (reviewStatusChanged && isDoctor && data) {
+        if (reviewStatusChanged && isDoctor && updatedLead) {
           try {
             const newReviewStatus = filtered.doctor_review_status;
             let autoNextAction = null;
@@ -440,23 +440,27 @@ module.exports = async function handler(req, res) {
 
             // Auto-update next_action if review status requires it
             if (autoNextAction) {
-              const { data: updatedLead } = await dbClient
+              const { data: leadWithAction, error: actionErr } = await dbClient
                 .from("leads")
                 .update({ next_action: autoNextAction })
-                .eq("id", data.id)
-                .select("next_action")
+                .eq("id", updatedLead.id)
+                .select("next_action, status")
                 .single();
               
               // Update local data for response
-              if (updatedLead) {
-                data.next_action = updatedLead.next_action;
+              if (leadWithAction && !actionErr) {
+                updatedLead.next_action = leadWithAction.next_action;
+                // Also update status if it changed
+                if (leadWithAction.status) {
+                  updatedLead.status = leadWithAction.status;
+                }
               }
             }
 
             // Create timeline event for review status change
             if (timelineNote) {
-              const leadIdForTimeline = data.id || id || lead_uuid;
-              const stageForTimeline = normalizeStatus(data.status ?? existingStatus) || "new";
+              const leadIdForTimeline = updatedLead.id || id || lead_uuid;
+              const stageForTimeline = normalizeStatus(updatedLead.status ?? existingStatus) || "new";
               
               await dbClient
                 .from("lead_timeline_events")
@@ -477,7 +481,8 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        return res.status(200).json({ ok: true, lead: data, requestId });
+        // ✅ 4) RESPOND (after all side effects)
+        return res.status(200).json({ ok: true, lead: updatedLead, requestId });
       } catch (e) {
         console.error("[api/leads] PATCH crash", requestId, e);
         return res.status(500).json({ ok: false, error: e?.message || "Server error", requestId });
