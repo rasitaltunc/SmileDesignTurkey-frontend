@@ -12,8 +12,10 @@ interface Lead {
   email: string | null;
   phone: string | null;
   status: string | null;
+  doctor_id: string | null;
   doctor_review_status: string | null;
   doctor_review_notes: string | null;
+  next_action: string | null;
   created_at: string;
   updated_at: string | null;
 }
