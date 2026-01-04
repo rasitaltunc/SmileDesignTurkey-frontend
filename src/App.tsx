@@ -1,4 +1,4 @@
-import { useState, createContext, useEffect } from 'react';
+import { useState, createContext, useEffect, ReactNode } from 'react';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
@@ -21,6 +21,56 @@ import DoctorPortal from './pages/DoctorPortal';
 import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
+
+// RequireRole component for role-based access control
+function RequireRole({ 
+  roles, 
+  children, 
+  isLoading: externalLoading,
+  navigate 
+}: { 
+  roles: string[]; 
+  children: ReactNode;
+  isLoading?: boolean;
+  navigate: (path: string) => void;
+}) {
+  const { role, isLoading: authLoading } = useAuthStore();
+  const isLoading = externalLoading ?? authLoading;
+
+  // Show loading while role is being determined
+  if (isLoading || !role) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if user's role is in allowed roles
+  if (!roles.includes(role)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
+          <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
+          <p className="mt-2 text-gray-600">
+            You don't have permission to access this page.
+          </p>
+          <button
+            className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+            onClick={() => navigate('/')}
+          >
+            Go back home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 export const NavigationContext = createContext<{
   navigate: (path: string, params?: any) => void;
@@ -205,43 +255,17 @@ export default function App() {
         }
         return null;
       case '/patient/portal':
-        // Role check: only patient can access
-        if (role && role !== 'patient') {
-          return (
-            <div className="min-h-screen flex items-center justify-center p-6">
-              <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-                <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
-                <p className="mt-2 text-gray-600">You don't have permission to access the patient portal.</p>
-                <button
-                  className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
-                  onClick={() => navigate('/')}
-                >
-                  Go back home
-                </button>
-              </div>
-            </div>
-          );
-        }
-        return <PatientPortal />;
+        return (
+          <RequireRole roles={['patient']} navigate={navigate}>
+            <PatientPortal />
+          </RequireRole>
+        );
       case '/doctor/portal':
-        // Role check: only doctor can access
-        if (role && role !== 'doctor') {
-          return (
-            <div className="min-h-screen flex items-center justify-center p-6">
-              <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-                <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
-                <p className="mt-2 text-gray-600">You don't have permission to access the doctor portal.</p>
-                <button
-                  className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
-                  onClick={() => navigate('/')}
-                >
-                  Go back home
-                </button>
-              </div>
-            </div>
-          );
-        }
-        return <DoctorPortal />;
+        return (
+          <RequireRole roles={['doctor']} navigate={navigate}>
+            <DoctorPortal />
+          </RequireRole>
+        );
       case '/admin':
         // Redirect /admin to /admin/leads
         navigate('/admin/leads', { replace: true });
@@ -251,134 +275,36 @@ export default function App() {
         navigate('/employee/leads', { replace: true });
         return null;
       case '/admin/leads':
-        // Role gelene kadar loader göster (ÇOK ÖNEMLİ)
-        if (isLoading || !role) {
-          return (
-            <div className="min-h-screen flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading...</p>
-              </div>
-            </div>
-          );
-        }
-        // Role uyuşmuyorsa -> home
-        if (role !== 'admin') {
-          return (
-            <div className="min-h-screen flex items-center justify-center p-6">
-              <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-                <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
-                <p className="mt-2 text-gray-600">
-                  You don't have permission to access the admin panel.
-                </p>
-                <button
-                  className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
-                  onClick={() => navigate('/')}
-                >
-                  Go back home
-                </button>
-              </div>
-            </div>
-          );
-        }
-        return <AdminLeads />;
+        return (
+          <RequireRole roles={['admin']} navigate={navigate} isLoading={isLoading}>
+            <AdminLeads />
+          </RequireRole>
+        );
       case '/employee/leads':
-        // Role gelene kadar loader göster (ÇOK ÖNEMLİ)
-        if (isLoading || !role) {
-          return (
-            <div className="min-h-screen flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading...</p>
-              </div>
-            </div>
-          );
-        }
-        // Role uyuşmuyorsa -> home
-        if (role !== 'employee' && role !== 'admin') {
-          return (
-            <div className="min-h-screen flex items-center justify-center p-6">
-              <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-                <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
-                <p className="mt-2 text-gray-600">You don't have permission to access the employee panel.</p>
-                <button
-                  className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
-                  onClick={() => navigate('/')}
-                >
-                  Go back home
-                </button>
-              </div>
-            </div>
-          );
-        }
-        return <AdminLeads />;
+        return (
+          <RequireRole roles={['employee', 'admin']} navigate={navigate} isLoading={isLoading}>
+            <AdminLeads />
+          </RequireRole>
+        );
       default:
         // Handle dynamic /admin/lead/:id route
         if (currentPath.startsWith('/admin/lead/')) {
-          if (isLoading || !role) {
-            return (
-              <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-                  <p className="mt-4 text-gray-600">Loading...</p>
-                </div>
-              </div>
-            );
-          }
-          if (role !== 'admin' && role !== 'employee') {
-            return (
-              <div className="min-h-screen flex items-center justify-center p-6">
-                <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-                  <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
-                  <p className="mt-2 text-gray-600">
-                    You don't have permission to access the admin panel.
-                  </p>
-                  <button
-                    className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
-                    onClick={() => navigate('/')}
-                  >
-                    Go back home
-                  </button>
-                </div>
-              </div>
-            );
-          }
-          return <AdminPatientProfile />;
+          return (
+            <RequireRole roles={['admin', 'employee']} navigate={navigate} isLoading={isLoading}>
+              <AdminPatientProfile />
+            </RequireRole>
+          );
         }
         
         // Handle dynamic /doctor/lead/:id route (for doctor mode)
         if (currentPath.startsWith('/doctor/lead/')) {
-          if (isLoading || !role) {
-            return (
-              <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-                  <p className="mt-4 text-gray-600">Loading...</p>
-                </div>
-              </div>
-            );
-          }
-          if (role !== 'doctor') {
-            return (
-              <div className="min-h-screen flex items-center justify-center p-6">
-                <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-                  <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
-                  <p className="mt-2 text-gray-600">
-                    You don't have permission to access the doctor panel.
-                  </p>
-                  <button
-                    className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white"
-                    onClick={() => navigate('/')}
-                  >
-                    Go back home
-                  </button>
-                </div>
-              </div>
-            );
-          }
           const leadIdMatch = currentPath.match(/\/doctor\/lead\/([^/]+)/);
           const leadId = leadIdMatch ? leadIdMatch[1] : null;
-          return <AdminPatientProfile doctorMode={true} leadId={leadId} />;
+          return (
+            <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
+              <AdminPatientProfile doctorMode={true} leadId={leadId} />
+            </RequireRole>
+          );
         }
         return <Home />;
     }
