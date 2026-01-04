@@ -43,7 +43,10 @@ module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("x-sdt-api", "leads-v2");
+  
+  // ✅ Version tracking headers (her response'da görünsün)
+  res.setHeader("x-sdt-api", "leads-vNEXT"); // her bugfixte bunu arttır
+  res.setHeader("x-sdt-commit", process.env.VERCEL_GIT_COMMIT_SHA || "unknown");
   res.setHeader("x-request-id", requestId);
 
   if (req.method === "OPTIONS") return res.status(200).end();
