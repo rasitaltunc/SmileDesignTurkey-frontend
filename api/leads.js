@@ -264,8 +264,8 @@ module.exports = async function handler(req, res) {
         // Execute query AFTER all filters are applied
         const { data: updatedLead, error: updErr } = await q.single();
 
-        if (error) {
-          return res.status(500).json({ ok: false, error: error.message, hint: error.hint || null, requestId });
+        if (updErr) {
+          return res.status(500).json({ ok: false, error: updErr.message, hint: updErr.hint || null, requestId });
         }
 
         // ✅ Create timeline event if assignment changed
