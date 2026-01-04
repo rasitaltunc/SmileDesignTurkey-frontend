@@ -1861,14 +1861,35 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                   throw new Error(result.error || 'Failed to update review status');
                                 }
 
-                                if (result.lead) {
-                                  setLead((prev) => prev ? { ...prev, doctor_review_status: (result.lead as any).doctor_review_status } : null);
-                                  // Auto-update next_action if review status changed (backend handles this)
-                                  if (result.lead.next_action) {
-                                    setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
+                                toast.success('Review status updated');
+                                
+                                // ✅ Re-fetch lead details to get updated next_action (automation result)
+                                try {
+                                  const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                                  const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
+                                    method: 'GET',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                    },
+                                  });
+                                  
+                                  if (leadResponse.ok) {
+                                    const leadResult = await leadResponse.json().catch(() => ({}));
+                                    if (leadResult.ok && leadResult.lead) {
+                                      setLead(leadResult.lead as Lead);
+                                      // Update local review state
+                                      setDoctorReviewStatus((leadResult.lead as any).doctor_review_status || '');
+                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
+                                    }
+                                  }
+                                } catch (refetchErr) {
+                                  console.warn('[Review] Failed to refetch lead after update:', refetchErr);
+                                  // Fallback: use result.lead if available
+                                  if (result.lead) {
+                                    setLead((prev) => prev ? { ...prev, doctor_review_status: (result.lead as any).doctor_review_status, next_action: result.lead.next_action } : null);
+                                    setDoctorReviewStatus((result.lead as any).doctor_review_status || '');
                                   }
                                 }
-                                toast.success('Review status updated');
                                 
                                 // Refetch timeline to show new event
                                 const timelineResponse = await fetch(`${import.meta.env.VITE_API_URL || window.location.origin}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
@@ -1930,10 +1951,34 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                   throw new Error(result.error || 'Failed to update review notes');
                                 }
 
-                                if (result.lead) {
-                                  setLead((prev) => prev ? { ...prev, doctor_review_notes: (result.lead as any).doctor_review_notes } : null);
-                                }
                                 toast.success('Review notes updated');
+                                
+                                // ✅ Re-fetch lead details to ensure UI is in sync
+                                try {
+                                  const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                                  const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
+                                    method: 'GET',
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                    },
+                                  });
+                                  
+                                  if (leadResponse.ok) {
+                                    const leadResult = await leadResponse.json().catch(() => ({}));
+                                    if (leadResult.ok && leadResult.lead) {
+                                      setLead(leadResult.lead as Lead);
+                                      // Update local review state
+                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
+                                    }
+                                  }
+                                } catch (refetchErr) {
+                                  console.warn('[Review] Failed to refetch lead after update:', refetchErr);
+                                  // Fallback: use result.lead if available
+                                  if (result.lead) {
+                                    setLead((prev) => prev ? { ...prev, doctor_review_notes: (result.lead as any).doctor_review_notes } : null);
+                                    setDoctorReviewNotes((result.lead as any).doctor_review_notes || '');
+                                  }
+                                }
                               } catch (err) {
                                 const errorMessage = err instanceof Error ? err.message : 'Failed to update review notes';
                                 toast.error(errorMessage);

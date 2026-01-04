@@ -165,6 +165,29 @@ export default function DoctorPortal() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* DEV ONLY: Doctor Debug Panel */}
+        {import.meta.env.DEV && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <h3 className="text-sm font-semibold text-yellow-900 mb-2">🔧 Doctor Debug Panel (DEV ONLY)</h3>
+            <div className="text-xs text-yellow-800 space-y-1">
+              <div><strong>User ID:</strong> {user?.id || 'N/A'}</div>
+              <div><strong>Role:</strong> {role || 'N/A'}</div>
+              <div><strong>Fetched Leads:</strong> {leads.length}</div>
+              {leads.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-yellow-300">
+                  <div><strong>First Lead:</strong></div>
+                  <div className="ml-2 space-y-0.5">
+                    <div><strong>ID:</strong> {leads[0].id}</div>
+                    <div><strong>doctor_id:</strong> {leads[0].doctor_id || 'null'}</div>
+                    <div><strong>doctor_review_status:</strong> {leads[0].doctor_review_status || 'null'}</div>
+                    <div><strong>next_action:</strong> {(leads[0] as any).next_action || 'null'}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
