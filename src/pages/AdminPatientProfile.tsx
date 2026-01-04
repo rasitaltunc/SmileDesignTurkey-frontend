@@ -2264,7 +2264,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                   )}
                 </div>
               )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
