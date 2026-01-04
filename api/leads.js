@@ -311,7 +311,8 @@ module.exports = async function handler(req, res) {
               : "Unassigned";
             
             // ✅ Use normalized status for timeline stage (safe fallback chain)
-            const stageForTimeline = normalizeStatus(filtered.status ?? existingStatus) || "new";
+            // ✅ Use normalized status for timeline stage (safe fallback chain)
+            const stageForTimeline = normalizeStatus(filtered.status ?? updatedLead?.status ?? existingStatus) || "new";
             
             await dbClient
               .from("lead_timeline_events")
