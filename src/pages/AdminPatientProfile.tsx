@@ -482,9 +482,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     fetchTimeline();
   }, [leadId, isAuthenticated]);
 
-  // Doctors: Fetch on page load
+  // Doctors: Fetch on page load (admin/employee only, skip in doctorMode)
   useEffect(() => {
     if (!isAuthenticated) return;
+    if (isDoctorMode) return; // ✅ doctor mode admin endpoint çağırmaz
 
     const fetchDoctors = async () => {
       setIsLoadingDoctors(true);
@@ -517,7 +518,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchDoctors();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isDoctorMode]);
 
   // Contact Events: Fetch on page load
   useEffect(() => {
@@ -1865,21 +1866,30 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 
                                 // ✅ Re-fetch lead details to get updated next_action (automation result)
                                 try {
-                                  const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-                                  const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
-                                    method: 'GET',
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`,
-                                    },
-                                  });
-                                  
-                                  if (leadResponse.ok) {
-                                    const leadResult = await leadResponse.json().catch(() => ({}));
-                                    if (leadResult.ok && leadResult.lead) {
-                                      setLead(leadResult.lead as Lead);
-                                      // Update local review state
-                                      setDoctorReviewStatus((leadResult.lead as any).doctor_review_status || '');
-                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
+                                  if (isDoctorMode) {
+                                    // ✅ Doctor mode: use doctor-friendly endpoint
+                                    const reloaded = await fetchLeadForDoctor(leadId);
+                                    setLead(reloaded);
+                                    setDoctorReviewStatus(reloaded.doctor_review_status || '');
+                                    setDoctorReviewNotes(reloaded.doctor_review_notes || '');
+                                  } else {
+                                    // ✅ Admin/Employee mode: use admin endpoint
+                                    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                                    const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
+                                      method: 'GET',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                      },
+                                    });
+                                    
+                                    if (leadResponse.ok) {
+                                      const leadResult = await leadResponse.json().catch(() => ({}));
+                                      if (leadResult.ok && leadResult.lead) {
+                                        setLead(leadResult.lead as Lead);
+                                        // Update local review state
+                                        setDoctorReviewStatus((leadResult.lead as any).doctor_review_status || '');
+                                        setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
+                                      }
                                     }
                                   }
                                 } catch (refetchErr) {
@@ -1955,20 +1965,28 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 
                                 // ✅ Re-fetch lead details to ensure UI is in sync
                                 try {
-                                  const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-                                  const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
-                                    method: 'GET',
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`,
-                                    },
-                                  });
-                                  
-                                  if (leadResponse.ok) {
-                                    const leadResult = await leadResponse.json().catch(() => ({}));
-                                    if (leadResult.ok && leadResult.lead) {
-                                      setLead(leadResult.lead as Lead);
-                                      // Update local review state
-                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
+                                  if (isDoctorMode) {
+                                    // ✅ Doctor mode: use doctor-friendly endpoint
+                                    const reloaded = await fetchLeadForDoctor(leadId);
+                                    setLead(reloaded);
+                                    setDoctorReviewNotes(reloaded.doctor_review_notes || '');
+                                  } else {
+                                    // ✅ Admin/Employee mode: use admin endpoint
+                                    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                                    const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
+                                      method: 'GET',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                      },
+                                    });
+                                    
+                                    if (leadResponse.ok) {
+                                      const leadResult = await leadResponse.json().catch(() => ({}));
+                                      if (leadResult.ok && leadResult.lead) {
+                                        setLead(leadResult.lead as Lead);
+                                        // Update local review state
+                                        setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
+                                      }
                                     }
                                   }
                                 } catch (refetchErr) {

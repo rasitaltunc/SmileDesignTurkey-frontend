@@ -96,6 +96,8 @@ module.exports = async function handler(req, res) {
 
     // GET /api/leads
     if (req.method === "GET") {
+      const id = req.query?.id;
+
       // ✅ Safe status filter: normalize and validate, never error
       const statusRaw = String(req.query?.status ?? "all").toLowerCase();
       let statusFilter = null;
@@ -109,6 +111,9 @@ module.exports = async function handler(req, res) {
 
       let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
+      // ✅ Support id parameter for single lead fetch
+      if (id) q = q.eq("id", id).limit(1);
+
       if (statusFilter) q = q.eq("status", statusFilter);
 
       // employee sees only assigned leads
@@ -120,7 +125,12 @@ module.exports = async function handler(req, res) {
       const { data, error } = await q;
       if (error) return res.status(500).json({ ok: false, error: error.message, requestId });
 
-      return res.status(200).json({ ok: true, leads: data, debug: { role, uid: user.id }, requestId });
+      // ✅ If id parameter provided, return single lead format
+      if (id) {
+        return res.status(200).json({ ok: true, lead: data?.[0] || null, leads: data || [], requestId });
+      }
+
+      return res.status(200).json({ ok: true, leads: data || [], requestId });
     }
 
     // PATCH /api/leads
