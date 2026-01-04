@@ -1753,6 +1753,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* F) Assign Doctor (Admin/Employee only) */}
                 {!isDoctorMode && (

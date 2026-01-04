@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/authStore';
 import { NavigationContext } from '@/App';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
-import { RefreshCw, LogOut, User, Phone, Mail, Clock, FileText, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { RefreshCw, LogOut, Phone, Mail, Clock, FileText, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import AdminPatientProfile from './AdminPatientProfile';
 
 interface Lead {
