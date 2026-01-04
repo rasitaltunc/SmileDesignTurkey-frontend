@@ -58,7 +58,8 @@ export default function DoctorPortal() {
       }
 
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const response = await fetch(`${apiUrl}/api/leads`, {
+      // ✅ Force status=all to avoid any status filter issues
+      const response = await fetch(`${apiUrl}/api/leads?status=all`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
