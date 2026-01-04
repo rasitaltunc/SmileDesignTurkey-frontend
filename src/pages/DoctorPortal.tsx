@@ -112,6 +112,15 @@ export default function DoctorPortal() {
     }
   }, [role, user]);
 
+  const openLead = (lead: any) => {
+    const id = lead?.id || lead?.lead_uuid; // lead.id esas
+    if (!id) {
+      console.error("Missing lead id", lead);
+      return;
+    }
+    navigate(`/doctor/lead/${encodeURIComponent(id)}`);
+  };
+
   const getReviewStatusBadge = (status: string | null) => {
     if (!status || status === 'pending') {
       return (
@@ -297,7 +306,7 @@ export default function DoctorPortal() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedLeadId(lead.id);
+                          openLead(lead);
                         }}
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
                       >
