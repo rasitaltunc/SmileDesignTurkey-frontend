@@ -254,11 +254,15 @@ module.exports = async function handler(req, res) {
           .update(filtered)
           .select("*");
 
+        // Apply role-based filters BEFORE await
         if (isEmployee) q = q.eq("assigned_to", user.id);
+        if (isDoctor) q = q.eq("doctor_id", user.id);
 
+        // Apply ID filter
         q = id ? q.eq("id", id) : q.eq("lead_uuid", lead_uuid);
 
-        const { data, error } = await q.single();
+        // Execute query AFTER all filters are applied
+        const { data: updatedLead, error: updErr } = await q.single();
 
         if (error) {
           return res.status(500).json({ ok: false, error: error.message, hint: error.hint || null, requestId });
