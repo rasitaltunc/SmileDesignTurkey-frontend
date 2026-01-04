@@ -93,12 +93,20 @@ module.exports = async function handler(req, res) {
 
     // GET /api/leads
     if (req.method === "GET") {
-      const { status } = req.query || {};
+      // ✅ Safe status filter: normalize and validate, never error
+      const statusRaw = String(req.query?.status ?? "all").toLowerCase();
+      let statusFilter = null;
+      if (statusRaw && statusRaw !== "all") {
+        const mapped = STATUS_MAP[statusRaw] || statusRaw;
+        if (VALID_STATUSES.has(mapped)) statusFilter = mapped;
+        // If invalid, treat as "all" (no filter) - never error
+      }
+
       const limit = Math.min(parseInt(req.query?.limit || "200", 10) || 200, 500);
 
       let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
-      if (status && status !== "all") q = q.eq("status", status);
+      if (statusFilter) q = q.eq("status", statusFilter);
 
       // employee sees only assigned leads
       if (isEmployee) q = q.eq("assigned_to", user.id);
