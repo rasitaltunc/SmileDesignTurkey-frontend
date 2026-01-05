@@ -33,26 +33,35 @@ module.exports = async function handler(req, res) {
   const token = getBearerToken(req);
   if (!token) return res.status(401).json({ error: "Missing bearer token" });
 
-  // Verify JWT + role via RPC
-  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
-  const authClient = createClient(url, anonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
+  // ✅ Verify JWT using service role client (supabase-js handles API key automatically)
+  const dbClient = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: role, error: roleErr } = await authClient.rpc("get_current_user_role");
-  if (roleErr) return res.status(401).json({ error: "Invalid token" });
+  // Verify JWT token
+  const { data: userData, error: userErr } = await dbClient.auth.getUser(token);
+  if (userErr || !userData?.user) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
 
-  if (String(role).toLowerCase() !== "admin") {
+  // Check role via profiles table (service role bypasses RLS)
+  const { data: prof, error: profErr } = await dbClient
+    .from("profiles")
+    .select("role")
+    .eq("id", userData.user.id)
+    .single();
+
+  if (profErr || !prof) {
+    return res.status(401).json({ error: "Failed to read profile role" });
+  }
+
+  const role = String(prof?.role || "").trim().toLowerCase();
+  if (role !== "admin") {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  // Admin-only: fetch employees using service role
-  const adminClient = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data, error } = await adminClient
+  // Admin-only: fetch employees using service role (reuse dbClient)
+  const { data, error } = await dbClient
     .from("profiles")
     .select("id, full_name, role")
     .eq("role", "employee")
