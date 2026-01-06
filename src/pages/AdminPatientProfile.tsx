@@ -199,10 +199,57 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     );
   };
 
+  // ✅ Doctor-friendly lead fetch function
+  const fetchLeadForDoctor = async (leadId: string): Promise<Lead> => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      throw new Error('Supabase client not configured');
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      throw new Error('Session expired');
+    }
+
+    // ✅ Doctor-safe endpoint: /api/leads?status=all&id=...&limit=1
+    const fetchUrl = `/api/leads?status=all&id=${encodeURIComponent(leadId)}&limit=1`;
+    
+    if (import.meta.env.DEV) {
+      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, fetchUrl });
+    }
+
+    const response = await fetch(fetchUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to load lead' }));
+      throw new Error(errorData.error || 'Failed to load lead');
+    }
+
+    const result = await response.json();
+    if (!result.ok) {
+      throw new Error(result.error || 'Lead not found');
+    }
+
+    // ✅ Response format: { ok: true, lead: {...} } OR { ok: true, leads: [...] }
+    const loadedLead = result.lead || (Array.isArray(result.leads) ? result.leads[0] : null);
+    if (!loadedLead) {
+      throw new Error('Lead not found');
+    }
+
+    return loadedLead as Lead;
+  };
+
   // leadId validation
   useEffect(() => {
     if (!leadId) {
-      setError('Invalid patient ID');
+      setError('Lead not found / Invalid lead ID');
       setIsLoadingLead(false);
     }
   }, [leadId]);
@@ -228,29 +275,37 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           throw new Error('Session expired');
         }
 
-        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-        const response = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        let loadedLead: Lead;
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to load patient' }));
-          if (errorData.error === 'NOT_FOUND') {
-            throw new Error('Patient not found');
+        // ✅ Doctor mode: use doctor-friendly endpoint
+        if (isDoctorMode) {
+          loadedLead = await fetchLeadForDoctor(leadId);
+        } else {
+          // ✅ Admin/Employee mode: use admin endpoint
+          const response = await fetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Failed to load patient' }));
+            if (errorData.error === 'NOT_FOUND') {
+              throw new Error('Lead not found / Invalid lead ID');
+            }
+            throw new Error(errorData.error || 'Failed to load patient');
           }
-          throw new Error(errorData.error || 'Failed to load patient');
+
+          const result = await response.json();
+          if (!result.ok || !result.lead) {
+            throw new Error('Lead not found');
+          }
+
+          loadedLead = result.lead as Lead;
         }
 
-        const result = await response.json();
-        if (!result.ok || !result.lead) {
-          throw new Error('Lead not found');
-        }
-
-        const loadedLead = result.lead as Lead;
         setLead(loadedLead);
         
         // Initialize Next Action & Follow-up from loaded lead
@@ -273,7 +328,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchLead();
-  }, [leadId, isAuthenticated]);
+  }, [leadId, isAuthenticated, isDoctorMode]);
 
   // Fetch notes
   useEffect(() => {

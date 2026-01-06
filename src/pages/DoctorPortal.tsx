@@ -113,9 +113,11 @@ export default function DoctorPortal() {
   }, [role, user]);
 
   const openLead = (lead: any) => {
-    const id = lead?.id || lead?.lead_uuid; // lead.id esas
+    // ✅ Guaranteed id: try lead.id first, then lead_uuid
+    const id = lead?.id || lead?.lead_uuid;
     if (!id) {
-      console.error("Missing lead id", lead);
+      console.error("[DoctorPortal] Missing lead id", lead);
+      toast.error("Invalid lead: missing ID");
       return;
     }
     navigate(`/doctor/lead/${encodeURIComponent(id)}`);
