@@ -2,6 +2,7 @@ import { useState, createContext, useEffect, ReactNode } from 'react';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
+import { getHomePath } from './lib/roleHome';
 import Home from './pages/Home';
 import Treatments from './pages/Treatments';
 import TreatmentDetail from './pages/TreatmentDetail';
@@ -37,6 +38,14 @@ function RequireRole({
   const { role, isLoading: authLoading } = useAuthStore();
   const isLoading = externalLoading ?? authLoading;
 
+  // ✅ Redirect to role's home if role is known but not allowed
+  useEffect(() => {
+    if (!isLoading && role && !roles.includes(role)) {
+      const homePath = getHomePath(role);
+      navigate(homePath, { replace: true });
+    }
+  }, [role, roles, isLoading, navigate]);
+
   // Show loading while role is being determined
   if (isLoading || !role) {
     return (
@@ -54,19 +63,13 @@ function RequireRole({
     if (import.meta.env.DEV) {
       console.log("RequireRole blocked:", { role, allowed: roles });
     }
+    
+    // ✅ Redirect is handled in useEffect above, show loading while redirecting
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-xl shadow p-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900">Unauthorized</h2>
-          <p className="mt-2 text-gray-600">
-            You don't have permission to access this page.
-          </p>
-          <button
-            className="mt-5 px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-            onClick={() => navigate('/')}
-          >
-            Go back home
-          </button>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Redirecting...</p>
         </div>
       </div>
     );
@@ -304,7 +307,7 @@ export default function App() {
           const leadIdMatch = currentPath.match(/\/doctor\/lead\/([^/]+)/);
           const leadId = leadIdMatch ? leadIdMatch[1] : null;
           return (
-            <RequireRole roles={['doctor', 'admin']} navigate={navigate} isLoading={isLoading}>
+            <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
               <AdminPatientProfile doctorMode={true} leadId={leadId} />
             </RequireRole>
           );

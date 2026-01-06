@@ -6,6 +6,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { useAuthStore } from '../store/authStore';
+import { getHomePath, getHomeLabel } from '../lib/roleHome';
 
 interface NavbarProps {
   minimal?: boolean;
@@ -42,7 +43,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
 
   const roleLabel = useMemo(() => {
     if (!role) return null;
-    return role === 'admin' ? 'Admin Dashboard' : 'My Leads';
+    return getHomeLabel(role);
   }, [role]);
 
   const handleWhatsAppClick = () => {
@@ -102,16 +103,10 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
       const role = result?.role;
       if (!role) return;
 
-      if (role === 'admin') {
-        closeAuth();
-        pushRoute('/admin/leads');
-      } else if (role === 'employee') {
-        closeAuth();
-        pushRoute('/employee/leads');
-      } else {
-        closeAuth();
-        pushRoute('/');
-      }
+      // ✅ Single source of truth: getHomePath
+      const homePath = getHomePath(role);
+      closeAuth();
+      pushRoute(homePath);
     } catch {
       // store error gösteriyor; burada hiçbir şey yapma (redirect yok, modal açık kalır)
     }
@@ -159,7 +154,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                 <div className="flex items-center gap-2">
                   {roleLabel && role ? (
                     <Link
-                      to={role === 'admin' ? '/admin/leads' : '/employee/leads'}
+                      to={getHomePath(role)}
                       className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
                     >
                       {roleLabel}
@@ -279,7 +274,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               <div className="flex items-center gap-2">
                 {roleLabel && role ? (
                   <Link
-                    to={role === 'admin' ? '/admin/leads' : '/employee/leads'}
+                    to={getHomePath(role)}
                     className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
                   >
                     {roleLabel}
@@ -387,7 +382,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                 <div className="flex items-center gap-2 w-full">
                   {roleLabel && role ? (
                     <Link
-                      to={role === 'admin' ? '/admin/leads' : '/employee/leads'}
+                      to={getHomePath(role)}
                       onClick={() => setIsOpen(false)}
                       className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-center"
                     >
