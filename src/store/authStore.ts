@@ -51,9 +51,24 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Login succeeded but no user returned');
           }
 
-          // Role'u direkt çek (fetchRole RPC kullanıyor, burada da aynısını yapabiliriz)
-          const { data: roleData, error: roleErr } = await supabase.rpc('get_current_user_role');
-          const role = roleErr ? null : (String(roleData || '').trim().toLowerCase() || null);
+          // ✅ Role'u API endpoint'inden çek
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          let role: string | null = null;
+          
+          if (token) {
+            try {
+              const r = await fetch("/api/get_current_user_role", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const j = await r.json();
+              if (j.ok && j.role) {
+                role = String(j.role).trim().toLowerCase() || null;
+              }
+            } catch (err) {
+              console.warn("[AuthStore] Failed to fetch role:", err);
+            }
+          }
 
           // Store'a set et
           set({
@@ -106,9 +121,24 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Login succeeded but no user returned');
           }
 
-          // Role'u direkt çek
-          const { data: roleData, error: roleErr } = await supabase.rpc('get_current_user_role');
-          const role = roleErr ? null : (String(roleData || '').trim().toLowerCase() || null);
+          // ✅ Role'u API endpoint'inden çek
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          let role: string | null = null;
+          
+          if (token) {
+            try {
+              const r = await fetch("/api/get_current_user_role", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const j = await r.json();
+              if (j.ok && j.role) {
+                role = String(j.role).trim().toLowerCase() || null;
+              }
+            } catch (err) {
+              console.warn("[AuthStore] Failed to fetch role:", err);
+            }
+          }
 
           // Store'a set et
           set({
@@ -188,12 +218,28 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          // ✅ En sağlam: DB fonksiyonundan rol çek
-          const { data, error } = await supabase.rpc("get_current_user_role");
-          if (error) throw error;
+          // ✅ Access token al
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token;
+          
+          if (!token) {
+            set({ role: null });
+            return;
+          }
 
-          set({ role: (data as string) || null });
+          // ✅ API endpoint'inden role çek
+          const r = await fetch("/api/get_current_user_role", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const j = await r.json();
+          
+          if (j.ok && j.role) {
+            set({ role: String(j.role).trim().toLowerCase() || null });
+          } else {
+            set({ role: null });
+          }
         } catch (e) {
+          console.warn("[AuthStore] fetchRole error:", e);
           set({ role: null });
         }
       },
