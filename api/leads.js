@@ -48,6 +48,8 @@ module.exports = async function handler(req, res) {
   res.setHeader("x-sdt-api", "leads-vNEXT"); // her bugfixte bunu arttır
   res.setHeader("x-sdt-commit", process.env.VERCEL_GIT_COMMIT_SHA || "unknown");
   res.setHeader("x-request-id", requestId);
+  // ✅ Cache-Control: no-store (avoid cached auth/role weirdness)
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -111,8 +113,13 @@ module.exports = async function handler(req, res) {
 
       let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
-      // ✅ Support id parameter for single lead fetch
-      if (id) q = q.eq("id", id).limit(1);
+      // ✅ Support id parameter for single lead fetch (harden against ID mismatch)
+      // Filter by either id OR lead_uuid (frontend yanlışlıkla lead_uuid yollasa bile çalışır)
+      if (id) {
+        const idStr = String(id).trim();
+        // ✅ OR condition: match either id or lead_uuid
+        q = q.or(`id.eq.${idStr},lead_uuid.eq.${idStr}`).limit(1);
+      }
 
       if (statusFilter) q = q.eq("status", statusFilter);
 
@@ -125,9 +132,15 @@ module.exports = async function handler(req, res) {
       const { data, error } = await q;
       if (error) return res.status(500).json({ ok: false, error: error.message, requestId });
 
-      // ✅ If id parameter provided, return single lead format
+      // ✅ If id parameter provided, return consistent single lead format
       if (id) {
-        return res.status(200).json({ ok: true, lead: data?.[0] || null, leads: data || [], requestId });
+        const leadRow = data?.[0] || null;
+        return res.status(200).json({ 
+          ok: true, 
+          lead: leadRow, 
+          leads: leadRow ? [leadRow] : [], 
+          requestId 
+        });
       }
 
       return res.status(200).json({ ok: true, leads: data || [], requestId });
