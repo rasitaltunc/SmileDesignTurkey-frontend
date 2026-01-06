@@ -268,7 +268,7 @@ export default function App() {
         );
       case '/doctor/portal':
         return (
-          <RequireRole roles={['doctor', 'admin']} navigate={navigate} isLoading={isLoading}>
+          <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
             <DoctorPortal />
           </RequireRole>
         );
