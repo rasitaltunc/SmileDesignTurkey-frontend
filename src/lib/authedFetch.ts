@@ -27,6 +27,11 @@ export async function authedFetch(
     throw new Error('Missing access token. Please login again.');
   }
 
+  // ✅ DEV logging
+  if (import.meta.env.DEV) {
+    console.log('[authedFetch]', url, !!token);
+  }
+
   // Merge Authorization header into existing headers
   const headers = new Headers(init?.headers);
   headers.set('Authorization', `Bearer ${token}`);

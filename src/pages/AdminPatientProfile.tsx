@@ -274,12 +274,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           loadedLead = await fetchLeadForDoctor(leadId);
         } else {
           // ✅ Admin/Employee mode: use admin endpoint
-          const response = await fetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
+          const response = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
             method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
           });
 
           if (!response.ok) {
@@ -389,28 +385,20 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // B4: Fetch AI memory on page load
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
+    
+    // ✅ Doctor mode: AI memory is admin/employee only (disable for doctor)
+    if (isDoctorMode) {
+      setIsLoadingMemory(false);
+      return;
+    }
 
     const fetchAIMemory = async () => {
       setIsLoadingMemory(true);
       try {
-        const supabase = getSupabaseClient();
-        if (!supabase) {
-          throw new Error('Supabase client not configured');
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        if (!token) {
-          throw new Error('Session expired');
-        }
-
-        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-        const response = await fetch(`${apiUrl}/api/admin/lead-ai/${encodeURIComponent(leadId)}`, {
+        // ✅ Use resolved UUID for admin endpoints
+        const resolvedId = resolvedLeadId || lead?.id || leadId;
+        const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedId)}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
         });
 
         if (!response.ok) {
@@ -455,16 +443,24 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchAIMemory();
-  }, [leadId, isAuthenticated]);
+  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadId, lead?.id]);
 
   // B5: Fetch AI tasks on page load
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
+    
+    // ✅ Doctor mode: AI tasks is admin/employee only (disable for doctor)
+    if (isDoctorMode) {
+      setIsLoadingTasks(false);
+      return;
+    }
 
     const fetchTasks = async () => {
       setIsLoadingTasks(true);
       try {
-        const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
+        // ✅ Use resolved UUID for admin endpoints
+        const resolvedId = resolvedLeadId || lead?.id || leadId;
+        const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedId)}`, {
           method: 'GET',
         });
 
@@ -495,7 +491,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchTasks();
-  }, [leadId, isAuthenticated]);
+  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadId, lead?.id]);
   
   // B6: Fetch timeline events on page load
   useEffect(() => {
@@ -668,9 +664,6 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     const toastId = toast.loading('Adding timeline event...');
     
     try {
-      const token = await getAccessToken();
-      console.log("token length", token?.length);
-      
       // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for timeline endpoint)
       const resolvedId = resolvedLeadId || lead?.id;
       if (!resolvedId || !isUuid(resolvedId)) {
@@ -717,18 +710,17 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setNewTimelineStage('');
       setNewTimelineNote('');
       
-      // Refetch timeline events
-      const refetchResponse = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (refetchResponse.ok) {
-        const refetchResult = await refetchResponse.json();
-        if (refetchResult.ok && Array.isArray(refetchResult.data)) {
-          setTimelineEvents(refetchResult.data);
+      // ✅ Refetch timeline events with resolved UUID (reuse same resolvedId)
+      if (resolvedId && isUuid(resolvedId)) {
+        const refetchResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
+          method: 'GET',
+        });
+        
+        if (refetchResponse.ok) {
+          const refetchResult = await refetchResponse.json();
+          if (refetchResult.ok && Array.isArray(refetchResult.data)) {
+            setTimelineEvents(refetchResult.data);
+          }
         }
       }
       
@@ -748,9 +740,17 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // B5: Mark task as done
   const handleMarkTaskDone = async (taskId: string) => {
     if (!leadId || !isAuthenticated) return;
+    
+    // ✅ Doctor mode: AI tasks is admin/employee only (disable for doctor)
+    if (isDoctorMode) {
+      toast.error('Task management is not available for doctors');
+      return;
+    }
 
     try {
-      const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(leadId)}`, {
+      // ✅ Use resolved UUID for admin endpoints
+      const resolvedId = resolvedLeadId || lead?.id || leadId;
+      const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedId)}`, {
         method: 'POST',
         body: JSON.stringify({
           action: 'mark_done',
@@ -874,6 +874,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // B3: Normalize Notes
   const handleNormalizeNotes = async () => {
     if (!leadId || !isAuthenticated) return;
+    
+    // ✅ Doctor mode: Normalize is admin/employee only (disable for doctor)
+    if (isDoctorMode) {
+      toast.error('Note normalization is not available for doctors');
+      return;
+    }
 
     setIsLoadingNormalize(true);
     setError(null);
@@ -881,24 +887,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     const toastId = toast.loading('Normalizing notes...');
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured');
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        throw new Error('Session expired');
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const response = await fetch(`${apiUrl}/api/ai/normalize`, {
+      const response = await authedFetch(`/api/ai/normalize`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({ leadId }),
       });
 
@@ -948,29 +938,21 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // B4: Sync Memory Vault
   const handleSyncMemory = async () => {
     if (!leadId || !isAuthenticated || !briefData) return;
+    
+    // ✅ Doctor mode: AI memory sync is admin/employee only (disable for doctor)
+    if (isDoctorMode) {
+      toast.error('Memory sync is not available for doctors');
+      return;
+    }
 
     setIsSyncingMemory(true);
     const toastId = toast.loading('Syncing memory vault...');
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured');
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        throw new Error('Session expired');
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const response = await fetch(`${apiUrl}/api/admin/lead-ai/${encodeURIComponent(leadId)}`, {
+      // ✅ Use resolved UUID for admin endpoints
+      const resolvedId = resolvedLeadId || lead?.id || leadId;
+      const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedId)}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({
           snapshot: briefData.brief?.snapshot || null,
           callBrief: briefData.brief?.callBrief || null,
@@ -1894,12 +1876,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                     setDoctorReviewNotes(reloaded.doctor_review_notes || '');
                                   } else {
                                     // ✅ Admin/Employee mode: use admin endpoint
-                                    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-                                    const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
+                                    const leadResponse = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
                                       method: 'GET',
-                                      headers: {
-                                        'Authorization': `Bearer ${token}`,
-                                      },
                                     });
                                     
                                     if (leadResponse.ok) {
@@ -1986,12 +1964,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                     setDoctorReviewNotes(reloaded.doctor_review_notes || '');
                                   } else {
                                     // ✅ Admin/Employee mode: use admin endpoint
-                                    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-                                    const leadResponse = await fetch(`${apiUrl}/api/admin/lead/${encodeURIComponent(leadId)}`, {
+                                    const leadResponse = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
                                       method: 'GET',
-                                      headers: {
-                                        'Authorization': `Bearer ${token}`,
-                                      },
                                     });
                                     
                                     if (leadResponse.ok) {

@@ -5,6 +5,7 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { RefreshCw, LogOut, Phone, Mail, Clock, FileText, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import AdminPatientProfile from './AdminPatientProfile';
+import { authedFetch } from '@/lib/authedFetch';
 
 interface Lead {
   id: string;
@@ -43,26 +44,9 @@ export default function DoctorPortal() {
     setError(null);
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured.');
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-
-      if (!token) {
-        console.warn("[DoctorPortal] No token yet, skipping loadLeads");
-        setIsLoading(false);
-        return;
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      // ✅ Force status=all to avoid any status filter issues
-      const response = await fetch(`${apiUrl}/api/leads?status=all`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      // ✅ Use authedFetch to ensure Authorization header is always present
+      const response = await authedFetch(`/api/leads?status=all`, {
+        method: 'GET',
       });
 
       if (!response.ok) {
