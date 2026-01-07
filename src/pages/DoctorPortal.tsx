@@ -113,13 +113,15 @@ export default function DoctorPortal() {
   }, [role, user]);
 
   const openLead = (lead: any) => {
-    // ✅ Guaranteed id: try lead.id first, then lead_uuid
-    const id = lead?.id || lead?.lead_uuid;
+    // ✅ Prefer lead_uuid (public ID) for navigation, fallback to id (UUID)
+    // This ensures route param is public ID, which backend can handle
+    const id = lead?.lead_uuid || lead?.id;
     if (!id) {
       console.error("[DoctorPortal] Missing lead id", lead);
       toast.error("Invalid lead: missing ID");
       return;
     }
+    // ✅ SPA navigation (not full page reload)
     navigate(`/doctor/lead/${encodeURIComponent(id)}`);
   };
 

@@ -67,6 +67,45 @@ function pickString(v) {
   return "";
 }
 
+// ✅ UUID validation (kalıcı fix: UUID değilse UUID kolonuna asla dokunma)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(v) {
+  if (!v) return false;
+  return UUID_RE.test(String(v).trim());
+}
+
+// ✅ Resolve lead_uuid to UUID (for child endpoints that require UUID)
+async function resolveLeadUuid(supabase, leadIdOrUuid) {
+  if (!leadIdOrUuid) return null;
+  
+  const idStr = String(leadIdOrUuid).trim();
+  
+  // If it's already a UUID, return it
+  if (isUuid(idStr)) {
+    return idStr;
+  }
+  
+  // Otherwise, query leads table to find UUID by lead_uuid
+  try {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("lead_uuid", idStr)
+      .maybeSingle();
+    
+    if (error || !data) {
+      console.warn("[leads-contact-events] Failed to resolve lead_uuid to UUID:", idStr, error?.message);
+      return null;
+    }
+    
+    return data.id;
+  } catch (err) {
+    console.warn("[leads-contact-events] Error resolving lead_uuid:", err);
+    return null;
+  }
+}
+
 module.exports = async function handler(req, res) {
   setCors(res);
 
@@ -97,17 +136,27 @@ module.exports = async function handler(req, res) {
   try {
     // GET: List contact events for a lead
     if (req.method === "GET") {
-      const leadId = pickString(req.query?.lead_id || req.query?.leadId);
+      const leadIdRaw = pickString(req.query?.lead_id || req.query?.leadId);
       const limit = parseInt(req.query?.limit || "5", 10);
 
-      if (!leadId) {
-        return res.status(400).json({ error: "Missing lead_id" });
+      if (!leadIdRaw) {
+        return res.status(400).json({ ok: false, error: "Missing lead_id", requestId });
+      }
+
+      // ✅ Resolve lead_uuid to UUID if needed
+      const resolvedLeadId = await resolveLeadUuid(supabase, leadIdRaw);
+      if (!resolvedLeadId) {
+        return res.status(400).json({ 
+          ok: false,
+          error: "Invalid lead_id: not found or cannot resolve to UUID", 
+          requestId 
+        });
       }
 
       const { data: events, error: eventsError } = await supabase
         .from("lead_contact_events")
         .select("*")
-        .eq("lead_id", leadId)
+        .eq("lead_id", resolvedLeadId)
         .order("created_at", { ascending: false })
         .limit(Math.min(limit, 50)); // Cap at 50
 
@@ -127,18 +176,28 @@ module.exports = async function handler(req, res) {
     // POST: Add new contact event
     if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-      const leadId = pickString(body.lead_id || body.leadId);
+      const leadIdRaw = pickString(body.lead_id || body.leadId);
       const channel = pickString(body.channel || "phone");
       const note = pickString(body.note || "");
 
-      if (!leadId) {
-        return res.status(400).json({ error: "Missing lead_id" });
+      if (!leadIdRaw) {
+        return res.status(400).json({ ok: false, error: "Missing lead_id", requestId });
+      }
+
+      // ✅ Resolve lead_uuid to UUID if needed
+      const resolvedLeadId = await resolveLeadUuid(supabase, leadIdRaw);
+      if (!resolvedLeadId) {
+        return res.status(400).json({ 
+          ok: false,
+          error: "Invalid lead_id: not found or cannot resolve to UUID", 
+          requestId 
+        });
       }
 
       // Validate channel
       const validChannels = ["phone", "whatsapp", "email", "sms", "other"];
       if (!validChannels.includes(channel)) {
-        return res.status(400).json({ error: `Invalid channel. Must be one of: ${validChannels.join(", ")}` });
+        return res.status(400).json({ ok: false, error: `Invalid channel. Must be one of: ${validChannels.join(", ")}`, requestId });
       }
 
       // Insert contact event
@@ -146,7 +205,7 @@ module.exports = async function handler(req, res) {
         .from("lead_contact_events")
         .insert([
           {
-            lead_id: leadId,
+            lead_id: resolvedLeadId,
             channel: channel,
             note: note || null,
             created_by: authResult.userId || null,
@@ -174,7 +233,7 @@ module.exports = async function handler(req, res) {
         const { data: currentLead } = await supabase
           .from("leads")
           .select("status")
-          .eq("id", leadId)
+          .eq("id", resolvedLeadId)
           .single();
         
         // Only update to "contacted" if status is "new" or null
@@ -187,7 +246,7 @@ module.exports = async function handler(req, res) {
       const { data: updatedLead, error: updateError } = await supabase
         .from("leads")
         .update(updateData)
-        .eq("id", leadId)
+        .eq("id", resolvedLeadId)
         .select("id, last_contacted_at, status")
         .single();
 

@@ -55,8 +55,8 @@ module.exports = async function handler(req, res) {
     }
 
     // Extract leadId from query
-    const leadId = req.query.leadId;
-    if (!leadId) {
+    const leadIdRaw = req.query.leadId;
+    if (!leadIdRaw) {
       return res.status(400).json({
         ok: false,
         error: "Missing leadId parameter",
@@ -64,11 +64,47 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Dynamic import Supabase
+    // Dynamic import Supabase (needed for UUID resolution)
     const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    // ✅ UUID validation helper
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    function isUuid(v) {
+      if (!v) return false;
+      return UUID_RE.test(String(v).trim());
+    }
+
+    // ✅ Resolve lead_uuid to UUID if needed
+    let leadId = String(leadIdRaw).trim();
+    if (!isUuid(leadId)) {
+      // Try to resolve from leads table
+      try {
+        const { data, error } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("lead_uuid", leadId)
+          .maybeSingle();
+        
+        if (error || !data) {
+          return res.status(400).json({
+            ok: false,
+            error: "Invalid leadId: not found or cannot resolve to UUID",
+            requestId,
+          });
+        }
+        
+        leadId = data.id;
+      } catch (err) {
+        return res.status(400).json({
+          ok: false,
+          error: "Failed to resolve leadId to UUID",
+          requestId,
+        });
+      }
+    }
 
     // GET: Fetch timeline events for lead
     if (req.method === "GET") {
