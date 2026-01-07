@@ -27,6 +27,14 @@ function normalizeStatus(input) {
   return VALID_STATUSES.has(mapped) ? mapped : "new"; // ✅ safe fallback
 }
 
+// ✅ UUID validation (kalıcı fix: UUID değilse UUID kolonuna asla dokunma)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(v) {
+  if (!v) return false;
+  return UUID_RE.test(String(v).trim());
+}
+
 function getBearerToken(req) {
   const h = req.headers.authorization; // ✅ Node'da hep lowercase gelir
   if (!h) return null;
@@ -98,7 +106,9 @@ module.exports = async function handler(req, res) {
 
     // GET /api/leads
     if (req.method === "GET") {
-      const id = req.query?.id;
+      // ✅ Explicit support for both id (UUID) and lead_uuid (public string)
+      const id = req.query?.id ? String(req.query.id).trim() : null;
+      const lead_uuid = req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null;
 
       // ✅ Safe status filter: normalize and validate, never error
       const statusRaw = String(req.query?.status ?? "all").toLowerCase();
@@ -113,12 +123,20 @@ module.exports = async function handler(req, res) {
 
       let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
-      // ✅ Support id parameter for single lead fetch (harden against ID mismatch)
-      // Filter by either id OR lead_uuid (frontend yanlışlıkla lead_uuid yollasa bile çalışır)
-      if (id) {
-        const idStr = String(id).trim();
-        // ✅ OR condition: match either id or lead_uuid
-        q = q.or(`id.eq.${idStr},lead_uuid.eq.${idStr}`).limit(1);
+      // ✅ Kalıcı fix: UUID değilse UUID kolonuna asla dokunma
+      // lead_uuid param varsa → lead_uuid kolonuna filtrele (public string)
+      // id param varsa → UUID kontrolü yap, UUID ise id kolonuna, değilse lead_uuid kolonuna filtrele
+      if (lead_uuid) {
+        // ✅ public id ile arama (string)
+        q = q.eq("lead_uuid", lead_uuid).limit(1);
+      } else if (id) {
+        if (isUuid(id)) {
+          // ✅ gerçek uuid gelirse DB id üzerinden arama
+          q = q.eq("id", id).limit(1);
+        } else {
+          // ✅ id diye string gelmişse (lead_...) asla uuid kolonuna dokunma
+          q = q.eq("lead_uuid", id).limit(1);
+        }
       }
 
       if (statusFilter) q = q.eq("status", statusFilter);
@@ -132,8 +150,8 @@ module.exports = async function handler(req, res) {
       const { data, error } = await q;
       if (error) return res.status(500).json({ ok: false, error: error.message, requestId });
 
-      // ✅ If id parameter provided, return consistent single lead format
-      if (id) {
+      // ✅ If id or lead_uuid parameter provided, return consistent single lead format
+      if (id || lead_uuid) {
         const leadRow = data?.[0] || null;
         return res.status(200).json({ 
           ok: true, 

@@ -199,6 +199,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     );
   };
 
+  // ✅ UUID validation helper
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const isUuid = (v: string) => UUID_RE.test((v || "").trim());
+
   // ✅ Doctor-friendly lead fetch function
   const fetchLeadForDoctor = async (leadId: string): Promise<Lead> => {
     const supabase = getSupabaseClient();
@@ -212,11 +216,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       throw new Error('Session expired');
     }
 
-    // ✅ Doctor-safe endpoint: /api/leads?status=all&id=...&limit=1
-    const fetchUrl = `/api/leads?status=all&id=${encodeURIComponent(leadId)}&limit=1`;
+    // ✅ Kalıcı fix: UUID ise id=, değilse lead_uuid= kullan
+    const key = isUuid(leadId) ? `id=${encodeURIComponent(leadId)}` : `lead_uuid=${encodeURIComponent(leadId)}`;
+    const fetchUrl = `/api/leads?status=all&${key}&limit=1`;
     
     if (import.meta.env.DEV) {
-      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, fetchUrl });
+      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, isUuid: isUuid(leadId), fetchUrl });
     }
 
     const response = await fetch(fetchUrl, {
@@ -333,6 +338,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // Fetch notes
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
+    
+    // ✅ Doctor mode: notes are admin/employee only (disable for doctor)
+    if (isDoctorMode) {
+      setIsLoadingNotes(false);
+      return;
+    }
 
     const loadNotes = async () => {
       setIsLoadingNotes(true);
@@ -350,8 +361,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           throw new Error('Session expired');
         }
 
-        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-        const response = await fetch(`${apiUrl}/api/lead-notes?lead_id=${encodeURIComponent(leadId)}`, {
+        // ✅ Use resolved UUID from lead if available, otherwise use leadId (may be public ID)
+        const resolvedId = lead?.id || leadId;
+        const response = await fetch(`/api/lead-notes?lead_id=${encodeURIComponent(resolvedId)}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -376,7 +388,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     loadNotes();
-  }, [leadId, isAuthenticated]);
+  }, [leadId, isAuthenticated, isDoctorMode, lead?.id]);
 
   // B4: Fetch AI memory on page load
   useEffect(() => {
@@ -504,8 +516,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       try {
         const token = await getAccessToken();
         console.log("token length", token?.length);
-        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-        const response = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+        
+        // ✅ Use resolved UUID from lead if available (doctor mode needs UUID)
+        const resolvedId = lead?.id || leadId;
+        const response = await fetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -535,7 +549,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
     
     fetchTimeline();
-  }, [leadId, isAuthenticated]);
+  }, [leadId, isAuthenticated, lead?.id]);
 
   // Doctors: Fetch on page load (admin/employee only, skip in doctorMode)
   useEffect(() => {
@@ -584,8 +598,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       try {
         const token = await getAccessToken();
         console.log("token length", token?.length);
-        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-        const response = await fetch(`${apiUrl}/api/leads-contact-events?lead_id=${encodeURIComponent(leadId)}&limit=10`, {
+        
+        // ✅ Use resolved UUID from lead if available (doctor mode needs UUID)
+        const resolvedId = lead?.id || leadId;
+        const response = await fetch(`/api/leads-contact-events?lead_id=${encodeURIComponent(resolvedId)}&limit=10`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -615,7 +631,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
     
     fetchContactEvents();
-  }, [leadId, isAuthenticated]);
+  }, [leadId, isAuthenticated, lead?.id]);
 
   // Helper: Log contact event
   const logContactEvent = async (channel: 'whatsapp' | 'phone' | 'email', note?: string) => {
@@ -624,15 +640,17 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     try {
       const token = await getAccessToken();
       console.log("token length", token?.length);
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const response = await fetch(`${apiUrl}/api/leads-contact-events`, {
+      
+      // ✅ Use resolved UUID from lead if available (doctor mode needs UUID)
+      const resolvedId = lead?.id || leadId;
+      const response = await fetch(`/api/leads-contact-events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          lead_id: leadId,
+          lead_id: resolvedId,
           channel: channel,
           note: note || null,
           update_status: true, // Auto-update status to "contacted" if new
@@ -670,8 +688,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     try {
       const token = await getAccessToken();
       console.log("token length", token?.length);
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const response = await fetch(`${apiUrl}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+      
+      // ✅ Use resolved UUID from lead if available (doctor mode needs UUID)
+      const resolvedId = lead?.id || leadId;
+      const response = await fetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1848,7 +1868,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           toast.success('Doctor assigned');
                           
                           // Refetch timeline to show new event
-                          const timelineResponse = await fetch(`${import.meta.env.VITE_API_URL || window.location.origin}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+                          const resolvedId = lead?.id || leadId;
+                          const timelineResponse = await fetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
                             method: 'GET',
                             headers: {
                               'Authorization': `Bearer ${token}`,
@@ -1957,7 +1978,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 }
                                 
                                 // Refetch timeline to show new event
-                                const timelineResponse = await fetch(`${import.meta.env.VITE_API_URL || window.location.origin}/api/admin/lead-timeline/${encodeURIComponent(leadId)}?leadId=${encodeURIComponent(leadId)}`, {
+                                const resolvedId = lead?.id || leadId;
+                                const timelineResponse = await fetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
                                   method: 'GET',
                                   headers: {
                                     'Authorization': `Bearer ${token}`,
