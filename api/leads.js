@@ -123,19 +123,22 @@ module.exports = async function handler(req, res) {
 
       let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
-      // ✅ Kalıcı fix: UUID değilse UUID kolonuna asla dokunma
-      // lead_uuid param varsa → lead_uuid kolonuna filtrele (public string)
-      // id param varsa → UUID kontrolü yap, UUID ise id kolonuna, değilse lead_uuid kolonuna filtrele
+      // ✅ Canonical internal key = lead_uuid (UUID)
+      // Rules:
+      // - if lead_uuid param provided -> filter by lead_uuid column (UUID)
+      // - else if id param provided:
+      //   - if id is UUID -> filter by lead_uuid column (internal key)
+      //   - else (lead_... or other string) -> filter by id column (public string)
       if (lead_uuid) {
-        // ✅ public id ile arama (string)
+        // ✅ UUID param ile arama (lead_uuid kolonu)
         q = q.eq("lead_uuid", lead_uuid).limit(1);
       } else if (id) {
         if (isUuid(id)) {
-          // ✅ gerçek uuid gelirse DB id üzerinden arama
-          q = q.eq("id", id).limit(1);
-        } else {
-          // ✅ id diye string gelmişse (lead_...) asla uuid kolonuna dokunma
+          // ✅ UUID geldiyse lead_uuid kolonuna filtrele (internal key = lead_uuid)
           q = q.eq("lead_uuid", id).limit(1);
+        } else {
+          // ✅ Public string (lead_...) geldiyse id kolonuna filtrele
+          q = q.eq("id", id).limit(1);
         }
       }
 

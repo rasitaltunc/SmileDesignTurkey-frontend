@@ -206,12 +206,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // ✅ Doctor-friendly lead fetch function
   const fetchLeadForDoctor = async (leadId: string): Promise<Lead> => {
-    // ✅ Kalıcı fix: UUID ise id=, değilse lead_uuid= kullan
-    const key = isUuid(leadId) ? `id=${encodeURIComponent(leadId)}` : `lead_uuid=${encodeURIComponent(leadId)}`;
-    const fetchUrl = `/api/leads?status=all&${key}&limit=1`;
+    // ✅ Canonical internal key = lead_uuid (UUID)
+    // Route param is always UUID, backend filters by lead_uuid column
+    const fetchUrl = `/api/leads?status=all&lead_uuid=${encodeURIComponent(leadId)}&limit=1`;
     
     if (import.meta.env.DEV) {
-      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, isUuid: isUuid(leadId), fetchUrl });
+      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, fetchUrl });
     }
 
     // ✅ Use authedFetch to ensure Authorization header is always present
@@ -297,12 +297,15 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         setLead(loadedLead);
         
         // ✅ IMPORTANT: Set resolved UUID for child endpoints (contact events, timeline, etc.)
-        // These endpoints require UUID, not public ID
-        if (loadedLead.id && isUuid(loadedLead.id)) {
-          setResolvedLeadId(loadedLead.id);
+        // ✅ Canonical internal key = lead_uuid (UUID)
+        // Child endpoints require UUID, always use lead.lead_uuid
+        const leadUuid = (loadedLead as any).lead_uuid;
+        if (leadUuid && isUuid(leadUuid)) {
+          setResolvedLeadId(leadUuid);
         } else {
-          // Fallback: if lead.id is not UUID, try to use it anyway (shouldn't happen)
-          setResolvedLeadId(loadedLead.id || null);
+          // Fallback: if lead_uuid missing/invalid, log warning but continue
+          console.warn('[AdminPatientProfile] Lead UUID missing or invalid:', { lead: loadedLead });
+          setResolvedLeadId(null);
         }
         
         // Initialize Next Action & Follow-up from loaded lead
@@ -354,12 +357,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         }
 
         // ✅ Use resolved UUID (MUST be UUID for notes endpoint)
-        const resolvedId = resolvedLeadId || lead?.id || leadId;
-        if (!resolvedId || !isUuid(resolvedId)) {
+        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
           throw new Error('Cannot load notes: lead UUID not resolved');
         }
         
-        const response = await authedFetch(`/api/lead-notes?lead_id=${encodeURIComponent(resolvedId)}`, {
+        const response = await authedFetch(`/api/lead-notes?lead_id=${encodeURIComponent(resolvedLeadId)}`, {
           method: 'GET',
         });
 
@@ -396,8 +399,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingMemory(true);
       try {
         // ✅ Use resolved UUID for admin endpoints
-        const resolvedId = resolvedLeadId || lead?.id || leadId;
-        const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedId)}`, {
+        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+          console.warn('[AdminPatientProfile] Cannot load AI memory: UUID not resolved');
+          return;
+        }
+        const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedLeadId)}`, {
           method: 'GET',
         });
 
@@ -459,8 +466,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingTasks(true);
       try {
         // ✅ Use resolved UUID for admin endpoints
-        const resolvedId = resolvedLeadId || lead?.id || leadId;
-        const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedId)}`, {
+        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+          console.warn('[AdminPatientProfile] Cannot load AI tasks: UUID not resolved');
+          return;
+        }
+        const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadId)}`, {
           method: 'GET',
         });
 
@@ -501,14 +512,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingTimeline(true);
       try {
         // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for timeline endpoint)
-        const resolvedId = resolvedLeadId || lead?.id;
-        if (!resolvedId || !isUuid(resolvedId)) {
+        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
           // Lead not loaded yet or UUID not resolved - skip silently
           console.warn('[AdminPatientProfile] Skipping timeline: UUID not resolved');
           return;
         }
         
-        const response = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
+        const response = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
           method: 'GET',
         });
         
@@ -577,14 +588,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingContactEvents(true);
       try {
         // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for contact events endpoint)
-        const resolvedId = resolvedLeadId || lead?.id;
-        if (!resolvedId || !isUuid(resolvedId)) {
+        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
           // Lead not loaded yet or UUID not resolved - skip silently
           console.warn('[AdminPatientProfile] Skipping contact events: UUID not resolved');
           return;
         }
         
-        const response = await authedFetch(`/api/leads-contact-events?lead_id=${encodeURIComponent(resolvedId)}&limit=10`, {
+        const response = await authedFetch(`/api/leads-contact-events?lead_id=${encodeURIComponent(resolvedLeadId)}&limit=10`, {
           method: 'GET',
         });
         
@@ -619,8 +630,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     
     try {
       // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for contact events endpoint)
-      const resolvedId = resolvedLeadId || lead?.id;
-      if (!resolvedId || !isUuid(resolvedId)) {
+      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
         console.warn('[AdminPatientProfile] Cannot log contact event: UUID not resolved');
         return;
       }
@@ -628,7 +639,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       const response = await authedFetch(`/api/leads-contact-events`, {
         method: 'POST',
         body: JSON.stringify({
-          lead_id: resolvedId,
+          lead_id: resolvedLeadId,
           channel: channel,
           note: note || null,
           update_status: true, // Auto-update status to "contacted" if new
@@ -665,12 +676,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     
     try {
       // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for timeline endpoint)
-      const resolvedId = resolvedLeadId || lead?.id;
-      if (!resolvedId || !isUuid(resolvedId)) {
+      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
         throw new Error('Cannot add timeline event: lead UUID not resolved');
       }
       
-      const response = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
+      const response = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
         method: 'POST',
         body: JSON.stringify({
           stage: newTimelineStage,
@@ -710,9 +721,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setNewTimelineStage('');
       setNewTimelineNote('');
       
-      // ✅ Refetch timeline events with resolved UUID (reuse same resolvedId)
-      if (resolvedId && isUuid(resolvedId)) {
-        const refetchResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
+      // ✅ Refetch timeline events with resolved UUID
+      if (resolvedLeadId && isUuid(resolvedLeadId)) {
+        const refetchResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
           method: 'GET',
         });
         
@@ -749,8 +760,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
     try {
       // ✅ Use resolved UUID for admin endpoints
-      const resolvedId = resolvedLeadId || lead?.id || leadId;
-      const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedId)}`, {
+      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+        throw new Error('Cannot mark task done: lead UUID not resolved');
+      }
+      const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadId)}`, {
         method: 'POST',
         body: JSON.stringify({
           action: 'mark_done',
@@ -791,15 +805,15 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       }
 
       // ✅ Use resolved UUID (MUST be UUID for notes endpoint)
-      const resolvedId = resolvedLeadId || lead?.id || leadId;
-      if (!resolvedId || !isUuid(resolvedId)) {
+      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
         throw new Error('Cannot create note: lead UUID not resolved');
       }
       
       const response = await authedFetch(`/api/lead-notes`, {
         method: 'POST',
         body: JSON.stringify({
-          lead_id: resolvedId,
+          lead_id: resolvedLeadId,
           note: newNoteContent.trim(),
         }),
       });
@@ -950,8 +964,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
     try {
       // ✅ Use resolved UUID for admin endpoints
-      const resolvedId = resolvedLeadId || lead?.id || leadId;
-      const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedId)}`, {
+      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+        throw new Error('Cannot sync AI memory: lead UUID not resolved');
+      }
+      const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedLeadId)}`, {
         method: 'POST',
         body: JSON.stringify({
           snapshot: briefData.brief?.snapshot || null,
@@ -1797,9 +1814,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           toast.success('Doctor assigned');
                           
                           // Refetch timeline to show new event
-                          const resolvedId = resolvedLeadId || lead?.id;
-                          if (resolvedId && isUuid(resolvedId)) {
-                            const timelineResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
+                          if (resolvedLeadId && isUuid(resolvedLeadId)) {
+                            const timelineResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
                               method: 'GET',
                             });
                             const timelineResult = await timelineResponse.json().catch(() => ({}));
@@ -1900,9 +1916,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 }
                                 
                                 // Refetch timeline to show new event
-                                const resolvedId = resolvedLeadId || lead?.id;
-                                if (resolvedId && isUuid(resolvedId)) {
-                                  const timelineResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedId)}?leadId=${encodeURIComponent(resolvedId)}`, {
+                                if (resolvedLeadId && isUuid(resolvedLeadId)) {
+                                  const timelineResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
                                     method: 'GET',
                                   });
                                   const timelineResult = await timelineResponse.json().catch(() => ({}));

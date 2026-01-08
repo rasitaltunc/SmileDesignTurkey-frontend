@@ -97,16 +97,16 @@ export default function DoctorPortal() {
   }, [role, user]);
 
   const openLead = (lead: any) => {
-    // ✅ Prefer lead_uuid (public ID) for navigation, fallback to id (UUID)
-    // This ensures route param is public ID, which backend can handle
-    const id = lead?.lead_uuid || lead?.id;
-    if (!id) {
-      console.error("[DoctorPortal] Missing lead id", lead);
-      toast.error("Invalid lead: missing ID");
+    // ✅ Canonical internal key = lead_uuid (UUID)
+    // Route param must always be UUID, backend will filter by lead_uuid column
+    const leadUuid = lead?.lead_uuid;
+    if (!leadUuid) {
+      console.error("[DoctorPortal] Missing lead_uuid", lead);
+      toast.error("Invalid lead: missing UUID");
       return;
     }
     // ✅ SPA navigation (not full page reload)
-    navigate(`/doctor/lead/${encodeURIComponent(id)}`);
+    navigate(`/doctor/lead/${encodeURIComponent(leadUuid)}`);
   };
 
   const getReviewStatusBadge = (status: string | null) => {
