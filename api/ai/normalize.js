@@ -200,12 +200,15 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
       }),
     });
 
+    // ✅ Catch OpenAI API errors gracefully
     if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text().catch(() => "Unknown error");
-      console.error("[normalize] OpenAI error", openaiResponse.status, errorText);
-      return res.status(500).json({
+      const errorData = await openaiResponse.json().catch(() => ({}));
+      const errorText = errorData.error?.message || await openaiResponse.text().catch(() => "Unknown error");
+      console.error("[normalize] OpenAI API error", requestId, openaiResponse.status, errorText);
+      return res.status(200).json({
         ok: false,
-        error: "OpenAI API call failed",
+        error: "OPENAI_API_ERROR",
+        message: errorData.error?.message || errorText || "OpenAI API request failed",
         requestId,
       });
     }
@@ -214,9 +217,11 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
     const content = openaiData.choices?.[0]?.message?.content;
 
     if (!content) {
-      return res.status(500).json({
+      // ✅ Graceful fail: return 200 with error (don't crash)
+      return res.status(200).json({
         ok: false,
-        error: "OpenAI returned empty response",
+        error: "OPENAI_EMPTY_RESPONSE",
+        message: "OpenAI returned empty response",
         requestId,
       });
     }
@@ -239,9 +244,11 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
       normalizedData = JSON.parse(jsonText);
     } catch (parseErr) {
       console.error("[normalize] JSON parse failed", parseErr, "Content:", content.substring(0, 200));
-      return res.status(500).json({
+      // ✅ Graceful fail: return 200 with error (don't crash)
+      return res.status(200).json({
         ok: false,
         error: "AI_JSON_PARSE_FAILED",
+        message: parseErr.message || "Failed to parse AI JSON response",
         requestId,
       });
     }
@@ -416,10 +423,11 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations, no c
     });
   } catch (err) {
     console.error("[normalize] fatal", requestId, err);
-    return res.status(500).json({
+    // ✅ Graceful fail: return 200 with error (don't crash the function)
+    return res.status(200).json({
       ok: false,
-      error: "Normalize failed (crash)",
-      details: err && err.message ? err.message : String(err),
+      error: "NORMALIZE_FAILED",
+      message: err?.message || String(err) || "Unknown error",
       requestId,
     });
   }

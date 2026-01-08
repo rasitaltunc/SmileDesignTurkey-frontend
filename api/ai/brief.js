@@ -95,7 +95,7 @@ module.exports = async function handler(req, res) {
       console.debug("[brief] Notes fetch skipped:", err);
     }
 
-    // If OpenAI key missing, generate deterministic demo brief
+    // ✅ OPENAI_API_KEY guard: if missing, return graceful error (don't crash)
     if (!openaiKey || openaiKey.trim().length === 0) {
       // Demo mode: rules-based brief from lead data
       const leadName = lead.name || lead.full_name || "Lead";
@@ -258,9 +258,17 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations):
       }),
     });
 
+    // ✅ Catch OpenAI API errors gracefully
     if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.json().catch(() => ({ error: "OpenAI API error" }));
-      throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`);
+      const errorData = await openaiResponse.json().catch(() => ({ error: { message: "OpenAI API error" } }));
+      const errorMessage = errorData.error?.message || errorData.error || "OpenAI API request failed";
+      console.error("[brief] OpenAI API error", requestId, openaiResponse.status, errorMessage);
+      return res.status(200).json({
+        ok: false,
+        error: "OPENAI_API_ERROR",
+        message: errorMessage,
+        requestId,
+      });
     }
 
     const openaiData = await openaiResponse.json();
@@ -271,11 +279,12 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations):
     const firstBrace = cleaned.indexOf("{");
     const lastBrace = cleaned.lastIndexOf("}");
     if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-      return res.status(500).json({
+      // ✅ Graceful fail: return 200 with error (don't crash)
+      return res.status(200).json({
         ok: false,
         error: "AI_JSON_PARSE_FAILED",
+        message: "No valid JSON found in AI response",
         requestId,
-        details: "No valid JSON found in AI response",
       });
     }
 
@@ -284,21 +293,23 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations):
     try {
       brief = JSON.parse(jsonText);
     } catch (parseErr) {
-      return res.status(500).json({
+      // ✅ Graceful fail: return 200 with error (don't crash)
+      return res.status(200).json({
         ok: false,
         error: "AI_JSON_PARSE_FAILED",
+        message: parseErr.message || "Failed to parse AI JSON response",
         requestId,
-        details: parseErr.message,
       });
     }
 
     // Validate structure
     if (!brief.snapshot || !brief.callBrief || !brief.risk) {
-      return res.status(500).json({
+      // ✅ Graceful fail: return 200 with error (don't crash)
+      return res.status(200).json({
         ok: false,
         error: "AI_JSON_PARSE_FAILED",
+        message: "Missing required fields in AI response",
         requestId,
-        details: "Missing required fields in AI response",
       });
     }
 
@@ -310,10 +321,11 @@ Analyze this lead and return ONLY valid JSON (no markdown, no explanations):
     });
   } catch (err) {
     console.error("[brief] Fatal error", requestId, err);
-    return res.status(500).json({
+    // ✅ Graceful fail: return 200 with error (don't crash the function)
+    return res.status(200).json({
       ok: false,
-      error: "Brief generation failed",
-      details: err && err.message ? err.message : String(err),
+      error: "BRIEF_GENERATION_FAILED",
+      message: err?.message || String(err) || "Unknown error",
       requestId,
     });
   }
