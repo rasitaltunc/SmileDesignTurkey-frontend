@@ -47,7 +47,7 @@ function RequireRole({
   }, [role, roles, isLoading, navigate]);
 
   // Show loading while role is being determined
-  if (isLoading || !role) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -58,7 +58,21 @@ function RequireRole({
     );
   }
 
-  // Check if user's role is in allowed roles
+  // ✅ Role yoksa → Unauthorized göster
+  if (!role) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 text-xl font-semibold mb-2">Unauthorized</div>
+          <p className="text-gray-600">You don't have access to this page.</p>
+          <p className="text-sm text-gray-500 mt-2">Please log in to continue.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Role biliniyorsa ama allowed değilse → kendi home'una redirect (useEffect ile)
+  // Bu durumda redirect gerçekleşene kadar "Redirecting..." göster
   if (!roles.includes(role)) {
     if (import.meta.env.DEV) {
       console.log("RequireRole blocked:", { role, allowed: roles });
@@ -69,7 +83,7 @@ function RequireRole({
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Redirecting...</p>
+          <p className="mt-4 text-gray-600">Redirecting to your dashboard...</p>
         </div>
       </div>
     );
