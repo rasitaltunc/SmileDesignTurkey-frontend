@@ -3,50 +3,29 @@
 
 import { supabase } from './supabase';
 
-export interface AuthedFetchError {
-  ok: false;
-  error: string;
-  code?: string;
-  details?: any;
-}
-
 export async function authedFetch(
-  url: string,
-  init?: RequestInit
+  input: RequestInfo | URL,
+  init: RequestInit = {}
 ): Promise<Response> {
   // Get access token from Supabase session
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  
-  if (sessionError) {
-    throw new Error(`Session error: ${sessionError.message}`);
-  }
-
-  const token = sessionData?.session?.access_token;
-  
-  if (!token) {
-    throw new Error('Missing access token. Please login again.');
-  }
-
-  // ✅ DEV logging
-  if (import.meta.env.DEV) {
-    console.log('[authedFetch]', url, !!token);
-  }
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
 
   // Merge Authorization header into existing headers
-  const headers = new Headers(init?.headers);
-  headers.set('Authorization', `Bearer ${token}`);
+  const headers = new Headers(init.headers || {});
   
-  // Ensure Content-Type is set for JSON requests
-  if (init?.body && typeof init.body === 'string' && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
-  // Create new init with merged headers
-  const authedInit: RequestInit = {
-    ...init,
-    headers,
-  };
+  // Optional but helpful: DEV logging
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('authedFetch:', String(input), 'hasToken:', Boolean(token));
+  }
 
-  return fetch(url, authedInit);
+  // If no token, we still make the request but backend will reject with 401
+  // This allows backend to return proper error messages instead of frontend failing silently
+  return fetch(input, { ...init, headers });
 }
 
