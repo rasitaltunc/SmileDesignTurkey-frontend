@@ -97,8 +97,16 @@ module.exports = async function handler(req, res) {
 
     // ✅ OPENAI_API_KEY guard: if missing, return graceful error (don't crash)
     if (!openaiKey || openaiKey.trim().length === 0) {
-      // Demo mode: rules-based brief from lead data
-      const leadName = lead.name || lead.full_name || "Lead";
+      return res.status(200).json({
+        ok: false,
+        error: "MISSING_OPENAI_API_KEY",
+        message: "OPENAI_API_KEY missing or invalid",
+        requestId,
+      });
+    }
+
+    // Build prompt for OpenAI
+    const leadName = lead.name || lead.full_name || "Unknown";
       const leadCountry = lead.country || "Unknown";
       const leadStatus = lead.status || "new";
       
