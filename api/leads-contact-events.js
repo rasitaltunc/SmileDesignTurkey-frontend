@@ -176,29 +176,10 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ ok: false, error: "Missing lead_uuid or lead_id", requestId });
       }
 
-      // ✅ Resolve to UUID: if lead_uuid provided, use it; else query leads table
-      let resolvedLeadId = lead_uuid;
-      if (!resolvedLeadId && lead_id) {
-        resolvedLeadId = await resolveLeadUuid(supabase, lead_id);
-      } else if (resolvedLeadId) {
-        // If lead_uuid provided, resolve to UUID (id column) for lead_contact_events table
-        const { data: leadData } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("lead_uuid", resolvedLeadId)
-          .maybeSingle();
-        
-        if (!leadData) {
-          return res.status(404).json({ 
-            ok: false,
-            error: "Lead not found", 
-            requestId 
-          });
-        }
-        resolvedLeadId = leadData.id;
-      }
+      // ✅ Resolve to UUID: use safe resolver
+      const resolvedLeadUuid = await resolveLeadUuid(supabase, lead_uuid || lead_id);
       
-      if (!resolvedLeadId) {
+      if (!resolvedLeadUuid) {
         return res.status(400).json({ 
           ok: false,
           error: "Invalid lead_uuid/lead_id: not found or cannot resolve to UUID", 
