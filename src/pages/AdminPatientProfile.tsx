@@ -206,12 +206,15 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // ✅ Doctor-friendly lead fetch function
   const fetchLeadForDoctor = async (leadId: string): Promise<Lead> => {
-    // ✅ Canonical internal key = lead_uuid (UUID)
-    // Route param is always UUID, backend filters by lead_uuid column
-    const fetchUrl = `/api/leads?status=all&lead_uuid=${encodeURIComponent(leadId)}&limit=1`;
+    // ✅ UUID → lead_uuid query param, text → id query param
+    const qs = isUuid(leadId)
+      ? `lead_uuid=${encodeURIComponent(leadId)}`
+      : `id=${encodeURIComponent(leadId)}`;
+    
+    const fetchUrl = `/api/leads?status=all&${qs}&limit=1`;
     
     if (import.meta.env.DEV) {
-      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, fetchUrl });
+      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, isUuid: isUuid(leadId), fetchUrl });
     }
 
     // ✅ Use authedFetch to ensure Authorization header is always present
