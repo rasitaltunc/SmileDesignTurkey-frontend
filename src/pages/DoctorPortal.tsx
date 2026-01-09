@@ -285,6 +285,7 @@ export default function DoctorPortal() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           openLead(lead);

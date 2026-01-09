@@ -10,6 +10,7 @@ import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
 import CalEmbed from '../components/CalEmbed';
 import { authedFetch } from '@/lib/authedFetch';
+import { apiJsonAuth } from '@/lib/api';
 import { isUuid } from '@/lib/isUuid';
 
 // Import single source of truth from AdminLeads
@@ -73,17 +74,23 @@ interface LeadNote {
 interface AdminPatientProfileProps {
   doctorMode?: boolean;
   leadId?: string | null;
+  leadUuid?: string | null; // ✅ Doctor mode: route param is always UUID (lead_uuid)
 }
 
-export default function AdminPatientProfile({ doctorMode = false, leadId: propLeadId = null }: AdminPatientProfileProps = {}) {
+export default function AdminPatientProfile({ doctorMode = false, leadId: propLeadId = null, leadUuid: propLeadUuid = null }: AdminPatientProfileProps = {}) {
   const { isAuthenticated, user, role } = useAuthStore();
   const { currentPath } = useContext(NavigationContext);
   
   // Extract leadId from URL (App.tsx uses custom routing, not React Router)
-  // Route: /admin/lead/:id OR from prop (doctor mode)
+  // Route: /admin/lead/:id OR from prop (admin/employee mode)
+  // Route: /doctor/lead/:leadUuid OR from prop (doctor mode - always UUID)
   const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/);
   const urlLeadId = leadIdMatch ? leadIdMatch[1] : null;
   const leadId = propLeadId || urlLeadId;
+  
+  // ✅ Doctor mode: use leadUuid prop (always UUID)
+  // leadUuid is defined here so it can be used in fetchLeadForDoctor
+  const leadUuid = propLeadUuid;
   
   // In doctor mode, use doctor role
   const isDoctorMode = doctorMode || role === 'doctor';
@@ -205,40 +212,24 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   const [resolvedLeadId, setResolvedLeadId] = useState<string | null>(null);
 
   // ✅ Doctor-friendly lead fetch function
-  const fetchLeadForDoctor = async (leadId: string): Promise<Lead> => {
-    // ✅ UUID → lead_uuid query param, text → id query param
-    const qs = isUuid(leadId)
-      ? `lead_uuid=${encodeURIComponent(leadId)}`
-      : `id=${encodeURIComponent(leadId)}`;
-    
-    const fetchUrl = `/api/leads?status=all&${qs}&limit=1`;
+  // Route param is always UUID (lead_uuid), so we always use lead_uuid query param
+  const fetchLeadForDoctor = async (leadUuid: string): Promise<Lead> => {
+    const fetchUrl = `/api/leads?status=all&lead_uuid=${encodeURIComponent(leadUuid)}&limit=1`;
     
     if (import.meta.env.DEV) {
-      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadId, isUuid: isUuid(leadId), fetchUrl });
+      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadUuid, fetchUrl });
     }
 
-    // ✅ Use authedFetch to ensure Authorization header is always present
-    const response = await authedFetch(fetchUrl, {
-      method: 'GET',
-    });
+    // ✅ Use apiJsonAuth for automatic token handling and error handling
+    const j = await apiJsonAuth<{ ok: true; lead: Lead | null; leads: Lead[] }>(fetchUrl);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Failed to load lead' }));
-      throw new Error(errorData.error || 'Failed to load lead');
-    }
-
-    const result = await response.json();
-    if (!result.ok) {
-      throw new Error(result.error || 'Lead not found');
-    }
-
-    // ✅ Response format: { ok: true, lead: {...} } OR { ok: true, leads: [...] }
-    const loadedLead = result.lead || (Array.isArray(result.leads) ? result.leads[0] : null);
+    // ✅ Backend returns { ok: true, lead, leads }
+    const loadedLead = j.lead || (Array.isArray(j.leads) ? j.leads[0] : null);
     if (!loadedLead) {
       throw new Error('Lead not found');
     }
 
-    return loadedLead as Lead;
+    return loadedLead;
   };
 
   // leadId validation
@@ -272,9 +263,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
         let loadedLead: Lead;
 
-        // ✅ Doctor mode: use doctor-friendly endpoint
-        if (isDoctorMode) {
-          loadedLead = await fetchLeadForDoctor(leadId);
+        // ✅ Doctor mode: use doctor-friendly endpoint (leadUuid is always UUID)
+        if (isDoctorMode && leadUuid) {
+          loadedLead = await fetchLeadForDoctor(leadUuid);
         } else {
           // ✅ Admin/Employee mode: use admin endpoint
           const response = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
@@ -1887,9 +1878,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 
                                 // ✅ Re-fetch lead details to get updated next_action (automation result)
                                 try {
-                                  if (isDoctorMode) {
-                                    // ✅ Doctor mode: use doctor-friendly endpoint
-                                    const reloaded = await fetchLeadForDoctor(leadId);
+                                  if (isDoctorMode && leadUuid) {
+                                    // ✅ Doctor mode: use doctor-friendly endpoint (leadUuid is always UUID)
+                                    const reloaded = await fetchLeadForDoctor(leadUuid);
                                     setLead(reloaded);
                                     setDoctorReviewStatus(reloaded.doctor_review_status || '');
                                     setDoctorReviewNotes(reloaded.doctor_review_notes || '');
@@ -1975,12 +1966,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 
                                 // ✅ Re-fetch lead details to ensure UI is in sync
                                 try {
-                                  if (isDoctorMode) {
-                                    // ✅ Doctor mode: use doctor-friendly endpoint
-                                    const reloaded = await fetchLeadForDoctor(leadId);
-                                    setLead(reloaded);
-                                    setDoctorReviewNotes(reloaded.doctor_review_notes || '');
-                                  } else {
+                                if (isDoctorMode && leadUuid) {
+                                  // ✅ Doctor mode: use doctor-friendly endpoint (leadUuid is always UUID)
+                                  const reloaded = await fetchLeadForDoctor(leadUuid);
+                                  setLead(reloaded);
+                                  setDoctorReviewNotes(reloaded.doctor_review_notes || '');
+                                } else {
                                     // ✅ Admin/Employee mode: use admin endpoint
                                     const leadResponse = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
                                       method: 'GET',

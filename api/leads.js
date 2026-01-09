@@ -106,13 +106,9 @@ module.exports = async function handler(req, res) {
 
     // GET /api/leads
     if (req.method === "GET") {
-      // ✅ Parse query params
-      const idParam = req.query?.id ? String(req.query.id).trim() : null;
-      const leadUuidParam = req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null;
-
-      // ✅ DOĞRU MAPPING: UUID → lead_uuid kolonu, text → id kolonu
-      const lead_uuid = leadUuidParam || (idParam && isUuid(idParam) ? idParam : null);
-      const id = !leadUuidParam && idParam && !isUuid(idParam) ? idParam : null;
+      // ✅ Parse query params - basit kural: lead_uuid varsa lead_uuid, id varsa id kolonunda filtrele
+      const id = req.query?.id ? String(req.query.id).trim() : null;
+      const lead_uuid = req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null;
 
       // ✅ Safe status filter: normalize and validate, never error
       const statusRaw = String(req.query?.status ?? "all").toLowerCase();
@@ -132,10 +128,11 @@ module.exports = async function handler(req, res) {
       if (isEmployee) q = q.eq("assigned_to", user.id);
       if (isDoctor) q = q.eq("doctor_id", user.id);
 
-      // ✅ ID filters: UUID → lead_uuid kolonu, text → id kolonu
+      // ✅ ID filters: lead_uuid param → lead_uuid kolonu, id param → id kolonu
       if (lead_uuid) {
         q = q.eq("lead_uuid", lead_uuid).limit(1);
-      } else if (id) {
+      }
+      if (id) {
         q = q.eq("id", id).limit(1);
       }
 

@@ -316,13 +316,14 @@ export default function App() {
           );
         }
         
-        // Handle dynamic /doctor/lead/:id route (for doctor mode)
+        // Handle dynamic /doctor/lead/:leadUuid route (for doctor mode)
+        // ✅ Route param is always UUID (lead_uuid)
         if (currentPath.startsWith('/doctor/lead/')) {
-          const leadIdMatch = currentPath.match(/\/doctor\/lead\/([^/]+)/);
-          const leadId = leadIdMatch ? leadIdMatch[1] : null;
+          const leadUuidMatch = currentPath.match(/\/doctor\/lead\/([^/]+)/);
+          const leadUuid = leadUuidMatch ? leadUuidMatch[1] : null;
           return (
             <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-              <AdminPatientProfile doctorMode={true} leadId={leadId} />
+              <AdminPatientProfile doctorMode={true} leadUuid={leadUuid} />
             </RequireRole>
           );
         }
