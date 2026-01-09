@@ -268,9 +268,16 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       try {
         let loadedLead: Lead;
 
-        // ✅ Doctor mode: UUID ile leads endpoint
+        // ✅ Doctor mode: Use privacy-safe doctor endpoint
         if (isDoctorMode && leadUuid) {
-          loadedLead = await fetchLeadForDoctor(leadUuid);
+          // ✅ Use /api/doctor/lead?ref=... for privacy-filtered data
+          const result = await apiJsonAuth<{ ok: true; lead: any; documents?: any[] }>(
+            `/api/doctor/lead?ref=${encodeURIComponent(leadUuid)}`
+          );
+          if (!result.ok || !result.lead) {
+            throw new Error("Lead not found or not assigned to you");
+          }
+          loadedLead = result.lead as Lead;
         } else {
           // ✅ Admin/Employee mode
           const result = await apiJsonAuth<{ ok: true; lead: Lead }>(
@@ -982,77 +989,96 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                   <Brain className="w-5 h-5 text-teal-600" />
                   AI Snapshot
                 </h2>
-                <div className="flex items-center gap-2 relative z-20">
-                  {(() => {
-                    const btnBase =
-                      "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
+                {/* ✅ Doctor mode: AI buttons hidden (privacy-first) */}
+                {!isDoctorMode && (
+                  <div className="flex items-center gap-2 relative z-20">
+                    {(() => {
+                      const btnBase =
+                        "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
 
-                    // ✅ Use lead.id (TEXT) for button state, fallback to lead_uuid if id missing
-                    const activeLeadId = lead?.id ?? null;
-                    const activeLeadUuid = lead?.lead_uuid ?? null;
-                    // Button enable: id varsa kesin, id yoksa en azından uuid var mı gör
-                    const canUseAi = Boolean(activeLeadId || activeLeadUuid);
-                    const normalizeDisabled = isLoadingNormalize || isLoadingBrief || !canUseAi;
-                    const snapshotDisabled = isLoadingBrief || isLoadingNormalize || !canUseAi;
+                      // ✅ Use lead.id (TEXT) for button state, fallback to lead_uuid if id missing
+                      const activeLeadId = lead?.id ?? null;
+                      const activeLeadUuid = lead?.lead_uuid ?? null;
+                      // Button enable: id varsa kesin, id yoksa en azından uuid var mı gör
+                      const canUseAi = Boolean(activeLeadId || activeLeadUuid);
+                      const normalizeDisabled = isLoadingNormalize || isLoadingBrief || !canUseAi;
+                      const snapshotDisabled = isLoadingBrief || isLoadingNormalize || !canUseAi;
 
-                    return (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleNormalizeNotes}
-                          disabled={normalizeDisabled}
-                          className={[
-                            btnBase,
-                            "focus:ring-slate-400",
-                            normalizeDisabled
-                              ? "bg-slate-200 text-slate-400 border-slate-200"
-                              : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800",
-                          ].join(" ")}
-                        >
-                          {isLoadingNormalize ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span className="text-gray-700">Normalizing...</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileText className="w-4 h-4" />
-                              <span className="text-gray-700">{canUseAi ? "Normalize Notes" : "Select a lead first"}</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleGenerateBrief}
-                          disabled={snapshotDisabled}
-                          className={[
-                            btnBase,
-                            "focus:ring-emerald-400",
-                            snapshotDisabled
-                              ? "bg-emerald-100 text-emerald-500 border-emerald-200"
-                              : "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700",
-                          ].join(" ")}
-                        >
-                          {isLoadingBrief ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span className="text-gray-700">Generating snapshot...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Brain className="w-4 h-4" />
-                              <span className="text-gray-700">{canUseAi ? "Generate Snapshot" : "Select a lead first"}</span>
-                            </>
-                          )}
-                        </button>
-                      </>
-                    );
-                  })()}
-                </div>
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleNormalizeNotes}
+                            disabled={normalizeDisabled}
+                            className={[
+                              btnBase,
+                              "focus:ring-slate-400",
+                              normalizeDisabled
+                                ? "bg-slate-200 text-slate-400 border-slate-200"
+                                : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800",
+                            ].join(" ")}
+                          >
+                            {isLoadingNormalize ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span className="text-gray-700">Normalizing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="w-4 h-4" />
+                                <span className="text-gray-700">{canUseAi ? "Normalize Notes" : "Select a lead first"}</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleGenerateBrief}
+                            disabled={snapshotDisabled}
+                            className={[
+                              btnBase,
+                              "focus:ring-emerald-400",
+                              snapshotDisabled
+                                ? "bg-emerald-100 text-emerald-500 border-emerald-200"
+                                : "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700",
+                            ].join(" ")}
+                          >
+                            {isLoadingBrief ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                <span className="text-gray-700">Generating snapshot...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Brain className="w-4 h-4" />
+                                <span className="text-gray-700">{canUseAi ? "Generate Snapshot" : "Select a lead first"}</span>
+                              </>
+                            )}
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               {/* Content - gradient container (buttons are OUTSIDE) */}
-              {briefData ? (
+              {/* ✅ Doctor mode: Show read-only snapshot from lead.snapshot (from /api/doctor/lead) */}
+              {isDoctorMode && (lead as any)?.snapshot ? (
+                <div className="border border-gray-200 rounded-lg bg-white p-6">
+                  <div className="mb-4 pb-4 border-b border-gray-100">
+                    <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-teal-600" />
+                      <span>Patient Snapshot (Read-Only)</span>
+                    </h4>
+                    <p className="text-xs text-gray-500 mt-1">Employee/admin summary for review</p>
+                  </div>
+                  <div className="prose prose-sm max-w-none">
+                    <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                      {String((lead as any).snapshot || '')}
+                    </div>
+                  </div>
+                </div>
+              ) : !isDoctorMode && briefData ? (
                 <div 
                   data-snapshot-section
                   className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all max-w-full overflow-hidden relative z-0"
@@ -1699,6 +1725,13 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           value={doctorReviewStatus}
                           onChange={(e) => setDoctorReviewStatus(e.target.value)}
                           onBlur={async () => {
+                            // ✅ Doctor mode: status updates only via Submit Review
+                            if (isDoctorMode) {
+                              // Revert to original if changed (doctor must use Submit button)
+                              setDoctorReviewStatus((lead as any)?.doctor_review_status || '');
+                              return;
+                            }
+                            
                             if (doctorReviewStatus !== ((lead as any)?.doctor_review_status || '') && leadId) {
                               setIsUpdatingReview(true);
                               try {
@@ -1712,31 +1745,16 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
                                 toast.success('Review status updated');
                                 
-                                // ✅ Re-fetch lead details to get updated next_action (automation result)
+                                // ✅ Admin/Employee mode: refetch from admin endpoint
                                 try {
-                                  if (isDoctorMode && leadUuid) {
-                                    // ✅ Doctor mode: use doctor-friendly endpoint (leadUuid is always UUID)
-                                    const reloaded = await fetchLeadForDoctor(leadUuid);
-                                    setLead(reloaded);
-                                    setDoctorReviewStatus(reloaded.doctor_review_status || '');
-                                    setDoctorReviewNotes(reloaded.doctor_review_notes || '');
-                                  } else {
-                                    // ✅ Admin/Employee mode: use admin endpoint
-                                    const leadResult = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
-                                    if (leadResult.ok && leadResult.lead) {
-                                      setLead(leadResult.lead as Lead);
-                                      // Update local review state
-                                      setDoctorReviewStatus((leadResult.lead as any).doctor_review_status || '');
-                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
-                                    }
+                                  const leadResult = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
+                                  if (leadResult.ok && leadResult.lead) {
+                                    setLead(leadResult.lead as Lead);
+                                    setDoctorReviewStatus((leadResult.lead as any).doctor_review_status || '');
+                                    setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
                                   }
                                 } catch (refetchErr) {
                                   console.warn('[Review] Failed to refetch lead after update:', refetchErr);
-                                  // Fallback: use result.lead if available
-                                  if (result.lead) {
-                                    setLead((prev) => prev ? { ...prev, doctor_review_status: (result.lead as any).doctor_review_status, next_action: result.lead.next_action } : null);
-                                    setDoctorReviewStatus((result.lead as any).doctor_review_status || '');
-                                  }
                                 }
                                 
                                 // Refetch timeline to show new event
@@ -1759,7 +1777,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                               }
                             }
                           }}
-                          disabled={isUpdatingReview || !leadId}
+                          disabled={isUpdatingReview || !leadId || isDoctorMode}
                           className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                         >
                           <option value="">Select status...</option>
@@ -1776,6 +1794,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           value={doctorReviewNotes}
                           onChange={(e) => setDoctorReviewNotes(e.target.value)}
                           onBlur={async () => {
+                            // ✅ Doctor mode: don't auto-save, require explicit submit
+                            if (isDoctorMode) return;
+                            
                             if (doctorReviewNotes !== ((lead as any)?.doctor_review_notes || '') && leadId) {
                               setIsUpdatingReview(true);
                               try {
@@ -1789,29 +1810,15 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
                                 toast.success('Review notes updated');
                                 
-                                // ✅ Re-fetch lead details to ensure UI is in sync
+                                // ✅ Admin/Employee mode: refetch from admin endpoint
                                 try {
-                                if (isDoctorMode && leadUuid) {
-                                  // ✅ Doctor mode: use doctor-friendly endpoint (leadUuid is always UUID)
-                                  const reloaded = await fetchLeadForDoctor(leadUuid);
-                                  setLead(reloaded);
-                                  setDoctorReviewNotes(reloaded.doctor_review_notes || '');
-                                } else {
-                                    // ✅ Admin/Employee mode: use admin endpoint
-                                    const leadResult = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
-                                    if (leadResult.ok && leadResult.lead) {
-                                      setLead(leadResult.lead as Lead);
-                                      // Update local review state
-                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
-                                    }
+                                  const leadResult = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
+                                  if (leadResult.ok && leadResult.lead) {
+                                    setLead(leadResult.lead as Lead);
+                                    setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
                                   }
                                 } catch (refetchErr) {
                                   console.warn('[Review] Failed to refetch lead after update:', refetchErr);
-                                  // Fallback: use result.lead if available
-                                  if (result.lead) {
-                                    setLead((prev) => prev ? { ...prev, doctor_review_notes: (result.lead as any).doctor_review_notes } : null);
-                                    setDoctorReviewNotes((result.lead as any).doctor_review_notes || '');
-                                  }
                                 }
                               } catch (err) {
                                 const errorMessage = err instanceof Error ? err.message : 'Failed to update review notes';
@@ -1823,11 +1830,55 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                             }
                           }}
                           disabled={isUpdatingReview || !leadId}
-                          placeholder="Add review notes..."
+                          placeholder={isDoctorMode ? "Add your review notes..." : "Add review notes..."}
                           rows={4}
                           className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
                         />
                       </div>
+                      
+                      {/* ✅ Doctor mode: Submit Review button */}
+                      {isDoctorMode && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!leadUuid && !leadId) {
+                                toast.error("Lead reference missing");
+                                return;
+                              }
+                              
+                              setIsUpdatingReview(true);
+                              try {
+                                const ref = leadUuid || leadId;
+                                const result = await apiJsonAuth<{ ok: true; lead: any }>(`/api/doctor/lead/review`, {
+                                  method: 'POST',
+                                  body: JSON.stringify({
+                                    ref: ref,
+                                    doctor_review_notes: doctorReviewNotes || null,
+                                  }),
+                                });
+
+                                if (result.ok && result.lead) {
+                                  toast.success('Review submitted');
+                                  // ✅ Navigate to reviewed tab
+                                  setTimeout(() => {
+                                    window.location.href = '/doctor/portal?tab=reviewed';
+                                  }, 1000);
+                                }
+                              } catch (err) {
+                                const errorMessage = err instanceof Error ? err.message : 'Failed to submit review';
+                                toast.error(errorMessage);
+                              } finally {
+                                setIsUpdatingReview(false);
+                              }
+                            }}
+                            disabled={isUpdatingReview || (!leadUuid && !leadId)}
+                            className="w-full px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Submit Review & Mark as Reviewed
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

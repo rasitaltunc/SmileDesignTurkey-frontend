@@ -3,22 +3,24 @@ import { useAuthStore } from '@/store/authStore';
 import { NavigationContext } from '@/App';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
-import { RefreshCw, LogOut, Phone, Mail, Clock, FileText, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { RefreshCw, LogOut, Clock, FileText, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import AdminPatientProfile from './AdminPatientProfile';
 import { authedFetch } from '@/lib/authedFetch';
 
 interface Lead {
   id: string;
+  lead_uuid?: string;
   name: string | null;
-  email: string | null;
-  phone: string | null;
+  age?: number | null;
+  gender?: string | null;
+  treatment?: string | null;
+  timeline?: string | null;
   status: string | null;
-  doctor_id: string | null;
   doctor_review_status: string | null;
   doctor_review_notes: string | null;
-  next_action: string | null;
+  doctor_assigned_at?: string | null;
+  doctor_reviewed_at?: string | null;
   created_at: string;
-  updated_at: string | null;
 }
 
 export default function DoctorPortal() {
@@ -28,6 +30,7 @@ export default function DoctorPortal() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'unread' | 'reviewed'>('unread');
 
   // Redirect if not doctor
   useEffect(() => {
@@ -36,55 +39,42 @@ export default function DoctorPortal() {
     }
   }, [role, navigate]);
 
-  // Load leads assigned to this doctor
-  const loadLeads = async () => {
+  // Load leads assigned to this doctor via privacy-safe endpoint
+  const loadLeads = async (bucket: 'unread' | 'reviewed' = 'unread') => {
     if (!user) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // ✅ Use authedFetch to ensure Authorization header is always present
-      const response = await authedFetch(`/api/leads?status=all`, {
+      // ✅ Use doctor-safe endpoint (/api/doctor/leads)
+      const response = await authedFetch(`/api/doctor/leads?bucket=${bucket}`, {
         method: 'GET',
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to load leads' }));
+        const errorData = await response.json().catch(() => ({ ok: false, error: 'Failed to load leads' }));
         throw new Error(errorData.error || 'Failed to load leads');
       }
 
       const result = await response.json();
       if (result.ok && Array.isArray(result.leads)) {
-        // Sort: pending/needs_info first, then by created_at desc
+        // Sort by assigned date (newest first) or created_at
         const sorted = [...result.leads].sort((a, b) => {
-          const aStatus = a.doctor_review_status || 'pending';
-          const bStatus = b.doctor_review_status || 'pending';
-          
-          const priorityOrder: Record<string, number> = {
-            'pending': 0,
-            'needs_info': 1,
-            'approved_for_booking': 2,
-            'rejected': 3,
-          };
-          
-          const aPriority = priorityOrder[aStatus] ?? 99;
-          const bPriority = priorityOrder[bStatus] ?? 99;
-          
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
-          
-          // Same priority: newest first
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          const aDate = a.doctor_assigned_at || a.created_at;
+          const bDate = b.doctor_assigned_at || b.created_at;
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
         });
         
         setLeads(sorted);
+      } else {
+        setLeads([]);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
       setError(errorMessage);
       toast.error(errorMessage);
+      setLeads([]);
     } finally {
       setIsLoading(false);
     }
@@ -92,9 +82,9 @@ export default function DoctorPortal() {
 
   useEffect(() => {
     if (role === 'doctor' && user) {
-      loadLeads();
+      loadLeads(activeTab);
     }
-  }, [role, user]);
+  }, [role, user, activeTab]);
 
   const openLead = (lead: any) => {
     const key = lead?.lead_uuid; // ✅ doktor için bu anahtar
@@ -191,7 +181,7 @@ export default function DoctorPortal() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={loadLeads}
+              onClick={() => loadLeads(activeTab)}
               disabled={isLoading}
               className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
@@ -206,6 +196,36 @@ export default function DoctorPortal() {
               Logout
             </button>
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-4 flex gap-2 border-b border-gray-200">
+          <button
+            onClick={() => {
+              setActiveTab('unread');
+              loadLeads('unread');
+            }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'unread'
+                ? 'border-teal-600 text-teal-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Unread ({leads.filter(l => (l.doctor_review_status || 'pending') !== 'reviewed').length})
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('reviewed');
+              loadLeads('reviewed');
+            }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'reviewed'
+                ? 'border-teal-600 text-teal-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Reviewed ({leads.filter(l => l.doctor_review_status === 'reviewed').length})
+          </button>
         </div>
 
         {/* Error */}
@@ -224,27 +244,33 @@ export default function DoctorPortal() {
         ) : leads.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No leads assigned</h3>
-            <p className="text-gray-600">You don't have any leads assigned to you yet.</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {activeTab === 'unread' ? 'No unread leads' : 'No reviewed leads'}
+            </h3>
+            <p className="text-gray-600">
+              {activeTab === 'unread' 
+                ? 'You don\'t have any unread leads assigned to you.'
+                : 'You haven\'t reviewed any leads yet.'}
+            </p>
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <table className="w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-64">
                     Patient
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                    Treatment
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Review Status
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                    Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                    Assigned
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
                     Action
                   </th>
                 </tr>
@@ -253,35 +279,37 @@ export default function DoctorPortal() {
                 {leads.map((lead) => (
                   <tr
                     key={lead.id}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => setSelectedLeadId(lead.id)}
+                    className="hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
                         {lead.name || 'Unnamed'}
                       </div>
+                      {(lead.age || lead.gender) && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {lead.age ? `${lead.age} years` : ''}
+                          {lead.age && lead.gender ? ', ' : ''}
+                          {lead.gender || ''}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-700">
-                        {lead.email && (
-                          <div className="flex items-center gap-1">
-                            <Mail className="w-3 h-3" />
-                            {lead.email}
-                          </div>
-                        )}
-                        {lead.phone && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <Phone className="w-3 h-3" />
-                            {lead.phone}
-                          </div>
-                        )}
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {lead.treatment || '-'}
                       </div>
+                      {lead.timeline && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {lead.timeline}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getReviewStatusBadge(lead.doctor_review_status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(lead.created_at).toLocaleDateString()}
+                      {lead.doctor_assigned_at 
+                        ? new Date(lead.doctor_assigned_at).toLocaleDateString()
+                        : new Date(lead.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
