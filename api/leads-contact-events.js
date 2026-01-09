@@ -94,56 +94,83 @@ async function resolveLeadRow(supabase, anyId) {
 }
 
 module.exports = async function handler(req, res) {
-  setCors(res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  // Verify auth (Bearer JWT or x-admin-token)
-  const authResult = await verifyAuth(req);
-  if (!authResult.authenticated) {
-    return res.status(401).json({ error: authResult.error || "Invalid credentials" });
-  }
-
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-  // Initialize Supabase client (service role)
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return res.status(500).json({ error: "Missing SUPABASE env", requestId });
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const requestId = `contact_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
   try {
-    // GET: List contact events for a lead
-    if (req.method === "GET") {
-      // ✅ Accept both lead_uuid (UUID) and lead_id (for backward compatibility)
-      const lead_uuid = req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null;
-      const lead_id = req.query?.lead_id || req.query?.leadId ? String(req.query?.lead_id || req.query?.leadId).trim() : null;
-      const limit = parseInt(req.query?.limit || "5", 10);
+    setCors(res);
 
-      if (!lead_uuid && !lead_id) {
-        return res.status(400).json({ ok: false, error: "Missing lead_uuid or lead_id", requestId });
-      }
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
 
-      // ✅ Resolve to TEXT lead_id: use safe resolver
-      const leadRow = await resolveLeadRow(supabase, lead_uuid || lead_id);
-      
+    // Verify auth (Bearer JWT or x-admin-token)
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+      return res.status(401).json({ ok: false, error: authResult.error || "Invalid credentials", requestId });
+    }
+
+    // Initialize Supabase client (service role)
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return res.status(500).json({ ok: false, error: "Missing SUPABASE env", requestId });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // ✅ Accept both leadId/lead_id and leadUuid/lead_uuid from query or body
+    const body = (req.body && typeof req.body === "object") ? req.body : {};
+
+    const leadId =
+      (req.query?.lead_id ? String(req.query.lead_id) : null) ||
+      (req.query?.leadId ? String(req.query.leadId) : null) ||
+      (body.lead_id ? String(body.lead_id) : null) ||
+      (body.leadId ? String(body.leadId) : null);
+
+    const leadUuid =
+      (req.query?.lead_uuid ? String(req.query.lead_uuid) : null) ||
+      (req.query?.leadUuid ? String(req.query.leadUuid) : null) ||
+      (body.lead_uuid ? String(body.lead_uuid) : null) ||
+      (body.leadUuid ? String(body.leadUuid) : null);
+
+    if (!leadId && !leadUuid) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing lead_id/leadId or lead_uuid/leadUuid",
+        requestId,
+      });
+    }
+
+    // ✅ Resolve to TEXT lead_id: if leadId provided, use it; else resolve leadUuid to id
+    let resolvedLeadIdText = null;
+    if (leadId) {
+      resolvedLeadIdText = String(leadId).trim();
+    } else if (leadUuid) {
+      const leadRow = await resolveLeadRow(supabase, leadUuid);
       if (!leadRow) {
         return res.status(400).json({ 
           ok: false,
-          error: "Invalid lead_uuid/lead_id: not found", 
+          error: "Invalid lead_uuid: not found", 
           requestId 
         });
       }
+      resolvedLeadIdText = leadRow.id; // ✅ Use id (TEXT column)
+    }
 
-      const resolvedLeadIdText = leadRow.id; // ✅ Use id (TEXT column) for child tables
+    if (!resolvedLeadIdText) {
+      return res.status(400).json({ 
+        ok: false,
+        error: "Could not resolve lead ID", 
+        requestId 
+      });
+    }
+
+    // GET: List contact events for a lead
+    if (req.method === "GET") {
+      const limit = parseInt(req.query?.limit || "5", 10);
 
       const { data: events, error: eventsError } = await supabase
         .from("lead_contact_events")
@@ -155,6 +182,7 @@ module.exports = async function handler(req, res) {
       if (eventsError) {
         console.error("[leads-contact-events] Error fetching events:", eventsError, { requestId });
         return res.status(500).json({ 
+          ok: false,
           error: "Failed to fetch contact events",
           details: eventsError.message,
           hint: eventsError.message.includes("relation") ? "Table 'lead_contact_events' may not exist. Run migration: supabase/migration_lead_contact_events.sql" : eventsError.message,
@@ -167,29 +195,8 @@ module.exports = async function handler(req, res) {
 
     // POST: Add new contact event
     if (req.method === "POST") {
-      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-      // ✅ Accept both lead_uuid (UUID) and lead_id (for backward compatibility)
-      const lead_uuid = body.lead_uuid ? String(body.lead_uuid).trim() : null;
-      const lead_id = body.lead_id || body.leadId ? String(body.lead_id || body.leadId).trim() : null;
       const channel = pickString(body.channel || "phone");
       const note = pickString(body.note || "");
-
-      if (!lead_uuid && !lead_id) {
-        return res.status(400).json({ ok: false, error: "Missing lead_uuid or lead_id", requestId });
-      }
-
-      // ✅ Resolve to TEXT lead_id: use safe resolver
-      const leadRow = await resolveLeadRow(supabase, lead_uuid || lead_id);
-      
-      if (!leadRow) {
-        return res.status(400).json({ 
-          ok: false,
-          error: "Invalid lead_uuid/lead_id: not found", 
-          requestId 
-        });
-      }
-
-      const resolvedLeadIdText = leadRow.id; // ✅ Use id (TEXT column) for child tables
 
       // Validate channel
       const validChannels = ["phone", "whatsapp", "email", "sms", "other"];
@@ -213,7 +220,7 @@ module.exports = async function handler(req, res) {
 
       if (insertError) {
         console.error("[leads-contact-events] Error inserting event:", insertError, { requestId });
-        return res.status(500).json({ error: "Failed to create contact event", details: insertError.message, requestId });
+        return res.status(500).json({ ok: false, error: "Failed to create contact event", details: insertError.message, requestId });
       }
 
       // Update last_contacted_at and optionally status to "contacted"
@@ -222,7 +229,6 @@ module.exports = async function handler(req, res) {
       };
       
       // Optionally update status to "contacted" if not already in a later stage
-      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
       const updateStatus = body.update_status !== false; // Default: true
       
       if (updateStatus) {
@@ -261,10 +267,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    return res.status(405).json({ error: "Method not allowed", requestId });
-  } catch (error) {
-    console.error("[leads-contact-events] Unhandled error:", error, { requestId });
-    return res.status(500).json({ error: "Internal server error", details: error.message, requestId });
+    return res.status(405).json({ ok: false, error: "Method not allowed", requestId });
+  } catch (err) {
+    console.error("[leads-contact-events] crash", err, { requestId });
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Server error",
+      requestId,
+    });
   }
 };
+
 
