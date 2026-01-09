@@ -276,6 +276,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         setLead(loadedLead);
         
         // ✅ Lead loaded - resolvedLeadIdText will be set via lead.id
+        // ✅ doctor lead page: treat opened lead as selected lead (for AI buttons)
         
         // Initialize Next Action & Follow-up from loaded lead
         setNextAction(loadedLead.next_action || '');
@@ -702,7 +703,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // B2: Generate AI Brief
   const handleGenerateBrief = async () => {
-    if (!leadId) return;
+    // ✅ Use lead.id (TEXT) instead of leadId prop
+    const activeLeadId = lead?.id;
+    if (!activeLeadId) return;
 
     setIsLoadingBrief(true);
     setError(null);
@@ -710,7 +713,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     const toastId = toast.loading('Generating snapshot...');
 
     try {
-      const result = await briefLead(leadId);
+      const result = await briefLead(activeLeadId);
       
       if (!result.ok) {
         const requestId = result.requestId || 'unknown';
@@ -751,7 +754,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // B3: Normalize Notes
   const handleNormalizeNotes = async () => {
-    if (!leadId || !isAuthenticated) return;
+    // ✅ Use lead.id (TEXT) instead of leadId prop
+    const activeLeadId = lead?.id;
+    if (!activeLeadId || !isAuthenticated) return;
     
     // ✅ Doctor mode: Normalize is admin/employee only (disable for doctor)
     if (isDoctorMode) {
@@ -767,7 +772,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     try {
       const result = await apiJsonAuth<{ ok: true; normalized: boolean; data: any; requestId?: string }>(`/api/ai/normalize`, {
         method: 'POST',
-        body: JSON.stringify({ leadId }),
+        body: JSON.stringify({ lead_id: activeLeadId }),
       });
 
       if (result.normalized && result.data) {
@@ -968,8 +973,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                     const btnBase =
                       "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
 
-                    const normalizeDisabled = isLoadingNormalize || isLoadingBrief || !leadId;
-                    const snapshotDisabled = isLoadingBrief || isLoadingNormalize || !leadId;
+                    // ✅ Use lead.id (TEXT) for button state
+                    const activeLeadId = lead?.id;
+                    const canUseAi = Boolean(activeLeadId);
+                    const normalizeDisabled = isLoadingNormalize || isLoadingBrief || !canUseAi;
+                    const snapshotDisabled = isLoadingBrief || isLoadingNormalize || !canUseAi;
 
                     return (
                       <>
@@ -993,7 +1001,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           ) : (
                             <>
                               <FileText className="w-4 h-4" />
-                              <span className="text-gray-700">{leadId ? "Normalize Notes" : "Select a lead first"}</span>
+                              <span className="text-gray-700">{canUseAi ? "Normalize Notes" : "Select a lead first"}</span>
                             </>
                           )}
                         </button>
@@ -1017,7 +1025,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           ) : (
                             <>
                               <Brain className="w-4 h-4" />
-                              <span className="text-gray-700">{leadId ? "Generate Snapshot" : "Select a lead first"}</span>
+                              <span className="text-gray-700">{canUseAi ? "Generate Snapshot" : "Select a lead first"}</span>
                             </>
                           )}
                         </button>
@@ -1925,7 +1933,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                     const syncBtnBase =
                       "mt-2 inline-flex items-center justify-center gap-2 h-8 px-3 rounded-lg text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
 
-                    const syncDisabled = isSyncingMemory || isLoadingNormalize || !leadId || !briefData;
+                    // ✅ Use lead.id (TEXT) for sync button state
+                    const activeLeadId = lead?.id;
+                    const canUseAi = Boolean(activeLeadId);
+                    const syncDisabled = isSyncingMemory || isLoadingNormalize || !canUseAi || !briefData;
 
                     const syncBtnClass = [
                       syncBtnBase,

@@ -55,7 +55,7 @@ export async function briefLead(leadId: string): Promise<BriefResponse> {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ leadId }),
+    body: JSON.stringify({ lead_id: leadId }), // ✅ Use lead_id (TEXT) for consistency with FIX PACK 6
   });
 
   if (!response.ok) {
