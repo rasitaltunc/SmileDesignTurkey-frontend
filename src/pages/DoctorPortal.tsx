@@ -97,16 +97,9 @@ export default function DoctorPortal() {
   }, [role, user]);
 
   const openLead = (lead: any) => {
-    // ✅ Canonical internal key = lead_uuid (UUID)
-    // Route param must always be UUID, backend will filter by lead_uuid column
-    const leadUuid = lead?.lead_uuid;
-    if (!leadUuid) {
-      console.error("[DoctorPortal] Missing lead_uuid", lead);
-      toast.error("Invalid lead: missing UUID");
-      return;
-    }
-    // ✅ SPA navigation (not full page reload)
-    navigate(`/doctor/lead/${encodeURIComponent(leadUuid)}`);
+    const key = lead?.lead_uuid; // ✅ doktor için bu anahtar
+    if (!key) return toast.error("Lead UUID missing");
+    navigate(`/doctor/lead/${encodeURIComponent(key)}`);
   };
 
   const getReviewStatusBadge = (status: string | null) => {
