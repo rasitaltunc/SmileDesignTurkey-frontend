@@ -54,12 +54,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Extract leadId from query
-    const leadIdRaw = req.query.leadId;
+    // ✅ Extract leadId from query - accept both leadId (route param) and lead_uuid (query param)
+    const leadIdFromRoute = req.query.leadId || null;
+    const leadUuidFromQuery = req.query.lead_uuid ? String(req.query.lead_uuid).trim() : null;
+    const leadIdRaw = leadUuidFromQuery || leadIdFromRoute;
+    
     if (!leadIdRaw) {
       return res.status(400).json({
         ok: false,
-        error: "Missing leadId parameter",
+        error: "Missing leadId or lead_uuid parameter",
         requestId,
       });
     }

@@ -209,7 +209,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   };
 
   // ✅ Resolved UUID state (for child endpoints that require UUID)
-  const [resolvedLeadId, setResolvedLeadId] = useState<string | null>(null);
+  // Canonical internal key = lead_uuid (UUID)
+  const [resolvedLeadUuid, setResolvedLeadUuid] = useState<string | null>(null);
 
   // ✅ Doctor-friendly lead fetch function
   // Route param is always UUID (lead_uuid), so we always use lead_uuid query param
@@ -268,19 +269,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           loadedLead = await fetchLeadForDoctor(leadUuid);
         } else {
           // ✅ Admin/Employee mode: use admin endpoint
-          const response = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
-            method: 'GET',
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Failed to load patient' }));
-            if (errorData.error === 'NOT_FOUND') {
-              throw new Error('Lead not found / Invalid lead ID');
-            }
-            throw new Error(errorData.error || 'Failed to load patient');
-          }
-
-          const result = await response.json();
+          const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
           if (!result.ok || !result.lead) {
             throw new Error('Lead not found');
           }
@@ -292,14 +281,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         
         // ✅ IMPORTANT: Set resolved UUID for child endpoints (contact events, timeline, etc.)
         // ✅ Canonical internal key = lead_uuid (UUID)
-        // Child endpoints require UUID, always use lead.lead_uuid
-        const leadUuid = (loadedLead as any).lead_uuid;
-        if (leadUuid && isUuid(leadUuid)) {
-          setResolvedLeadId(leadUuid);
+        // Single source of truth: lead.lead_uuid OR leadUuid from route (doctor mode)
+        const resolvedUuid = (loadedLead as any).lead_uuid || leadUuid || null;
+        if (resolvedUuid && isUuid(resolvedUuid)) {
+          setResolvedLeadUuid(resolvedUuid);
         } else {
           // Fallback: if lead_uuid missing/invalid, log warning but continue
-          console.warn('[AdminPatientProfile] Lead UUID missing or invalid:', { lead: loadedLead });
-          setResolvedLeadId(null);
+          console.warn('[AdminPatientProfile] Lead UUID missing or invalid:', { lead: loadedLead, leadUuid });
+          setResolvedLeadUuid(null);
         }
         
         // Initialize Next Action & Follow-up from loaded lead
@@ -351,21 +340,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         }
 
         // ✅ Use resolved UUID (MUST be UUID for notes endpoint)
-        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+        // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
           throw new Error('Cannot load notes: lead UUID not resolved');
         }
         
-        const response = await authedFetch(`/api/lead-notes?lead_id=${encodeURIComponent(resolvedLeadId)}`, {
-          method: 'GET',
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to load notes' }));
-          throw new Error(errorData.error || 'Failed to load notes');
-        }
-
-        const result = await response.json();
+        const result = await apiJsonAuth<{ notes: any[] }>(`/api/lead-notes?lead_uuid=${encodeURIComponent(resolvedLeadUuid)}`);
         setNotes(result.notes || []);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load notes';
@@ -377,7 +357,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     loadNotes();
-  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadId, lead?.id]);
+  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadUuid, lead?.lead_uuid]);
 
   // B4: Fetch AI memory on page load
   useEffect(() => {
@@ -393,26 +373,13 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingMemory(true);
       try {
         // ✅ Use resolved UUID for admin endpoints
-        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+        // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
           console.warn('[AdminPatientProfile] Cannot load AI memory: UUID not resolved');
           return;
         }
-        const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedLeadId)}`, {
-          method: 'GET',
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to load AI memory' }));
-          // Don't show error if table doesn't exist (graceful degradation)
-          if (errorData.warning === 'Table not found') {
-            console.warn('[AdminPatientProfile] AI memory table not found');
-            return;
-          }
-          throw new Error(errorData.error || 'Failed to load AI memory');
-        }
-
-        const result = await response.json();
+        
+        const result = await apiJsonAuth<{ ok: true; data: any }>(`/api/admin/lead-ai/${encodeURIComponent(resolvedLeadUuid)}`);
         if (result.ok && result.data) {
           // Hydrate briefData from persisted memory
           if (result.data.snapshot || result.data.callBrief || result.data.risk) {
@@ -444,7 +411,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchAIMemory();
-  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadId, lead?.id]);
+  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadUuid, lead?.lead_uuid]);
 
   // B5: Fetch AI tasks on page load
   useEffect(() => {
@@ -460,26 +427,19 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingTasks(true);
       try {
         // ✅ Use resolved UUID for admin endpoints
-        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+        // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
           console.warn('[AdminPatientProfile] Cannot load AI tasks: UUID not resolved');
           return;
         }
-        const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadId)}`, {
-          method: 'GET',
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to load tasks' }));
+        const result = await apiJsonAuth<{ ok: true; tasks: any[] }>(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadUuid)}`).catch((err) => {
           // Don't show error if table doesn't exist (graceful degradation)
-          if (errorData.warning === 'Table not found') {
+          if (err.message?.includes('Table not found')) {
             console.warn('[AdminPatientProfile] AI tasks table not found');
-            return;
+            return { ok: true, tasks: [] };
           }
-          throw new Error(errorData.error || 'Failed to load tasks');
-        }
-
-        const result = await response.json();
+          throw err;
+        });
         if (result.ok && Array.isArray(result.tasks)) {
           setTasks(result.tasks);
         }
@@ -496,7 +456,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchTasks();
-  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadId, lead?.id]);
+  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadUuid, lead?.lead_uuid]);
   
   // B6: Fetch timeline events on page load
   useEffect(() => {
@@ -506,28 +466,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingTimeline(true);
       try {
         // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for timeline endpoint)
-        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+        // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
           // Lead not loaded yet or UUID not resolved - skip silently
           console.warn('[AdminPatientProfile] Skipping timeline: UUID not resolved');
           return;
         }
         
-        const response = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
-          method: 'GET',
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to load timeline' }));
-          // Don't show error if table doesn't exist (graceful degradation)
-          if (errorData.warning === 'Table not found') {
-            console.warn('[AdminPatientProfile] Timeline table not found');
-            return;
-          }
-          throw new Error(errorData.error || 'Failed to load timeline');
-        }
-        
-        const result = await response.json();
+        const result = await apiJsonAuth<{ ok: true; data: any[] }>(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadUuid)}?leadId=${encodeURIComponent(resolvedLeadUuid)}`);
         if (result.ok && Array.isArray(result.data)) {
           setTimelineEvents(result.data);
         }
@@ -540,7 +486,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
     
     fetchTimeline();
-  }, [leadId, isAuthenticated, resolvedLeadId, lead?.id]);
+  }, [leadId, isAuthenticated, resolvedLeadUuid, lead?.lead_uuid]);
 
   // Doctors: Fetch on page load (admin/employee only, skip in doctorMode)
   useEffect(() => {
@@ -550,18 +496,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     const fetchDoctors = async () => {
       setIsLoadingDoctors(true);
       try {
-        const response = await authedFetch(`/api/admin/doctors`, {
-          method: 'GET',
+        const result = await apiJsonAuth<{ ok: true; doctors: any[] }>(`/api/admin/doctors`).catch((err) => {
+          console.warn('[AdminPatientProfile] Failed to fetch doctors:', err);
+          return { ok: false, doctors: [] };
         });
 
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok || result.ok === false) {
-          console.warn('[AdminPatientProfile] Failed to fetch doctors:', result.error);
-          return;
-        }
-
-        if (result.doctors) {
+        if (result.ok && result.doctors) {
           setDoctors(result.doctors);
         }
       } catch (err) {
@@ -582,28 +522,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setIsLoadingContactEvents(true);
       try {
         // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for contact events endpoint)
-        // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-        if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+        // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+        if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
           // Lead not loaded yet or UUID not resolved - skip silently
           console.warn('[AdminPatientProfile] Skipping contact events: UUID not resolved');
           return;
         }
         
-        const response = await authedFetch(`/api/leads-contact-events?lead_id=${encodeURIComponent(resolvedLeadId)}&limit=10`, {
-          method: 'GET',
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to load contact events' }));
-          // Don't show error if table doesn't exist (graceful degradation)
-          if (errorData.hint?.includes('Table') || errorData.error?.includes('relation')) {
-            console.warn('[AdminPatientProfile] Contact events table not found');
-            return;
-          }
-          throw new Error(errorData.error || 'Failed to load contact events');
-        }
-        
-        const result = await response.json();
+        const result = await apiJsonAuth<{ ok: true; events: any[] }>(`/api/leads-contact-events?lead_uuid=${encodeURIComponent(resolvedLeadUuid)}&limit=10`);
         if (result.ok && Array.isArray(result.events)) {
           setContactEvents(result.events);
         }
@@ -616,7 +542,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
     
     fetchContactEvents();
-  }, [leadId, isAuthenticated, resolvedLeadId, lead?.id]);
+  }, [leadId, isAuthenticated, resolvedLeadUuid, lead?.lead_uuid]);
 
   // Helper: Log contact event
   const logContactEvent = async (channel: 'whatsapp' | 'phone' | 'email', note?: string) => {
@@ -624,29 +550,22 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     
     try {
       // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for contact events endpoint)
-      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+      // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
         console.warn('[AdminPatientProfile] Cannot log contact event: UUID not resolved');
         return;
       }
       
-      const response = await authedFetch(`/api/leads-contact-events`, {
+      const result = await apiJsonAuth<{ ok: true; event: any; lead?: any }>(`/api/leads-contact-events`, {
         method: 'POST',
         body: JSON.stringify({
-          lead_id: resolvedLeadId,
+          lead_uuid: resolvedLeadUuid,
           channel: channel,
           note: note || null,
           update_status: true, // Auto-update status to "contacted" if new
         }),
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to log contact event' }));
-        console.warn('[AdminPatientProfile] Failed to log contact event:', errorData);
-        return;
-      }
-      
-      const result = await response.json();
+
       if (result.ok && result.event) {
         // Add to local state
         setContactEvents((prev) => [result.event, ...prev].slice(0, 10));
@@ -670,12 +589,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     
     try {
       // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for timeline endpoint)
-      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+      // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
         throw new Error('Cannot add timeline event: lead UUID not resolved');
       }
       
-      const response = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
+      const result = await apiJsonAuth<{ ok: true; data: any }>(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadUuid)}?leadId=${encodeURIComponent(resolvedLeadUuid)}`, {
         method: 'POST',
         body: JSON.stringify({
           stage: newTimelineStage,
@@ -684,14 +603,6 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           payload: {},
         }),
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to add timeline event' }));
-        const requestId = errorData.requestId || 'unknown';
-        throw new Error(`${errorData.error || 'Failed to add timeline event'} (id: ${requestId})`);
-      }
-      
-      const result = await response.json();
       if (!result.ok) {
         const requestId = result.requestId || 'unknown';
         throw new Error(`${result.error || 'Failed to add timeline event'} (id: ${requestId})`);
@@ -716,16 +627,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       setNewTimelineNote('');
       
       // ✅ Refetch timeline events with resolved UUID
-      if (resolvedLeadId && isUuid(resolvedLeadId)) {
-        const refetchResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
-          method: 'GET',
-        });
-        
-        if (refetchResponse.ok) {
-          const refetchResult = await refetchResponse.json();
+      if (resolvedLeadUuid && isUuid(resolvedLeadUuid)) {
+        try {
+          const refetchResult = await apiJsonAuth<{ ok: true; data: any[] }>(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadUuid)}?leadId=${encodeURIComponent(resolvedLeadUuid)}`);
           if (refetchResult.ok && Array.isArray(refetchResult.data)) {
             setTimelineEvents(refetchResult.data);
           }
+        } catch (err) {
+          console.warn('[AdminPatientProfile] Failed to refetch timeline:', err);
         }
       }
       
@@ -754,27 +663,17 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
     try {
       // ✅ Use resolved UUID for admin endpoints
-      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+      // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
         throw new Error('Cannot mark task done: lead UUID not resolved');
       }
-      const response = await authedFetch(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadId)}`, {
+      await apiJsonAuth(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadUuid)}`, {
         method: 'POST',
         body: JSON.stringify({
           action: 'mark_done',
           taskId: taskId,
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to mark task done' }));
-        throw new Error(errorData.error || 'Failed to mark task done');
-      }
-
-      const result = await response.json();
-      if (!result.ok) {
-        throw new Error(result.error || 'Failed to mark task done');
-      }
 
       // Update local state
       setTasks((prev) =>
@@ -799,25 +698,18 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       }
 
       // ✅ Use resolved UUID (MUST be UUID for notes endpoint)
-      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+      // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
         throw new Error('Cannot create note: lead UUID not resolved');
       }
       
-      const response = await authedFetch(`/api/lead-notes`, {
+      const result = await apiJsonAuth<{ ok: true; note: any }>(`/api/lead-notes`, {
         method: 'POST',
         body: JSON.stringify({
-          lead_id: resolvedLeadId,
+          lead_uuid: resolvedLeadUuid,
           note: newNoteContent.trim(),
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to save note' }));
-        throw new Error(errorData.error || 'Failed to save note');
-      }
-
-      const result = await response.json();
       setNotes((prev) => [result.note, ...prev]);
       setNewNoteContent('');
       toast.success('Note saved');
@@ -895,22 +787,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     const toastId = toast.loading('Normalizing notes...');
 
     try {
-      const response = await authedFetch(`/api/ai/normalize`, {
+      const result = await apiJsonAuth<{ ok: true; normalized: boolean; data: any; requestId?: string }>(`/api/ai/normalize`, {
         method: 'POST',
         body: JSON.stringify({ leadId }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to normalize notes' }));
-        const requestId = errorData.requestId || 'unknown';
-        throw new Error(`${errorData.error || 'Failed to normalize notes'} (id: ${requestId})`);
-      }
-
-      const result = await response.json();
-      if (!result.ok) {
-        const requestId = result.requestId || 'unknown';
-        throw new Error(`${result.error || 'Normalization failed'} (id: ${requestId})`);
-      }
 
       if (result.normalized && result.data) {
         setNormalizeData(result.data);
@@ -958,11 +838,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
     try {
       // ✅ Use resolved UUID for admin endpoints
-      // resolvedLeadId is always UUID (from lead.lead_uuid), never use lead.id (public string)
-      if (!resolvedLeadId || !isUuid(resolvedLeadId)) {
+      // resolvedLeadUuid is always UUID (from lead.lead_uuid), never use lead.id (public string)
+      if (!resolvedLeadUuid || !isUuid(resolvedLeadUuid)) {
         throw new Error('Cannot sync AI memory: lead UUID not resolved');
       }
-      const response = await authedFetch(`/api/admin/lead-ai/${encodeURIComponent(resolvedLeadId)}`, {
+      await apiJsonAuth(`/api/admin/lead-ai/${encodeURIComponent(resolvedLeadUuid)}`, {
         method: 'POST',
         body: JSON.stringify({
           snapshot: briefData.brief?.snapshot || null,
@@ -971,17 +851,6 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           memory: normalizeData?.memory || memoryData || null,
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to sync memory' }));
-        const requestId = errorData.requestId || 'unknown';
-        if (errorData.error === 'TABLE_NOT_FOUND') {
-          throw new Error(`AI memory table not found. Please run migration. (id: ${requestId})`);
-        }
-        throw new Error(`${errorData.error || 'Failed to sync memory'} (id: ${requestId})`);
-      }
-
-      const result = await response.json();
       if (!result.ok) {
         const requestId = result.requestId || 'unknown';
         throw new Error(`${result.error || 'Sync failed'} (id: ${requestId})`);
@@ -1600,7 +1469,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                   setIsUpdatingBookingFlag(true);
                                   
                                   try {
-                                    const response = await authedFetch(`/api/leads`, {
+                                    const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/leads`, {
                                       method: 'PATCH',
                                       body: JSON.stringify({
                                         id: leadId,
@@ -1608,12 +1477,6 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                       }),
                                     });
                                     
-                                    if (!response.ok) {
-                                      const errorData = await response.json().catch(() => ({ error: 'Failed to update booking flag' }));
-                                      throw new Error(errorData.error || 'Failed to update booking flag');
-                                    }
-                                    
-                                    const result = await response.json();
                                     if (result.lead) {
                                       setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
                                     }
@@ -1689,19 +1552,13 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                         if (nextAction !== (lead?.next_action || '') && leadId) {
                           setIsUpdatingAction(true);
                           try {
-                            const response = await authedFetch(`/api/leads`, {
+                            const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/leads`, {
                               method: 'PATCH',
                               body: JSON.stringify({
                                 id: leadId,
                                 next_action: nextAction || null,
                               }),
                             });
-
-                            const result = await response.json().catch(() => ({}));
-
-                            if (!response.ok || result.ok === false) {
-                              throw new Error(result.error || 'Failed to update next action');
-                            }
 
                             if (result.lead) {
                               setLead((prev) => prev ? { ...prev, next_action: result.lead.next_action } : null);
@@ -1737,12 +1594,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           if (leadId) {
                             setIsUpdatingAction(true);
                             try {
-                              const token = await getAccessToken();
-                              console.log("token length", token?.length);
                               // ✅ Convert datetime-local to ISO string
                               const followUpValue = followUpAt ? new Date(followUpAt).toISOString() : null;
                               
-                              const response = await authedFetch(`/api/leads`, {
+                              const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/leads`, {
                                 method: 'PATCH',
                                 body: JSON.stringify({
                                   id: leadId,
@@ -1750,11 +1605,6 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 }),
                               });
 
-                              const result = await response.json().catch(() => ({}));
-
-                              if (!response.ok || result.ok === false) {
-                                throw new Error(result.error || 'Failed to update follow-up');
-                              }
 
                               if (result.lead) {
                                 setLead((prev) => prev ? { ...prev, follow_up_at: result.lead.follow_up_at } : null);
@@ -1788,7 +1638,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                       if (selectedDoctorId !== (lead?.doctor_id || '') && leadId) {
                         setIsUpdatingDoctor(true);
                         try {
-                          const response = await authedFetch(`/api/leads`, {
+                          const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/leads`, {
                             method: 'PATCH',
                             body: JSON.stringify({
                               id: leadId,
@@ -1796,30 +1646,21 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                             }),
                           });
 
-                          const result = await response.json().catch(() => ({}));
-
-                          if (!response.ok || result.ok === false) {
-                            throw new Error(result.error || 'Failed to assign doctor');
-                          }
-
                           if (result.lead) {
                             setLead((prev) => prev ? { ...prev, doctor_id: result.lead.doctor_id } : null);
                           }
                           toast.success('Doctor assigned');
                           
                           // Refetch timeline to show new event
-                          if (resolvedLeadId && isUuid(resolvedLeadId)) {
-                            const timelineResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
-                              method: 'GET',
-                            });
-                            const timelineResult = await timelineResponse.json().catch(() => ({}));
-                            if (timelineResult.ok && timelineResult.data) {
-                              setTimelineEvents(timelineResult.data);
+                          if (resolvedLeadUuid && isUuid(resolvedLeadUuid)) {
+                            try {
+                              const timelineResult = await apiJsonAuth<{ ok: true; data: any[] }>(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadUuid)}?leadId=${encodeURIComponent(resolvedLeadUuid)}`);
+                              if (timelineResult.ok && Array.isArray(timelineResult.data)) {
+                                setTimelineEvents(timelineResult.data);
+                              }
+                            } catch (err) {
+                              console.warn('[AdminPatientProfile] Failed to refetch timeline:', err);
                             }
-                          }
-                          const timelineResult = await timelineResponse.json().catch(() => ({}));
-                          if (timelineResult.ok && timelineResult.data) {
-                            setTimelineEvents(timelineResult.data);
                           }
                         } catch (err) {
                           const errorMessage = err instanceof Error ? err.message : 'Failed to assign doctor';
@@ -1860,19 +1701,13 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                             if (doctorReviewStatus !== ((lead as any)?.doctor_review_status || '') && leadId) {
                               setIsUpdatingReview(true);
                               try {
-                                const response = await authedFetch(`/api/leads`, {
+                                const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/leads`, {
                                   method: 'PATCH',
                                   body: JSON.stringify({
                                     id: leadId,
                                     doctor_review_status: doctorReviewStatus || null,
                                   }),
                                 });
-
-                                const result = await response.json().catch(() => ({}));
-
-                                if (!response.ok || result.ok === false) {
-                                  throw new Error(result.error || 'Failed to update review status');
-                                }
 
                                 toast.success('Review status updated');
                                 
@@ -1886,18 +1721,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                     setDoctorReviewNotes(reloaded.doctor_review_notes || '');
                                   } else {
                                     // ✅ Admin/Employee mode: use admin endpoint
-                                    const leadResponse = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
-                                      method: 'GET',
-                                    });
-                                    
-                                    if (leadResponse.ok) {
-                                      const leadResult = await leadResponse.json().catch(() => ({}));
-                                      if (leadResult.ok && leadResult.lead) {
-                                        setLead(leadResult.lead as Lead);
-                                        // Update local review state
-                                        setDoctorReviewStatus((leadResult.lead as any).doctor_review_status || '');
-                                        setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
-                                      }
+                                    const leadResult = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
+                                    if (leadResult.ok && leadResult.lead) {
+                                      setLead(leadResult.lead as Lead);
+                                      // Update local review state
+                                      setDoctorReviewStatus((leadResult.lead as any).doctor_review_status || '');
+                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
                                     }
                                   }
                                 } catch (refetchErr) {
@@ -1910,13 +1739,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 }
                                 
                                 // Refetch timeline to show new event
-                                if (resolvedLeadId && isUuid(resolvedLeadId)) {
-                                  const timelineResponse = await authedFetch(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadId)}?leadId=${encodeURIComponent(resolvedLeadId)}`, {
-                                    method: 'GET',
-                                  });
-                                  const timelineResult = await timelineResponse.json().catch(() => ({}));
-                                  if (timelineResult.ok && timelineResult.data) {
-                                    setTimelineEvents(timelineResult.data);
+                                if (resolvedLeadUuid && isUuid(resolvedLeadUuid)) {
+                                  try {
+                                    const timelineResult = await apiJsonAuth<{ ok: true; data: any[] }>(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadUuid)}?leadId=${encodeURIComponent(resolvedLeadUuid)}`);
+                                    if (timelineResult.ok && Array.isArray(timelineResult.data)) {
+                                      setTimelineEvents(timelineResult.data);
+                                    }
+                                  } catch (err) {
+                                    console.warn('[AdminPatientProfile] Failed to refetch timeline:', err);
                                   }
                                 }
                               } catch (err) {
@@ -1948,19 +1778,13 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                             if (doctorReviewNotes !== ((lead as any)?.doctor_review_notes || '') && leadId) {
                               setIsUpdatingReview(true);
                               try {
-                                const response = await authedFetch(`/api/leads`, {
+                                const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/leads`, {
                                   method: 'PATCH',
                                   body: JSON.stringify({
                                     id: leadId,
                                     doctor_review_notes: doctorReviewNotes || null,
                                   }),
                                 });
-
-                                const result = await response.json().catch(() => ({}));
-
-                                if (!response.ok || result.ok === false) {
-                                  throw new Error(result.error || 'Failed to update review notes');
-                                }
 
                                 toast.success('Review notes updated');
                                 
@@ -1973,17 +1797,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                   setDoctorReviewNotes(reloaded.doctor_review_notes || '');
                                 } else {
                                     // ✅ Admin/Employee mode: use admin endpoint
-                                    const leadResponse = await authedFetch(`/api/admin/lead/${encodeURIComponent(leadId)}`, {
-                                      method: 'GET',
-                                    });
-                                    
-                                    if (leadResponse.ok) {
-                                      const leadResult = await leadResponse.json().catch(() => ({}));
-                                      if (leadResult.ok && leadResult.lead) {
-                                        setLead(leadResult.lead as Lead);
-                                        // Update local review state
-                                        setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
-                                      }
+                                    const leadResult = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
+                                    if (leadResult.ok && leadResult.lead) {
+                                      setLead(leadResult.lead as Lead);
+                                      // Update local review state
+                                      setDoctorReviewNotes((leadResult.lead as any).doctor_review_notes || '');
                                     }
                                   }
                                 } catch (refetchErr) {

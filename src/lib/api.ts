@@ -6,31 +6,31 @@ import { supabase } from './supabase';
 /**
  * Authenticated fetch - automatically adds Authorization header
  */
-export async function apiFetchAuth(url: string, init: RequestInit = {}): Promise<Response> {
+export async function apiFetchAuth(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  if (!supabase) throw new Error("Supabase client not configured");
+
   const { data } = await supabase.auth.getSession();
   const token = data?.session?.access_token;
+  if (!token) throw new Error("Session expired");
 
   const headers = new Headers(init.headers || {});
-  headers.set('Accept', 'application/json');
-  
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+  headers.set("Authorization", `Bearer ${token}`);
+  if (!headers.has("Content-Type") && init.body) {
+    headers.set("Content-Type", "application/json");
   }
 
-  return fetch(url, { ...init, headers });
+  return fetch(input, { ...init, headers });
 }
 
 /**
  * Authenticated JSON fetch with automatic error handling
  */
 export async function apiJsonAuth<T = any>(url: string, init: RequestInit = {}): Promise<T> {
-  const r = await apiFetchAuth(url, init);
-  const j = await r.json().catch(() => ({}));
-  
-  if (!r.ok || j?.ok === false) {
-    throw new Error(j?.error || `HTTP ${r.status}`);
+  const res = await apiFetchAuth(url, init);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json?.ok === false) {
+    throw new Error(json?.error || `Request failed: ${res.status}`);
   }
-  
-  return j as T;
+  return json as T;
 }
 

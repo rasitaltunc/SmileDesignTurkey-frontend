@@ -286,11 +286,17 @@ export default function DoctorPortal() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         type="button"
+                        className="text-sm text-teal-600 hover:text-teal-700 font-medium"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openLead(lead);
+                          const uuid = lead?.lead_uuid;
+                          if (!uuid) {
+                            toast.error("Lead UUID missing");
+                            console.error("[DoctorPortal] lead_uuid missing", lead);
+                            return;
+                          }
+                          navigate(`/doctor/lead/${encodeURIComponent(uuid)}`);
                         }}
-                        className="text-sm text-teal-600 hover:text-teal-700 font-medium"
                       >
                         Review →
                       </button>
