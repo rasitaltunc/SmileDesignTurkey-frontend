@@ -75,22 +75,22 @@ function isUuid(v) {
   return UUID_RE.test(String(v).trim());
 }
 
-// ✅ Safe resolver: returns lead_uuid (UUID) or null
-async function resolveLeadUuid(supabase, anyId) {
+// ✅ Safe resolver: returns { id: TEXT, lead_uuid: UUID } or null
+async function resolveLeadRow(supabase, anyId) {
   const v = String(anyId || "").trim();
   if (!v) return null;
 
   // v UUID ise lead_uuid kolonu; değilse id (text) kolonu
   const q = isUuid(v)
-    ? supabase.from("leads").select("lead_uuid").eq("lead_uuid", v).maybeSingle()
-    : supabase.from("leads").select("lead_uuid").eq("id", v).maybeSingle();
+    ? supabase.from("leads").select("id, lead_uuid").eq("lead_uuid", v).maybeSingle()
+    : supabase.from("leads").select("id, lead_uuid").eq("id", v).maybeSingle();
 
   const { data, error } = await q;
   if (error) {
     console.warn("[leads-contact-events] Failed to resolve:", v, error?.message);
     return null;
   }
-  return data?.lead_uuid || null; // ✅ Return lead_uuid (UUID column)
+  return data || null; // ✅ Return { id: TEXT, lead_uuid: UUID }
 }
 
 module.exports = async function handler(req, res) {
@@ -132,21 +132,23 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ ok: false, error: "Missing lead_uuid or lead_id", requestId });
       }
 
-      // ✅ Resolve to UUID: use safe resolver
-      const resolvedLeadUuid = await resolveLeadUuid(supabase, lead_uuid || lead_id);
+      // ✅ Resolve to TEXT lead_id: use safe resolver
+      const leadRow = await resolveLeadRow(supabase, lead_uuid || lead_id);
       
-      if (!resolvedLeadUuid) {
+      if (!leadRow) {
         return res.status(400).json({ 
           ok: false,
-          error: "Invalid lead_uuid/lead_id: not found or cannot resolve to UUID", 
+          error: "Invalid lead_uuid/lead_id: not found", 
           requestId 
         });
       }
 
+      const resolvedLeadIdText = leadRow.id; // ✅ Use id (TEXT column) for child tables
+
       const { data: events, error: eventsError } = await supabase
         .from("lead_contact_events")
         .select("*")
-        .eq("lead_id", resolvedLeadUuid) // ✅ resolvedLeadUuid is UUID (lead_uuid column)
+        .eq("lead_id", resolvedLeadIdText) // ✅ resolvedLeadIdText is TEXT (id column)
         .order("created_at", { ascending: false })
         .limit(Math.min(limit, 50)); // Cap at 50
 
@@ -176,16 +178,18 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ ok: false, error: "Missing lead_uuid or lead_id", requestId });
       }
 
-      // ✅ Resolve to UUID: use safe resolver
-      const resolvedLeadUuid = await resolveLeadUuid(supabase, lead_uuid || lead_id);
+      // ✅ Resolve to TEXT lead_id: use safe resolver
+      const leadRow = await resolveLeadRow(supabase, lead_uuid || lead_id);
       
-      if (!resolvedLeadUuid) {
+      if (!leadRow) {
         return res.status(400).json({ 
           ok: false,
-          error: "Invalid lead_uuid/lead_id: not found or cannot resolve to UUID", 
+          error: "Invalid lead_uuid/lead_id: not found", 
           requestId 
         });
       }
+
+      const resolvedLeadIdText = leadRow.id; // ✅ Use id (TEXT column) for child tables
 
       // Validate channel
       const validChannels = ["phone", "whatsapp", "email", "sms", "other"];
@@ -198,7 +202,7 @@ module.exports = async function handler(req, res) {
         .from("lead_contact_events")
         .insert([
           {
-            lead_id: resolvedLeadUuid, // ✅ resolvedLeadUuid is UUID (lead_uuid column)
+            lead_id: resolvedLeadIdText, // ✅ resolvedLeadIdText is TEXT (id column)
             channel: channel,
             note: note || null,
             created_by: authResult.userId || null,
@@ -223,43 +227,24 @@ module.exports = async function handler(req, res) {
       
       if (updateStatus) {
         // Get current lead status
-        // First resolve to id (TEXT) for query/update
-        const { data: leadForUpdate } = await supabase
+        const { data: currentLead } = await supabase
           .from("leads")
-          .select("id, status")
-          .eq("lead_uuid", resolvedLeadUuid)
+          .select("status")
+          .eq("id", resolvedLeadIdText)
           .maybeSingle();
         
-        if (leadForUpdate) {
-          const { data: currentLead } = await supabase
-            .from("leads")
-            .select("status")
-            .eq("id", leadForUpdate.id)
-            .maybeSingle();
-          
-          // Only update to "contacted" if status is "new" or null
-          const currentStatus = (currentLead?.status || "").toLowerCase();
-          if (currentStatus === "new" || !currentStatus) {
-            updateData.status = "contacted";
-          }
+        // Only update to "contacted" if status is "new" or null
+        const currentStatus = (currentLead?.status || "").toLowerCase();
+        if (currentStatus === "new" || !currentStatus) {
+          updateData.status = "contacted";
         }
       }
 
-      // Resolve to id (TEXT) for update query
-      const { data: leadForUpdate } = await supabase
-        .from("leads")
-        .select("id")
-        .eq("lead_uuid", resolvedLeadUuid)
-        .maybeSingle();
-
-      if (!leadForUpdate?.id) {
-        return res.status(404).json({ ok: false, error: "Lead not found for update", requestId });
-      }
-
+      // Update lead using resolved TEXT id
       const { data: updatedLead, error: updateError } = await supabase
         .from("leads")
         .update(updateData)
-        .eq("id", leadForUpdate.id) // Use id (TEXT) for update
+        .eq("id", resolvedLeadIdText) // ✅ Use id (TEXT) for update
         .select("id, last_contacted_at, status")
         .single();
 

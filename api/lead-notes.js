@@ -51,19 +51,19 @@ module.exports = async function handler(req, res) {
     return typeof v === "string" && UUID_RE.test(v.trim());
   }
 
-  // ✅ Safe resolver: returns { lead_uuid, assigned_to } or null
-  async function resolveLeadUuid(supabase, anyId) {
+  // ✅ Safe resolver: returns { id: TEXT, lead_uuid: UUID, assigned_to } or null
+  async function resolveLeadRow(supabase, anyId) {
     const v = String(anyId || "").trim();
     if (!v) return null;
 
     // v UUID ise lead_uuid kolonu; değilse id (text) kolonu
     const q = isUuid(v)
-      ? supabase.from("leads").select("lead_uuid, assigned_to").eq("lead_uuid", v).maybeSingle()
-      : supabase.from("leads").select("lead_uuid, assigned_to").eq("id", v).maybeSingle();
+      ? supabase.from("leads").select("id, lead_uuid, assigned_to").eq("lead_uuid", v).maybeSingle()
+      : supabase.from("leads").select("id, lead_uuid, assigned_to").eq("id", v).maybeSingle();
 
     const { data, error } = await q;
     if (error) throw error;
-    return data || null; // { lead_uuid, assigned_to }
+    return data || null; // { id: TEXT, lead_uuid: UUID, assigned_to }
   }
 
   // GET /api/lead-notes?lead_uuid=... OR ?lead_id=... (backward compatibility)
@@ -76,20 +76,20 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Missing lead_uuid or lead_id" });
     }
 
-    // ✅ Resolve to UUID: use safe resolver
-    let resolvedLeadUuid = null;
+    // ✅ Resolve to TEXT lead_id: use safe resolver
+    let resolvedLeadIdText = null;
     try {
-      const leadData = await resolveLeadUuid(supabase, lead_uuid || lead_id);
-      if (!leadData) {
+      const leadRow = await resolveLeadRow(supabase, lead_uuid || lead_id);
+      if (!leadRow) {
         return res.status(404).json({ ok: false, error: "Lead not found" });
       }
       
       // employee can only access notes for leads assigned to them
-      if (isEmployee && leadData.assigned_to !== user.id) {
+      if (isEmployee && leadRow.assigned_to !== user.id) {
         return res.status(403).json({ ok: false, error: "Forbidden: not assigned" });
       }
       
-      resolvedLeadUuid = leadData.lead_uuid; // ✅ Use lead_uuid (UUID column)
+      resolvedLeadIdText = leadRow.id; // ✅ Use id (TEXT column) for child tables
     } catch (err) {
       return res.status(500).json({ ok: false, error: "Failed to resolve lead", details: err.message });
     }
@@ -97,7 +97,7 @@ module.exports = async function handler(req, res) {
     const { data, error } = await supabase
       .from("lead_notes")
       .select("*")
-      .eq("lead_id", resolvedLeadUuid) // ✅ resolvedLeadUuid is UUID (lead_uuid column)
+      .eq("lead_id", resolvedLeadIdText) // ✅ resolvedLeadIdText is TEXT (id column)
       .order("created_at", { ascending: false });
 
     if (error) return res.status(500).json({ ok: false, error: error.message });
@@ -116,20 +116,20 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Missing lead_uuid/lead_id or note" });
     }
 
-    // ✅ Resolve to UUID: use safe resolver
-    let resolvedLeadUuid = null;
+    // ✅ Resolve to TEXT lead_id: use safe resolver
+    let resolvedLeadIdText = null;
     try {
-      const leadData = await resolveLeadUuid(supabase, lead_uuid || lead_id);
-      if (!leadData) {
+      const leadRow = await resolveLeadRow(supabase, lead_uuid || lead_id);
+      if (!leadRow) {
         return res.status(404).json({ ok: false, error: "Lead not found" });
       }
       
       // employee can only access notes for leads assigned to them
-      if (isEmployee && leadData.assigned_to !== user.id) {
+      if (isEmployee && leadRow.assigned_to !== user.id) {
         return res.status(403).json({ ok: false, error: "Forbidden: not assigned" });
       }
       
-      resolvedLeadUuid = leadData.lead_uuid; // ✅ Use lead_uuid (UUID column)
+      resolvedLeadIdText = leadRow.id; // ✅ Use id (TEXT column) for child tables
     } catch (err) {
       return res.status(500).json({ ok: false, error: "Failed to resolve lead", details: err.message });
     }
@@ -137,7 +137,7 @@ module.exports = async function handler(req, res) {
     // Insert with both note and content for compatibility
     const { data, error } = await supabase
       .from("lead_notes")
-      .insert([{ lead_id: resolvedLeadUuid, note: noteText, content: noteText }]) // ✅ resolvedLeadUuid is UUID
+      .insert([{ lead_id: resolvedLeadIdText, note: noteText, content: noteText }]) // ✅ resolvedLeadIdText is TEXT (id column)
       .select("*")
       .limit(1);
 
