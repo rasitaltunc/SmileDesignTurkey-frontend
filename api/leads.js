@@ -111,9 +111,10 @@ module.exports = async function handler(req, res) {
       const lead_uuid = req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null;
 
       // ✅ Safe status filter: normalize and validate, never error
-      const statusRaw = String(req.query?.status ?? "all").toLowerCase();
+      const status = req.query?.status ? String(req.query.status) : null;
       let statusFilter = null;
-      if (statusRaw && statusRaw !== "all") {
+      if (status && status !== "all") {
+        const statusRaw = status.toLowerCase();
         const mapped = STATUS_MAP[statusRaw] || statusRaw;
         if (VALID_STATUSES.has(mapped)) statusFilter = mapped;
         // If invalid, treat as "all" (no filter) - never error

@@ -215,7 +215,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // ✅ Doctor-friendly lead fetch function
   // Route param is always UUID (lead_uuid), so we always use lead_uuid query param
   const fetchLeadForDoctor = async (leadUuid: string): Promise<Lead> => {
-    const fetchUrl = `/api/leads?status=all&lead_uuid=${encodeURIComponent(leadUuid)}&limit=1`;
+    const fetchUrl = `/api/leads?lead_uuid=${encodeURIComponent(leadUuid)}&limit=1`;
     
     if (import.meta.env.DEV) {
       console.log("[AdminPatientProfile] DoctorMode fetch:", { leadUuid, fetchUrl });
