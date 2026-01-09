@@ -704,8 +704,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // B2: Generate AI Brief
   const handleGenerateBrief = async () => {
     // ✅ Use lead.id (TEXT) instead of leadId prop
-    const activeLeadId = lead?.id;
-    if (!activeLeadId) return;
+    const activeLeadId = lead?.id ?? null;
+    if (!activeLeadId) {
+      toast.error("Lead ID missing (API /api/leads must return id)");
+      return;
+    }
 
     setIsLoadingBrief(true);
     setError(null);
@@ -755,8 +758,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // B3: Normalize Notes
   const handleNormalizeNotes = async () => {
     // ✅ Use lead.id (TEXT) instead of leadId prop
-    const activeLeadId = lead?.id;
-    if (!activeLeadId || !isAuthenticated) return;
+    const activeLeadId = lead?.id ?? null;
+    if (!activeLeadId) {
+      toast.error("Lead ID missing (API /api/leads must return id)");
+      return;
+    }
+    if (!isAuthenticated) return;
     
     // ✅ Doctor mode: Normalize is admin/employee only (disable for doctor)
     if (isDoctorMode) {
@@ -973,9 +980,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                     const btnBase =
                       "inline-flex items-center justify-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
 
-                    // ✅ Use lead.id (TEXT) for button state
-                    const activeLeadId = lead?.id;
-                    const canUseAi = Boolean(activeLeadId);
+                    // ✅ Use lead.id (TEXT) for button state, fallback to lead_uuid if id missing
+                    const activeLeadId = lead?.id ?? null;
+                    const activeLeadUuid = lead?.lead_uuid ?? null;
+                    // Button enable: id varsa kesin, id yoksa en azından uuid var mı gör
+                    const canUseAi = Boolean(activeLeadId || activeLeadUuid);
                     const normalizeDisabled = isLoadingNormalize || isLoadingBrief || !canUseAi;
                     const snapshotDisabled = isLoadingBrief || isLoadingNormalize || !canUseAi;
 
@@ -1933,9 +1942,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                     const syncBtnBase =
                       "mt-2 inline-flex items-center justify-center gap-2 h-8 px-3 rounded-lg text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed";
 
-                    // ✅ Use lead.id (TEXT) for sync button state
-                    const activeLeadId = lead?.id;
-                    const canUseAi = Boolean(activeLeadId);
+                    // ✅ Use lead.id (TEXT) for sync button state, fallback to lead_uuid if id missing
+                    const activeLeadId = lead?.id ?? null;
+                    const activeLeadUuid = lead?.lead_uuid ?? null;
+                    // Button enable: id varsa kesin, id yoksa en azından uuid var mı gör
+                    const canUseAi = Boolean(activeLeadId || activeLeadUuid);
                     const syncDisabled = isSyncingMemory || isLoadingNormalize || !canUseAi || !briefData;
 
                     const syncBtnClass = [

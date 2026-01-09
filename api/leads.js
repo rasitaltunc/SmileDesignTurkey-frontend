@@ -122,7 +122,7 @@ module.exports = async function handler(req, res) {
 
       const limit = Math.min(parseInt(req.query?.limit || "200", 10) || 200, 500);
 
-      // ✅ Query builder
+      // ✅ Query builder - select all columns including id (TEXT) for doctor mode
       let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
       // Role-based filters (apply before ID filters)
