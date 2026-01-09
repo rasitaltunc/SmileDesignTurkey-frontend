@@ -212,20 +212,27 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // ✅ Resolved lead ID (TEXT) for child table queries
   const resolvedLeadIdText = lead?.id ?? null;
 
-  // ✅ Doctor-friendly lead fetch function
-  // Route param is always UUID (lead_uuid), so we always use lead_uuid query param
-  const fetchLeadForDoctor = async (leadUuid: string): Promise<Lead> => {
-    const fetchUrl = `/api/leads?lead_uuid=${encodeURIComponent(leadUuid)}&limit=1`;
+  // ✅ Doctor-friendly lead fetch function - auto-detect UUID vs TEXT id
+  const isUuid = (v: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+
+  const fetchLeadForDoctor = async (leadRef: string): Promise<Lead> => {
+    // ✅ Auto-detect: UUID ise lead_uuid param, TEXT ise id param
+    const qs = isUuid(leadRef)
+      ? `lead_uuid=${encodeURIComponent(leadRef)}`
+      : `id=${encodeURIComponent(leadRef)}`; // ✅ TEXT id desteği
+
+    const fetchUrl = `/api/leads?${qs}&limit=1`;
     
     if (import.meta.env.DEV) {
-      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadUuid, fetchUrl });
+      console.log("[AdminPatientProfile] DoctorMode fetch:", { leadRef, isUuid: isUuid(leadRef), fetchUrl });
     }
 
     // ✅ Use apiJsonAuth for automatic token handling and error handling
-    const j = await apiJsonAuth<{ ok: true; lead: Lead | null; leads: Lead[] }>(fetchUrl);
+    const j = await apiJsonAuth<{ ok: true; lead?: Lead | null; leads?: Lead[] }>(fetchUrl);
 
     // ✅ Backend returns { ok: true, lead, leads }
-    const loadedLead = j.lead || (Array.isArray(j.leads) ? j.leads[0] : null);
+    const loadedLead = (j as any).lead || ((j as any).leads?.[0] ?? null);
     if (!loadedLead) {
       throw new Error('Lead not found');
     }

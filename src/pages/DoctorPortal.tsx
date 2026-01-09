@@ -289,13 +289,14 @@ export default function DoctorPortal() {
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const uuid = lead?.lead_uuid;
-                          if (!uuid) {
-                            toast.error("Lead UUID missing");
-                            console.error("[DoctorPortal] lead_uuid missing", lead);
+                          // ✅ Önce UUID, yoksa fallback id (TEXT)
+                          const ref = lead?.lead_uuid || lead?.id;
+                          if (!ref) {
+                            toast.error("Lead reference missing");
+                            console.error("[DoctorPortal] lead reference missing", lead);
                             return;
                           }
-                          navigate(`/doctor/lead/${encodeURIComponent(uuid)}`);
+                          navigate(`/doctor/lead/${encodeURIComponent(ref)}`);
                         }}
                       >
                         Review →
