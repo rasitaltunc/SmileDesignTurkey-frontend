@@ -80,33 +80,30 @@ module.exports = async function handler(req, res) {
       return UUID_RE.test(String(v).trim());
     }
 
-    // ✅ Resolve lead_uuid to UUID if needed
-    let leadId = String(leadIdRaw).trim();
-    if (!isUuid(leadId)) {
-      // Try to resolve from leads table
-      try {
-        const { data, error } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("lead_uuid", leadId)
-          .maybeSingle();
-        
-        if (error || !data) {
-          return res.status(400).json({
-            ok: false,
-            error: "Invalid leadId: not found or cannot resolve to UUID",
-            requestId,
-          });
-        }
-        
-        leadId = data.id;
-      } catch (err) {
-        return res.status(400).json({
-          ok: false,
-          error: "Failed to resolve leadId to UUID",
-          requestId,
-        });
-      }
+    // ✅ Safe resolver: returns lead_uuid (UUID) or null
+    async function resolveLeadUuid(supabase, anyId) {
+      const v = String(anyId || "").trim();
+      if (!v) return null;
+
+      // v UUID ise lead_uuid kolonu; değilse id (text) kolonu
+      const q = isUuid(v)
+        ? supabase.from("leads").select("lead_uuid").eq("lead_uuid", v).maybeSingle()
+        : supabase.from("leads").select("lead_uuid").eq("id", v).maybeSingle();
+
+      const { data, error } = await q;
+      if (error) return null;
+      return data?.lead_uuid || null; // ✅ Return lead_uuid (UUID column)
+    }
+
+    // ✅ Resolve to UUID: use safe resolver
+    const resolvedLeadUuid = await resolveLeadUuid(supabase, leadIdRaw);
+    
+    if (!resolvedLeadUuid) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid leadId: not found or cannot resolve to UUID",
+        requestId,
+      });
     }
 
     // GET: Fetch timeline events for lead
@@ -115,7 +112,7 @@ module.exports = async function handler(req, res) {
         const { data, error } = await supabase
           .from("lead_timeline_events")
           .select("*")
-          .eq("lead_id", leadId)
+          .eq("lead_id", resolvedLeadUuid) // ✅ resolvedLeadUuid is UUID (lead_uuid column)
           .order("created_at", { ascending: false });
 
         if (error) {
@@ -167,7 +164,7 @@ module.exports = async function handler(req, res) {
 
         // Build insert payload
         const insertData = {
-          lead_id: leadId,
+          lead_id: resolvedLeadUuid, // ✅ resolvedLeadUuid is UUID (lead_uuid column)
           stage: String(stage),
           actor_role: "consultant",
           created_at: new Date().toISOString(),
@@ -220,31 +217,40 @@ module.exports = async function handler(req, res) {
         
         if (validStages.includes(stage)) {
           // After inserting timeline event successfully, update lead status
-          console.log("[lead-timeline] Updating lead status", { requestId, leadId, stage });
-          const { data: updatedLeadData, error: leadUpdateErr } = await supabase
+          // First resolve to id (TEXT) for update query
+          const { data: leadForUpdate } = await supabase
             .from("leads")
-            .update({
-              status: stage, // e.g. "deposit_paid"
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", leadId)
-            .select("id,status,updated_at")
-            .single();
+            .select("id")
+            .eq("lead_uuid", resolvedLeadUuid)
+            .maybeSingle();
+          
+          if (leadForUpdate?.id) {
+            console.log("[lead-timeline] Updating lead status", { requestId, leadId: leadForUpdate.id, stage });
+            const { data: updatedLeadData, error: leadUpdateErr } = await supabase
+              .from("leads")
+              .update({
+                status: stage, // e.g. "deposit_paid"
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", leadForUpdate.id) // Use id (TEXT) for update
+              .select("id,status,updated_at")
+              .single();
 
-          if (leadUpdateErr) {
-            leadUpdateError = leadUpdateErr;
-            console.error("LEAD_STATUS_UPDATE_ERROR", { requestId, leadId, stage, leadUpdateError });
-          } else {
-            updatedLead = updatedLeadData;
-            console.log("[lead-timeline] ✅ Auto-updated lead status", requestId, {
-              leadId,
-              stage,
-              updatedStatus: updatedLead?.status,
-              updatedAt: updatedLead?.updated_at,
-            });
+            if (leadUpdateErr) {
+              leadUpdateError = leadUpdateErr;
+              console.error("LEAD_STATUS_UPDATE_ERROR", { requestId, leadId: leadForUpdate.id, stage, leadUpdateError });
+            } else {
+              updatedLead = updatedLeadData;
+              console.log("[lead-timeline] ✅ Auto-updated lead status", requestId, {
+                leadId: leadForUpdate.id,
+                stage,
+                updatedStatus: updatedLead?.status,
+                updatedAt: updatedLead?.updated_at,
+              });
+            }
           }
         } else {
-          console.warn("[lead-timeline] Stage not in validStages, skipping lead update", { requestId, leadId, stage, validStages });
+          console.warn("[lead-timeline] Stage not in validStages, skipping lead update", { requestId, resolvedLeadUuid, stage, validStages });
         }
 
         return res.status(200).json({

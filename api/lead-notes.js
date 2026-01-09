@@ -44,6 +44,28 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({ error: "Forbidden: notes are admin/employee only" });
   }
 
+  // ✅ UUID validation helper
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  function isUuid(v) {
+    return typeof v === "string" && UUID_RE.test(v.trim());
+  }
+
+  // ✅ Safe resolver: returns { lead_uuid, assigned_to } or null
+  async function resolveLeadUuid(supabase, anyId) {
+    const v = String(anyId || "").trim();
+    if (!v) return null;
+
+    // v UUID ise lead_uuid kolonu; değilse id (text) kolonu
+    const q = isUuid(v)
+      ? supabase.from("leads").select("lead_uuid, assigned_to").eq("lead_uuid", v).maybeSingle()
+      : supabase.from("leads").select("lead_uuid, assigned_to").eq("id", v).maybeSingle();
+
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || null; // { lead_uuid, assigned_to }
+  }
+
   // GET /api/lead-notes?lead_uuid=... OR ?lead_id=... (backward compatibility)
   if (req.method === "GET") {
     // ✅ Accept both lead_uuid (UUID) and lead_id (for backward compatibility)
@@ -54,56 +76,28 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Missing lead_uuid or lead_id" });
     }
 
-    // ✅ Resolve to UUID: if lead_uuid provided, use it; else query leads table
-    let resolvedUuid = lead_uuid;
-    if (!resolvedUuid && lead_id) {
-      const { data: leadData } = await supabase
-        .from("leads")
-        .select("id, lead_uuid, assigned_to")
-        .or(`id.eq.${lead_id},lead_uuid.eq.${lead_id}`)
-        .maybeSingle();
-      
+    // ✅ Resolve to UUID: use safe resolver
+    let resolvedLeadUuid = null;
+    try {
+      const leadData = await resolveLeadUuid(supabase, lead_uuid || lead_id);
       if (!leadData) {
         return res.status(404).json({ ok: false, error: "Lead not found" });
       }
-      resolvedUuid = leadData.id; // Use UUID (id column) for lead_notes table
       
       // employee can only access notes for leads assigned to them
       if (isEmployee && leadData.assigned_to !== user.id) {
         return res.status(403).json({ ok: false, error: "Forbidden: not assigned" });
       }
-    } else if (resolvedUuid) {
-      // If lead_uuid provided, verify employee access
-      if (isEmployee) {
-        const { data: leadData } = await supabase
-          .from("leads")
-          .select("id, assigned_to")
-          .eq("lead_uuid", resolvedUuid)
-          .maybeSingle();
-        
-        if (!leadData || leadData.assigned_to !== user.id) {
-          return res.status(403).json({ ok: false, error: "Forbidden: not assigned" });
-        }
-        resolvedUuid = leadData.id; // Use UUID (id column) for lead_notes table
-      } else {
-        // For admin, resolve lead_uuid to UUID (id column)
-        const { data: leadData } = await supabase
-          .from("leads")
-          .select("id")
-          .eq("lead_uuid", resolvedUuid)
-          .maybeSingle();
-        
-        if (!leadData) {
-          return res.status(404).json({ ok: false, error: "Lead not found" });
-        }
-        resolvedUuid = leadData.id;
-      }
+      
+      resolvedLeadUuid = leadData.lead_uuid; // ✅ Use lead_uuid (UUID column)
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: "Failed to resolve lead", details: err.message });
     }
 
     const { data, error } = await supabase
       .from("lead_notes")
       .select("*")
-      .eq("lead_id", resolvedUuid)
+      .eq("lead_id", resolvedLeadUuid) // ✅ resolvedLeadUuid is UUID (lead_uuid column)
       .order("created_at", { ascending: false });
 
     if (error) return res.status(500).json({ ok: false, error: error.message });
@@ -122,46 +116,28 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Missing lead_uuid/lead_id or note" });
     }
 
-    // ✅ Resolve to UUID: if lead_uuid provided, use it; else query leads table
-    let resolvedUuid = lead_uuid;
-    if (!resolvedUuid && lead_id) {
-      const { data: leadData } = await supabase
-        .from("leads")
-        .select("id, assigned_to")
-        .or(`id.eq.${lead_id},lead_uuid.eq.${lead_id}`)
-        .maybeSingle();
-      
+    // ✅ Resolve to UUID: use safe resolver
+    let resolvedLeadUuid = null;
+    try {
+      const leadData = await resolveLeadUuid(supabase, lead_uuid || lead_id);
       if (!leadData) {
         return res.status(404).json({ ok: false, error: "Lead not found" });
       }
-      resolvedUuid = leadData.id; // Use UUID (id column) for lead_notes table
       
       // employee can only access notes for leads assigned to them
       if (isEmployee && leadData.assigned_to !== user.id) {
         return res.status(403).json({ ok: false, error: "Forbidden: not assigned" });
       }
-    } else if (resolvedUuid) {
-      // If lead_uuid provided, verify employee access and resolve to UUID
-      const { data: leadData } = await supabase
-        .from("leads")
-        .select("id, assigned_to")
-        .eq("lead_uuid", resolvedUuid)
-        .maybeSingle();
       
-      if (!leadData) {
-        return res.status(404).json({ ok: false, error: "Lead not found" });
-      }
-      
-      if (isEmployee && leadData.assigned_to !== user.id) {
-        return res.status(403).json({ ok: false, error: "Forbidden: not assigned" });
-      }
-      resolvedUuid = leadData.id; // Use UUID (id column) for lead_notes table
+      resolvedLeadUuid = leadData.lead_uuid; // ✅ Use lead_uuid (UUID column)
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: "Failed to resolve lead", details: err.message });
     }
 
     // Insert with both note and content for compatibility
     const { data, error } = await supabase
       .from("lead_notes")
-      .insert([{ lead_id: resolvedUuid, note: noteText, content: noteText }])
+      .insert([{ lead_id: resolvedLeadUuid, note: noteText, content: noteText }]) // ✅ resolvedLeadUuid is UUID
       .select("*")
       .limit(1);
 
