@@ -243,43 +243,38 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // Fetch lead data via API endpoint
   useEffect(() => {
-    if (!leadId || !isAuthenticated) return;
+    // ✅ Auth yoksa hiç deneme
+    if (!isAuthenticated) return;
+
+    // ✅ Doctor mode: leadUuid gerekli
+    if (isDoctorMode) {
+      if (!leadUuid) return;
+    } else {
+      // ✅ Admin/Employee mode: leadId gerekli
+      if (!leadId) return;
+    }
 
     const fetchLead = async () => {
       setIsLoadingLead(true);
       setError(null);
 
       try {
-        const supabase = getSupabaseClient();
-        if (!supabase) {
-          throw new Error('Supabase client not configured');
-        }
-
-        // Get JWT token from Supabase session
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        if (!token) {
-          throw new Error('Session expired');
-        }
-
         let loadedLead: Lead;
 
-        // ✅ Doctor mode: use doctor-friendly endpoint (leadUuid is always UUID)
+        // ✅ Doctor mode: UUID ile leads endpoint
         if (isDoctorMode && leadUuid) {
           loadedLead = await fetchLeadForDoctor(leadUuid);
         } else {
-          // ✅ Admin/Employee mode: use admin endpoint
-          const result = await apiJsonAuth<{ ok: true; lead: Lead }>(`/api/admin/lead/${encodeURIComponent(leadId)}`);
-          if (!result.ok || !result.lead) {
-            throw new Error('Lead not found');
-          }
-
+          // ✅ Admin/Employee mode
+          const result = await apiJsonAuth<{ ok: true; lead: Lead }>(
+            `/api/admin/lead/${encodeURIComponent(leadId!)}`
+          );
+          if (!result.ok || !result.lead) throw new Error("Lead not found");
           loadedLead = result.lead as Lead;
         }
 
         setLead(loadedLead);
         
-        // ✅ IMPORTANT: Set resolved UUID for child endpoints (contact events, timeline, etc.)
         // ✅ Lead loaded - resolvedLeadIdText will be set via lead.id
         
         // Initialize Next Action & Follow-up from loaded lead
@@ -293,16 +288,18 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         setDoctorReviewStatus((loadedLead as any).doctor_review_status || '');
         setDoctorReviewNotes((loadedLead as any).doctor_review_notes || '');
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to load lead";
         setError(errorMessage);
         toast.error(errorMessage);
+        console.error("[AdminPatientProfile] fetchLead error:", err);
       } finally {
         setIsLoadingLead(false);
       }
     };
 
     fetchLead();
-  }, [leadId, isAuthenticated, isDoctorMode]);
+  }, [leadId, leadUuid, isAuthenticated, isDoctorMode]);
 
   // Fetch notes
   useEffect(() => {
