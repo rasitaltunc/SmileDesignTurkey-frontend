@@ -62,12 +62,21 @@ module.exports = async function handler(req, res) {
     const jwt = getBearerToken(req);
     if (!jwt) return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId });
 
-    // Parse request body
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const { leadId } = body;
+    // ✅ Accept both leadId and lead_id from body or query
+    const body = (req.body && typeof req.body === "object") ? req.body : {};
+
+    const leadId =
+      (body.lead_id ? String(body.lead_id) : null) ||
+      (body.leadId ? String(body.leadId) : null) ||
+      (req.query?.lead_id ? String(req.query.lead_id) : null) ||
+      (req.query?.leadId ? String(req.query.leadId) : null);
 
     if (!leadId) {
-      return res.status(400).json({ ok: false, error: "Missing leadId", requestId });
+      return res.status(400).json({
+        ok: false,
+        error: "Missing leadId (send lead_id or leadId)",
+        requestId,
+      });
     }
 
     // Dynamic import Supabase (keep GET zero-dependency)
