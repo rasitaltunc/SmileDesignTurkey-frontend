@@ -106,9 +106,13 @@ module.exports = async function handler(req, res) {
 
     // GET /api/leads
     if (req.method === "GET") {
-      // ✅ Explicit support for both id (UUID) and lead_uuid (public string)
-      const id = req.query?.id ? String(req.query.id).trim() : null;
-      const lead_uuid = req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null;
+      // ✅ Parse query params
+      const idParam = req.query?.id ? String(req.query.id).trim() : null;
+      const leadUuidParam = req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null;
+
+      // ✅ DOĞRU MAPPING: UUID → lead_uuid kolonu, text → id kolonu
+      const lead_uuid = leadUuidParam || (idParam && isUuid(idParam) ? idParam : null);
+      const id = !leadUuidParam && idParam && !isUuid(idParam) ? idParam : null;
 
       // ✅ Safe status filter: normalize and validate, never error
       const statusRaw = String(req.query?.status ?? "all").toLowerCase();
@@ -121,45 +125,32 @@ module.exports = async function handler(req, res) {
 
       const limit = Math.min(parseInt(req.query?.limit || "200", 10) || 200, 500);
 
+      // ✅ Query builder
       let q = dbClient.from("leads").select("*").order("created_at", { ascending: false }).limit(limit);
 
-      // ✅ Canonical internal key = lead_uuid (UUID)
-      // Rules:
-      // - if lead_uuid param provided -> filter by lead_uuid column (UUID)
-      // - else if id param provided:
-      //   - if id is UUID -> filter by lead_uuid column (internal key)
-      //   - else (lead_... or other string) -> filter by id column (public string)
+      // Role-based filters (apply before ID filters)
+      if (isEmployee) q = q.eq("assigned_to", user.id);
+      if (isDoctor) q = q.eq("doctor_id", user.id);
+
+      // ✅ ID filters: UUID → lead_uuid kolonu, text → id kolonu
       if (lead_uuid) {
-        // ✅ UUID param ile arama (lead_uuid kolonu)
         q = q.eq("lead_uuid", lead_uuid).limit(1);
       } else if (id) {
-        if (isUuid(id)) {
-          // ✅ UUID geldiyse lead_uuid kolonuna filtrele (internal key = lead_uuid)
-          q = q.eq("lead_uuid", id).limit(1);
-        } else {
-          // ✅ Public string (lead_...) geldiyse id kolonuna filtrele
-          q = q.eq("id", id).limit(1);
-        }
+        q = q.eq("id", id).limit(1);
       }
 
       if (statusFilter) q = q.eq("status", statusFilter);
-
-      // employee sees only assigned leads
-      if (isEmployee) q = q.eq("assigned_to", user.id);
-      
-      // doctor sees only leads assigned to them
-      if (isDoctor) q = q.eq("doctor_id", user.id);
 
       const { data, error } = await q;
       if (error) return res.status(500).json({ ok: false, error: error.message, requestId });
 
       // ✅ If id or lead_uuid parameter provided, return consistent single lead format
       if (id || lead_uuid) {
-        const leadRow = data?.[0] || null;
+        const lead = Array.isArray(data) ? data[0] : null;
         return res.status(200).json({ 
           ok: true, 
-          lead: leadRow, 
-          leads: leadRow ? [leadRow] : [], 
+          lead: lead || null, 
+          leads: lead ? [lead] : [], 
           requestId 
         });
       }
