@@ -1,0 +1,268 @@
+// api/doctor/note/index.js
+// GET /api/doctor/note?lead_id=...
+// Returns latest doctor_note + items + signature info + pdf link if exists
+// Auth: Bearer JWT (doctor role required)
+
+const { createClient } = require("@supabase/supabase-js");
+
+const buildSha =
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.VERCEL_GIT_COMMIT_REF ||
+  process.env.GITHUB_SHA ||
+  null;
+
+function getBearerToken(req) {
+  const h = req.headers.authorization || req.headers.Authorization || "";
+  if (!h) return null;
+  const [type, token] = String(h).split(" ");
+  if (!type || type.toLowerCase() !== "bearer") return null;
+  return token || null;
+}
+
+module.exports = async function handler(req, res) {
+  const requestId = `doctor_note_get_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  try {
+    if (req.method === "OPTIONS") {
+      return res.status(200).json({ ok: true });
+    }
+
+    if (req.method !== "GET") {
+      return res.status(405).json({
+        ok: false,
+        error: "Method not allowed",
+        step: "method_check",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Parse URL
+    let url;
+    try {
+      url = new URL(req.url, "http://localhost");
+    } catch (urlErr) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid URL",
+        step: "url_parse",
+        requestId,
+        buildSha,
+      });
+    }
+
+    const leadId = url.searchParams.get("lead_id") || null;
+
+    if (!leadId) {
+      return res.status(400).json({
+        ok: false,
+        error: "Missing lead_id parameter",
+        step: "param_check",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Env check
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+    if (!SUPABASE_URL || !SERVICE_KEY) {
+      return res.status(500).json({
+        ok: false,
+        error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+        step: "env_check",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Auth
+    const token = getBearerToken(req);
+    if (!token) {
+      return res.status(401).json({
+        ok: false,
+        error: "Missing Authorization Bearer token",
+        step: "auth_check",
+        requestId,
+        buildSha,
+      });
+    }
+
+    const authClient = createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY || SERVICE_KEY,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
+
+    let user;
+    try {
+      const { data: userData, error: userErr } = await authClient.auth.getUser(token);
+      if (userErr || !userData?.user) {
+        return res.status(401).json({
+          ok: false,
+          error: "Invalid session",
+          step: "jwt_verify",
+          requestId,
+          buildSha,
+        });
+      }
+      user = userData.user;
+    } catch (authErr) {
+      return res.status(401).json({
+        ok: false,
+        error: "Auth verification failed",
+        step: "jwt_verify",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Verify doctor role
+    const dbClient = createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    let profile;
+    try {
+      const { data: profData, error: profErr } = await dbClient
+        .from("profiles")
+        .select("id, role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profErr || !profData || profData.role !== "doctor") {
+        return res.status(403).json({
+          ok: false,
+          error: "Forbidden: doctor access only",
+          step: "role_check",
+          requestId,
+          buildSha,
+        });
+      }
+      profile = profData;
+    } catch (roleErr) {
+      return res.status(500).json({
+        ok: false,
+        error: "Role check failed",
+        step: "role_check",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Verify lead assignment
+    const { data: lead, error: leadErr } = await dbClient
+      .from("leads")
+      .select("id, doctor_id")
+      .eq("id", leadId)
+      .maybeSingle();
+
+    if (leadErr || !lead) {
+      return res.status(404).json({
+        ok: false,
+        error: "Lead not found",
+        step: "fetch_lead",
+        requestId,
+        buildSha,
+      });
+    }
+
+    if (lead.doctor_id !== user.id) {
+      return res.status(403).json({
+        ok: false,
+        error: "Lead not assigned to you",
+        step: "lead_assignment_check",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Fetch latest doctor_note
+    const { data: note, error: noteErr } = await dbClient
+      .from("doctor_notes")
+      .select("*")
+      .eq("lead_id", leadId)
+      .eq("doctor_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (noteErr) {
+      console.error("[doctor/note] Note query error:", noteErr, { requestId });
+      return res.status(500).json({
+        ok: false,
+        error: noteErr.message || "Note query failed",
+        step: "fetch_note",
+        requestId,
+        buildSha,
+      });
+    }
+
+    if (!note) {
+      return res.status(200).json({
+        ok: true,
+        note: null,
+        items: [],
+        signature: null,
+        pdfUrl: null,
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Fetch note items
+    const { data: items, error: itemsErr } = await dbClient
+      .from("doctor_note_items")
+      .select("*")
+      .eq("doctor_note_id", note.id)
+      .order("created_at", { ascending: true });
+
+    // ✅ Fetch signature info
+    let signature = null;
+    if (note.approved_at) {
+      const { data: sigData } = await dbClient
+        .from("doctor_signatures")
+        .select("signature_image_url, signed_at")
+        .eq("doctor_id", user.id)
+        .maybeSingle();
+      signature = sigData;
+    }
+
+    // ✅ Build PDF URL if exists
+    let pdfUrl = null;
+    if (note.pdf_storage_path) {
+      // Generate signed URL from Supabase Storage
+      const { data: urlData } = await dbClient.storage
+        .from("doctor-notes")
+        .createSignedUrl(note.pdf_storage_path, 3600); // 1 hour expiry
+      pdfUrl = urlData?.signedUrl || null;
+    }
+
+    return res.status(200).json({
+      ok: true,
+      note: note,
+      items: items || [],
+      signature: signature,
+      pdfUrl: pdfUrl,
+      requestId,
+      buildSha,
+    });
+  } catch (err) {
+    console.error("[doctor/note] Handler crash:", err, { requestId });
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Server error",
+      step: "handler",
+      requestId,
+      buildSha,
+    });
+  }
+};
+
