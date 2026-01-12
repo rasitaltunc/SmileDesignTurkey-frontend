@@ -8,20 +8,16 @@ import AdminPatientProfile from './AdminPatientProfile';
 import { apiJsonAuth, apiFetchAuth } from '@/lib/api';
 
 interface Lead {
-  id: string;
-  lead_uuid?: string;
+  ref?: string | null; // ✅ Privacy-safe reference (prefer lead_uuid UUID, fallback to id TEXT)
+  case_code?: string | null;
   name: string | null;
   treatment?: string | null;
   timeline?: string | null;
   message?: string | null;
   snapshot?: string | null;
-  status: string | null;
   doctor_review_status: string | null;
-  doctor_review_notes: string | null;
   doctor_assigned_at?: string | null;
-  doctor_reviewed_at?: string | null;
-  created_at: string;
-  case_code?: string | null;
+  updated_at?: string | null;
 }
 
 export default function DoctorPortal() {
@@ -66,10 +62,13 @@ export default function DoctorPortal() {
       }
 
       if (result.ok && Array.isArray(result.leads)) {
-        // Sort by assigned date (newest first) or created_at
+        // Sort by assigned date (newest first) or updated_at
         const sorted = [...result.leads].sort((a, b) => {
-          const aDate = a.doctor_assigned_at || a.created_at;
-          const bDate = b.doctor_assigned_at || b.created_at;
+          const aDate = a.doctor_assigned_at || a.updated_at;
+          const bDate = b.doctor_assigned_at || b.updated_at;
+          if (!aDate && !bDate) return 0;
+          if (!aDate) return 1;
+          if (!bDate) return -1;
           return new Date(bDate).getTime() - new Date(aDate).getTime();
         });
         
@@ -287,12 +286,12 @@ export default function DoctorPortal() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {leads.map((lead) => (
                   <tr
-                    key={lead.id}
+                    key={lead.ref || lead.case_code || `lead-${lead.name}`}
                     className="hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-6 py-4">
                       <div className="text-xs font-mono text-gray-500 mb-1">
-                        Case: {lead.case_code || (lead.id ? `CASE-${String(lead.id).slice(0, 8).toUpperCase()}` : (lead.lead_uuid ? `CASE-${lead.lead_uuid.slice(0, 8).toUpperCase().replace(/-/g, '')}` : 'CASE-UNKNOWN'))}
+                        Case: {lead.case_code || 'CASE-UNKNOWN'}
                       </div>
                       <div className="text-sm font-medium text-gray-900">
                         {lead.name || 'Unnamed'}
@@ -314,22 +313,23 @@ export default function DoctorPortal() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {lead.doctor_assigned_at 
                         ? new Date(lead.doctor_assigned_at).toLocaleDateString()
-                        : new Date(lead.created_at).toLocaleDateString()}
+                        : lead.updated_at
+                        ? new Date(lead.updated_at).toLocaleDateString()
+                        : '—'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         type="button"
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
-                          onClick={(e) => {
+                        onClick={(e) => {
                           e.stopPropagation();
-                          // ✅ Use lead_uuid (preferred) for navigation
-                          const ref = lead?.lead_uuid || lead?.id;
-                          if (!ref) {
+                          // ✅ Use privacy-safe ref field for navigation
+                          if (!lead.ref) {
                             toast.error("Lead reference missing");
                             console.error("[DoctorPortal] lead reference missing", lead);
                             return;
                           }
-                          navigate(`/doctor/lead/${encodeURIComponent(ref)}`);
+                          navigate(`/doctor/lead/${encodeURIComponent(lead.ref)}`);
                         }}
                       >
                         Review →

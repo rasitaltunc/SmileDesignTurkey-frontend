@@ -16,9 +16,23 @@ function toDoctorLeadDTO(lead) {
   // ✅ SNAPSHOT-PROOF: snapshot kolonu yok, sadece ai_summary kullan
   const rawSnapshot = (lead && typeof lead.ai_summary === "string" ? lead.ai_summary : "") || "";
   
+  // ✅ REF: Privacy-safe reference (prefer lead_uuid UUID, fallback to id TEXT)
+  const ref = (lead.lead_uuid && String(lead.lead_uuid).trim()) || (lead.id && String(lead.id).trim()) || null;
+  
+  // ✅ CASE_CODE: Unique case code derived from ref (use last 10 alphanumeric chars)
+  let case_code = null;
+  if (ref) {
+    // Extract last 10 alphanumeric characters from ref (remove dashes, take last 10)
+    const cleaned = String(ref).replace(/[^a-zA-Z0-9]/g, '');
+    const tail = cleaned.slice(-10).toUpperCase();
+    case_code = tail ? `CASE-${tail}` : null;
+  }
+  
   return {
-    // ✅ Case code: prefer lead.id (TEXT) over lead_uuid (UUID)
-    case_code: (lead.id && String(lead.id).trim() ? `CASE-${String(lead.id).trim().slice(0, 8).toUpperCase()}` : null) || caseCodeFromLead(lead),
+    // ✅ Privacy-safe reference for navigation
+    ref: ref,
+    // ✅ Unique case code for display
+    case_code: case_code,
     name: lead.name ?? 'Unknown',
     treatment: lead.treatment ?? null,
     timeline: lead.timeline ?? null,
@@ -31,6 +45,7 @@ function toDoctorLeadDTO(lead) {
     // NOTE: DO NOT include age/gender (columns don't exist)
     // NOTE: DO NOT include id, lead_uuid, created_at, status (not needed for doctor UI)
     // NOTE: snapshot kolonu yok, sadece ai_summary kullan
+    // NOTE: Only return ref and case_code, not raw id/lead_uuid
   };
 }
 
