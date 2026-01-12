@@ -300,10 +300,17 @@ async function generateDoctorNotePDF({
         const base64Data = signatureImageUrl.split(",")[1];
         imageBytes = Buffer.from(base64Data, "base64");
       } else if (signatureImageUrl.startsWith("http")) {
-        // Fetch from URL
-        const fetch = require("node-fetch");
-        const response = await fetch(signatureImageUrl);
-        imageBytes = Buffer.from(await response.arrayBuffer());
+        // Fetch from URL (use native fetch in Node 18+ or node-fetch)
+        try {
+          const fetchModule = require("node-fetch");
+          const response = await fetchModule.default(signatureImageUrl);
+          imageBytes = Buffer.from(await response.arrayBuffer());
+        } catch (fetchErr) {
+          // If node-fetch fails, try native fetch (Node 18+)
+          const response = await fetch(signatureImageUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          imageBytes = Buffer.from(arrayBuffer);
+        }
       } else {
         console.warn("[_pdfUtils] Signature format not supported, skipping");
       }
