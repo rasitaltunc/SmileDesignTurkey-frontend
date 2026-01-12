@@ -146,9 +146,9 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Parse ref from query or body (backward compatibility)
+    // ✅ Parse ref from query/body: ref, lead_uuid, leadId, lead_id
     const body = req.body && typeof req.body === "object" ? req.body : {};
-    const ref =
+    let ref =
       (req.query?.ref ? String(req.query.ref).trim() : null) ||
       (req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null) ||
       (req.query?.leadUuid ? String(req.query.leadUuid).trim() : null) ||
@@ -168,6 +168,12 @@ module.exports = async function handler(req, res) {
         requestId,
         buildSha,
       });
+    }
+
+    // ✅ Normalize: strip CASE- prefix if present
+    ref = String(ref).trim();
+    if (ref.startsWith("CASE-")) {
+      ref = ref.slice(5); // Remove "CASE-" prefix
     }
 
     const refIsUuid = isUuid(ref);
@@ -266,19 +272,39 @@ module.exports = async function handler(req, res) {
     }
 
     // Fetch documents (if table exists) - exclude passport/ID, non-fatal
-    // ✅ Documents join key: lead_documents.lead_id is TEXT, so use lead.id (TEXT)
-    // But if lead_documents.lead_id is UUID, we'd need lead.lead_uuid
-    // Based on other endpoints, lead_documents.lead_id is TEXT, so use lead.id
+    // ✅ Documents fetch MUST NOT crash: try lead_id = lead.id first, fallback to lead_uuid if needed
     let documents = [];
     let docsError = null;
     try {
-      // ✅ Use lead.id (TEXT) as join key - this matches other endpoints (lead-notes, leads-contact-events)
-      const docJoinKey = lead.id; // TEXT column
-      const { data: docsData, error: docsErr } = await dbClient
+      // Try 1: lead_documents by lead_id = lead.id (TEXT)
+      let docJoinKey = lead.id; // TEXT column
+      let { data: docsData, error: docsErr } = await dbClient
         .from("lead_documents")
         .select("*")
         .eq("lead_id", docJoinKey)
         .order("created_at", { ascending: false });
+
+      // If error mentions missing column or type mismatch, try fallback with lead_uuid
+      if (docsErr && (docsErr.message?.includes("column") || docsErr.code === "PGRST116" || docsErr.code === "42804")) {
+        console.debug("[doctor/lead] Documents query error, trying fallback with lead_uuid:", {
+          error: docsErr?.message,
+          code: docsErr?.code,
+          firstJoinKey: docJoinKey,
+        });
+        
+        // Try 2: lead_documents by lead_uuid = lead.lead_uuid (if available)
+        if (lead.lead_uuid) {
+          docJoinKey = lead.lead_uuid;
+          const fallbackResult = await dbClient
+            .from("lead_documents")
+            .select("*")
+            .eq("lead_uuid", docJoinKey)
+            .order("created_at", { ascending: false });
+          
+          docsData = fallbackResult.data;
+          docsErr = fallbackResult.error;
+        }
+      }
 
       if (docsErr) {
         docsError = docsErr;
@@ -287,7 +313,6 @@ module.exports = async function handler(req, res) {
           code: docsErr?.code,
           joinKey: docJoinKey,
           joinKeyType: typeof docJoinKey,
-          hint: "lead_documents.lead_id should be TEXT to match lead.id"
         });
       } else if (docsData && Array.isArray(docsData)) {
         // ✅ Exclude passport/ID documents, only allow photos/x-rays/treatment-plan

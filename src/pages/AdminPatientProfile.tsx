@@ -280,9 +280,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
         // ✅ Doctor mode: Use privacy-safe doctor endpoint
         if (finalIsDoctorMode && finalRef) {
+          // ✅ Normalize ref: strip CASE- prefix if present
+          const raw = String(finalRef || "").trim();
+          const normalized = raw.startsWith("CASE-") ? raw.slice(5) : raw;
+          const debug = import.meta.env.DEV ? "&debug=1" : "";
+          
           // ✅ Use /api/doctor/lead?ref=... for privacy-filtered data (ref can be UUID or TEXT id)
           const result = await apiJsonAuth<{ ok: true; lead: any; documents?: any[] }>(
-            `/api/doctor/lead?ref=${encodeURIComponent(finalRef)}`
+            `/api/doctor/lead?ref=${encodeURIComponent(normalized)}${debug}`
           );
           if (!result.ok || !result.lead) {
             throw new Error("Lead not found or not assigned to you");

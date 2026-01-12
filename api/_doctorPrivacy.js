@@ -14,18 +14,18 @@ function toDoctorLeadDTO(lead) {
 
   // ✅ AGE-PROOF: Only return explicitly allowed fields (no age/gender, no PII)
   // ✅ SNAPSHOT-PROOF: snapshot kolonu yok, sadece ai_summary kullan
-  const rawSnapshot = (lead && typeof lead.ai_summary === "string" ? lead.ai_summary : "") || "";
+  const snapshotRaw = lead.ai_summary ? String(lead.ai_summary) : "";
   
   // ✅ REF: Privacy-safe reference (prefer lead_uuid UUID, fallback to id TEXT)
   const leadUuid = lead.lead_uuid ? String(lead.lead_uuid).trim() : null;
   const leadId = lead.id ? String(lead.id).trim() : null;
   const ref = leadUuid || leadId || null;
   
-  // ✅ CASE_CODE: Prefer lead.id (TEXT) if exists, else fallback to lead_uuid
+  // ✅ CASE_CODE: CASE-${id} if id exists, else CASE-${lead_uuid.slice(0,8)}
   let case_code = null;
   if (leadId) {
-    // Use lead.id (TEXT) directly
-    case_code = `CASE-${String(leadId).slice(0, 8).toUpperCase()}`;
+    // Use lead.id (TEXT) directly: CASE-${id}
+    case_code = `CASE-${String(leadId)}`;
   } else if (leadUuid) {
     // Fallback to lead_uuid (first 8 chars, uppercase, no dashes)
     const cleaned = String(leadUuid).replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -41,7 +41,7 @@ function toDoctorLeadDTO(lead) {
     treatment: lead.treatment ?? null,
     timeline: lead.timeline ?? null,
     message: lead.message ? redactPII(lead.message) : null, // ✅ PII redaction (only if exists)
-    snapshot: rawSnapshot ? redactPII(rawSnapshot) : null, // ✅ Sadece ai_summary'den üret (snapshot kolonu yok)
+    snapshot: snapshotRaw ? redactPII(snapshotRaw) : null, // ✅ Sadece ai_summary'den üret (snapshot kolonu yok)
     doctor_review_status: lead.doctor_review_status ?? 'pending',
     doctor_assigned_at: lead.doctor_assigned_at ?? null,
     updated_at: lead.updated_at ?? null,
