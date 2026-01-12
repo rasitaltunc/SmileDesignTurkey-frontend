@@ -96,7 +96,16 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   const leadId = propLeadId || urlLeadId;
   
   // ✅ Doctor mode: use leadUuid prop OR extract ref from route (ref can be UUID or TEXT id)
-  const leadRef = propLeadUuid || (isDoctorRoute ? urlLeadId : null);
+  // ✅ Normalize route param: extract ref from URL, strip CASE- prefix if present
+  const routeRefRaw = propLeadUuid || (isDoctorRoute ? urlLeadId : null);
+  const leadRef = typeof routeRefRaw === "string"
+    ? routeRefRaw.replace(/^CASE-/, "").trim()
+    : (routeRefRaw || null);
+  
+  // ✅ Guard: ref yoksa crash yerine düzgün hata (doctor mode için)
+  if (finalIsDoctorMode && !leadRef) {
+    console.error("[AdminPatientProfile] Lead reference missing (route param empty)", { currentPath, propLeadUuid, urlLeadId });
+  }
   
   // Debug log
   useEffect(() => {
@@ -1975,7 +1984,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 setIsUpdatingReview(false);
                               }
                             }}
-                            disabled={isUpdatingReview || !ref}
+                            disabled={isUpdatingReview || !reviewRef}
                             className="w-full px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                           >
                             Submit Review & Mark as Reviewed

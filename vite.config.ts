@@ -52,6 +52,7 @@
     build: {
       target: 'esnext',
       outDir: 'dist',
+      sourcemap: true, // ✅ Enable sourcemaps for better error debugging
     },
     server: {
       port: 3000,
