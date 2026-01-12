@@ -64,7 +64,7 @@ module.exports = async function handler(req, res) {
     const bucket = String(req.query?.bucket || "unread");
     const limit = Math.min(parseInt(String(req.query?.limit || "100"), 10) || 100, 200);
 
-    // ✅ AGE-PROOF: Explicit column allowlist (age/gender ASLA yok)
+    // ✅ AGE-PROOF: Explicit column allowlist (age/gender ASLA yok, snapshot kolonu yok)
     const { data: rows, error: rowsErr } = await supabase
       .from("leads")
       .select([
@@ -81,7 +81,6 @@ module.exports = async function handler(req, res) {
         "updated_at",
         "created_at",
         "ai_summary",
-        "snapshot",
       ].join(","))
       .eq("doctor_id", user.id)
       .order("doctor_assigned_at", { ascending: false })

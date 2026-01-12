@@ -13,6 +13,9 @@ function toDoctorLeadDTO(lead) {
   if (!lead) return null;
 
   // ✅ AGE-PROOF: Only return explicitly allowed fields (no age/gender, no PII)
+  // ✅ SNAPSHOT-PROOF: snapshot kolonu yok, sadece ai_summary kullan
+  const rawSnapshot = (lead && typeof lead.ai_summary === "string" ? lead.ai_summary : "") || "";
+  
   return {
     // ✅ Case code: prefer lead.id (TEXT) over lead_uuid (UUID)
     case_code: (lead.id && String(lead.id).trim() ? `CASE-${String(lead.id).trim().slice(0, 8).toUpperCase()}` : null) || caseCodeFromLead(lead),
@@ -20,13 +23,14 @@ function toDoctorLeadDTO(lead) {
     treatment: lead.treatment ?? null,
     timeline: lead.timeline ?? null,
     message: lead.message ? redactPII(lead.message) : null, // ✅ PII redaction (only if exists)
-    snapshot: redactPII(lead.ai_summary ?? lead.snapshot ?? null), // ✅ ai_summary > snapshot
+    snapshot: rawSnapshot ? redactPII(rawSnapshot) : null, // ✅ Sadece ai_summary'den üret (snapshot kolonu yok)
     doctor_review_status: lead.doctor_review_status ?? 'pending',
     doctor_assigned_at: lead.doctor_assigned_at ?? null,
     updated_at: lead.updated_at ?? null,
     // NOTE: DO NOT include email/phone/meta/utm/referrer/page_url/ip/ua
     // NOTE: DO NOT include age/gender (columns don't exist)
     // NOTE: DO NOT include id, lead_uuid, created_at, status (not needed for doctor UI)
+    // NOTE: snapshot kolonu yok, sadece ai_summary kullan
   };
 }
 
