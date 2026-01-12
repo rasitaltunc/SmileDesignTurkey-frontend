@@ -427,10 +427,24 @@ Rules:
       }
     }
 
+    // ✅ Return response matching user's requested format
     return res.status(200).json({
       ok: true,
-      items: insertedItems,
-      unmatched: unmatchedQueries,
+      items: insertedItems.map((item) => ({
+        kind: item.catalog_item_id
+          ? (allCatalogItems.find((c) => c.id === item.catalog_item_id)?.kind || "procedure")
+          : "procedure",
+        query: item.notes?.replace("AI matched: ", "") || item.catalog_item_name,
+        refQty: item.qty,
+        catalog_item_id: item.catalog_item_id,
+        catalog_item_name: item.catalog_item_name,
+        unit_price: item.unit_price,
+      })),
+      unmatched: unmatchedQueries.map((uq) => ({
+        kind: uq.kind,
+        query: uq.query,
+        refQty: uq.refQty,
+      })),
       questions: aiResponse.questions || [],
       assumptions: aiResponse.assumptions || [],
       requestId,
