@@ -1,159 +1,106 @@
 // api/doctor/leads.js
 // GET /api/doctor/leads?bucket=unread|reviewed
 // Returns privacy-filtered lead data (no email/phone/utm/internal meta)
-// Auth: Bearer JWT (doctor role required)
+// Auth: Bearer JWT (doctor role required) - AGE-PROOF (explicit column allowlist)
 
 const { createClient } = require("@supabase/supabase-js");
-
-function getBearerToken(req) {
-  const h = req.headers.authorization;
-  if (!h) return null;
-  const [type, token] = String(h).split(" ");
-  if (!type || type.toLowerCase() !== "bearer") return null;
-  return token || null;
-}
+const { toDoctorLeadDTO, filterLeadsByBucket } = require("../_doctorPrivacy");
 
 module.exports = async function handler(req, res) {
   const requestId = `doctor_leads_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const buildSha =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.VERCEL_GIT_COMMIT_REF ||
+    process.env.GITHUB_SHA ||
+    null;
 
   try {
-    // CORS
+    // CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Cache-Control", "no-store");
 
-    if (req.method === "OPTIONS") return res.status(200).end();
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+
+    // ✅ Ping mode (DB'ye hiç girmez) — deploy doğru mu test
+    if (req.query?.ping === "1") {
+      return res.status(200).json({ ok: true, ping: "doctor/leads", requestId, buildSha });
+    }
 
     if (req.method !== "GET") {
-      return res.status(405).json({ ok: false, error: "Method not allowed", requestId });
+      return res.status(405).json({ ok: false, error: "Method not allowed", requestId, buildSha });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return res.status(500).json({
-        ok: false,
-        error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
-        requestId,
-      });
+    const auth = req.headers.authorization || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) {
+      return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId, buildSha });
     }
 
-    const jwt = getBearerToken(req);
-    if (!jwt) {
-      return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId });
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+    const user = userData?.user;
+    if (userErr || !user) {
+      return res.status(401).json({ ok: false, error: "Invalid session", requestId, buildSha });
     }
 
-    const dbClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    // Verify JWT and get user
-    const { data: userData, error: userErr } = await dbClient.auth.getUser(jwt);
-    if (userErr || !userData?.user) {
-      return res.status(401).json({ ok: false, error: "Invalid session", requestId });
-    }
-
-    const user = userData.user;
-
-    // Verify doctor role
-    const { data: profile, error: profErr } = await dbClient
+    const { data: profile, error: profErr } = await supabase
       .from("profiles")
-      .select("role")
+      .select("id, role")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (profErr || profile?.role !== "doctor") {
-      return res.status(403).json({ ok: false, error: "Forbidden: doctor access only", requestId });
+    if (profErr || !profile || profile.role !== "doctor") {
+      return res.status(403).json({ ok: false, error: "Forbidden", requestId, buildSha });
     }
 
-    // Parse bucket filter (unread = pending, reviewed = reviewed)
-    const bucket = req.query?.bucket ? String(req.query.bucket).trim().toLowerCase() : "unread";
-    const validBuckets = ["unread", "pending", "reviewed"];
-    const bucketFilter = validBuckets.includes(bucket) ? bucket : "unread";
+    const bucket = String(req.query?.bucket || "unread");
+    const limit = Math.min(parseInt(String(req.query?.limit || "100"), 10) || 100, 200);
 
-    // Build query with privacy filter - only allowed columns
-    let q = dbClient
+    // ✅ AGE-PROOF: Explicit column allowlist (age/gender ASLA yok)
+    const { data: rows, error: rowsErr } = await supabase
       .from("leads")
-      .select(`
-        id,
-        lead_uuid,
-        name,
-        age,
-        gender,
-        treatment,
-        timeline,
-        message,
-        doctor_review_status,
-        doctor_review_notes,
-        doctor_assigned_at,
-        doctor_reviewed_at,
-        created_at,
-        status
-      `)
+      .select([
+        "id",
+        "lead_uuid",
+        "name",
+        "treatment",
+        "timeline",
+        "message",
+        "status",
+        "doctor_id",
+        "doctor_review_status",
+        "doctor_assigned_at",
+        "updated_at",
+        "created_at",
+        "ai_summary",
+        "snapshot",
+      ].join(","))
       .eq("doctor_id", user.id)
-      .order("doctor_assigned_at", { ascending: false });
+      .order("doctor_assigned_at", { ascending: false })
+      .limit(limit);
 
-    // Apply bucket filter
-    if (bucketFilter === "unread" || bucketFilter === "pending") {
-      q = q.in("doctor_review_status", ["pending", "needs_info", null]).limit(100);
-    } else if (bucketFilter === "reviewed") {
-      q = q.eq("doctor_review_status", "reviewed").limit(100);
+    if (rowsErr) {
+      return res.status(500).json({ ok: false, error: rowsErr.message, requestId, buildSha });
     }
 
-    const { data: leads, error } = await q;
+    const dto = (rows || []).map(toDoctorLeadDTO);
+    const filtered = filterLeadsByBucket(dto, bucket);
 
-    if (error) {
-      console.error("[doctor/leads] Query error:", error, { requestId });
-      return res.status(500).json({ ok: false, error: error.message, requestId });
-    }
-
-    // ✅ Privacy filter: remove any sensitive fields that might leak through
-    const safeLeads = (leads || []).map((lead) => {
-      const safe = {
-        id: lead.id,
-        lead_uuid: lead.lead_uuid,
-        name: lead.name || "Unknown",
-        age: lead.age || null,
-        gender: lead.gender || null,
-        treatment: lead.treatment || null,
-        timeline: lead.timeline || null,
-        message: lead.message || null, // ✅ Patient message only (pre-filtered)
-        doctor_review_status: lead.doctor_review_status || "pending",
-        doctor_review_notes: lead.doctor_review_notes || null,
-        doctor_assigned_at: lead.doctor_assigned_at || null,
-        doctor_reviewed_at: lead.doctor_reviewed_at || null,
-        created_at: lead.created_at || null,
-        status: lead.status || "new",
-      };
-      // Explicitly exclude sensitive fields (double-check)
-      delete safe.email;
-      delete safe.phone;
-      delete safe.referrer;
-      delete safe.utm_source;
-      delete safe.utm_medium;
-      delete safe.utm_campaign;
-      delete safe.utm_term;
-      delete safe.utm_content;
-      delete safe.page_url;
-      delete safe.meta;
-      return safe;
-    });
-
-    return res.status(200).json({
-      ok: true,
-      leads: safeLeads,
-      bucket: bucketFilter,
-      requestId,
-    });
-  } catch (err) {
-    console.error("[doctor/leads] Handler crash:", err, { requestId });
+    return res.status(200).json({ ok: true, leads: filtered, requestId, buildSha });
+  } catch (e) {
     return res.status(500).json({
       ok: false,
-      error: err instanceof Error ? err.message : "Internal server error",
+      error: e?.message || "Server error",
       requestId,
+      buildSha,
     });
   }
 };
-

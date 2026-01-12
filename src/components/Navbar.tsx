@@ -33,6 +33,11 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     logout,
     clearError,
   } = useAuthStore();
+  
+  // ✅ Doctor mode: Hide marketing buttons when path starts with /doctor
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isDoctorRoute = currentPath.startsWith('/doctor');
+  const isDoctorMode = variant === 'admin' || isDoctorRoute || role === 'doctor';
 
   // Auth modal state
   const [authOpen, setAuthOpen] = useState(false);
@@ -206,7 +211,8 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
           </Link>
 
           {/* Desktop Navigation */}
-          {variant !== 'admin' && (
+          {/* ✅ Doctor mode: Hide navigation links (minimal navbar) */}
+          {variant !== 'admin' && !isDoctorMode && (
             <div className="hidden md:flex items-center gap-8">
               <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors">
                 Treatments
@@ -228,6 +234,13 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               </Link>
             </div>
           )}
+          
+          {/* ✅ Doctor mode: Show "Doctor Inbox" title instead of navigation */}
+          {isDoctorMode && (
+            <div className="hidden md:flex items-center">
+              <h1 className="text-lg font-semibold text-gray-900">Doctor Inbox</h1>
+            </div>
+          )}
 
           {/* Desktop CTAs */}
           <div className="hidden md:flex items-center gap-2 md:gap-3">
@@ -240,7 +253,8 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               {lang.toUpperCase()}
             </button>
 
-            {variant !== 'admin' && (
+            {/* ✅ Doctor mode: Hide marketing buttons (Ask on WhatsApp, Get Consultation) */}
+            {variant !== 'admin' && !isDoctorMode && (
               <>
                 <button
                   onClick={handleWhatsAppClick}
@@ -310,7 +324,8 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
         {isOpen && (
           <div className="md:hidden py-4 border-t border-gray-100">
             <div className="flex flex-col gap-4">
-              {variant !== 'admin' && (
+              {/* ✅ Doctor mode: Hide navigation links (minimal navbar) */}
+              {variant !== 'admin' && !isDoctorMode && (
                 <>
                   <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
                     Treatments
@@ -354,6 +369,13 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                     {content.cta.primary}
                   </Link>
                 </>
+              )}
+              
+              {/* ✅ Doctor mode: Show "Doctor Inbox" title in mobile menu */}
+              {isDoctorMode && (
+                <div className="py-2">
+                  <h1 className="text-base font-semibold text-gray-900">Doctor Inbox</h1>
+                </div>
               )}
 
               <button

@@ -5,22 +5,23 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { RefreshCw, LogOut, Clock, FileText, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import AdminPatientProfile from './AdminPatientProfile';
-import { authedFetch } from '@/lib/authedFetch';
+import { apiJsonAuth, apiFetchAuth } from '@/lib/api';
 
 interface Lead {
   id: string;
   lead_uuid?: string;
   name: string | null;
-  age?: number | null;
-  gender?: string | null;
   treatment?: string | null;
   timeline?: string | null;
+  message?: string | null;
+  snapshot?: string | null;
   status: string | null;
   doctor_review_status: string | null;
   doctor_review_notes: string | null;
   doctor_assigned_at?: string | null;
   doctor_reviewed_at?: string | null;
   created_at: string;
+  case_code?: string | null;
 }
 
 export default function DoctorPortal() {
@@ -47,17 +48,23 @@ export default function DoctorPortal() {
     setError(null);
 
     try {
-      // ✅ Use doctor-safe endpoint (/api/doctor/leads)
-      const response = await authedFetch(`/api/doctor/leads?bucket=${bucket}`, {
-        method: 'GET',
-      });
+      // ✅ Use apiFetchAuth to ensure Authorization header is always present
+      // Use apiFetchAuth directly to handle ok:false responses gracefully
+      const response = await apiFetchAuth(`/api/doctor/leads?bucket=${bucket}`);
+      const result = await response.json().catch(() => ({ ok: false, error: 'Invalid JSON response' }));
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ ok: false, error: 'Failed to load leads' }));
-        throw new Error(errorData.error || 'Failed to load leads');
+      // ✅ Handle ok:false response gracefully with requestId/buildSha
+      if (!result.ok) {
+        const errorMsg = result.error || 'Failed to load leads';
+        const requestId = result.requestId || 'N/A';
+        const buildSha = result.buildSha || 'N/A';
+        const fullErrorMsg = `${errorMsg} (requestId: ${requestId}${buildSha !== 'N/A' ? ` / build: ${buildSha}` : ''})`;
+        setError(fullErrorMsg);
+        toast.error(fullErrorMsg);
+        setLeads([]);
+        return;
       }
 
-      const result = await response.json();
       if (result.ok && Array.isArray(result.leads)) {
         // Sort by assigned date (newest first) or created_at
         const sorted = [...result.leads].sort((a, b) => {
@@ -70,10 +77,12 @@ export default function DoctorPortal() {
       } else {
         setLeads([]);
       }
-    } catch (err) {
+    } catch (err: any) {
+      // ✅ Catch network/parsing errors and show gracefully
       const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      const fullErrorMsg = `${errorMessage} (requestId: N/A / build: N/A)`;
+      setError(fullErrorMsg);
+      toast.error(fullErrorMsg);
       setLeads([]);
     } finally {
       setIsLoading(false);
@@ -282,20 +291,16 @@ export default function DoctorPortal() {
                     className="hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-6 py-4">
+                      <div className="text-xs font-mono text-gray-500 mb-1">
+                        Case: {lead.case_code || (lead.id ? `CASE-${String(lead.id).slice(0, 8).toUpperCase()}` : (lead.lead_uuid ? `CASE-${lead.lead_uuid.slice(0, 8).toUpperCase().replace(/-/g, '')}` : 'CASE-UNKNOWN'))}
+                      </div>
                       <div className="text-sm font-medium text-gray-900">
                         {lead.name || 'Unnamed'}
                       </div>
-                      {(lead.age || lead.gender) && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {lead.age ? `${lead.age} years` : ''}
-                          {lead.age && lead.gender ? ', ' : ''}
-                          {lead.gender || ''}
-                        </div>
-                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
-                        {lead.treatment || '-'}
+                        {lead.treatment || 'General'}
                       </div>
                       {lead.timeline && (
                         <div className="text-xs text-gray-500 mt-1">
@@ -315,9 +320,9 @@ export default function DoctorPortal() {
                       <button
                         type="button"
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
-                        onClick={(e) => {
+                          onClick={(e) => {
                           e.stopPropagation();
-                          // ✅ Önce UUID, yoksa fallback id (TEXT)
+                          // ✅ Use lead_uuid (preferred) for navigation
                           const ref = lead?.lead_uuid || lead?.id;
                           if (!ref) {
                             toast.error("Lead reference missing");

@@ -36,6 +36,7 @@ module.exports = async function handler(req, res) {
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY; // For JWT verification
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return res.status(500).json({
@@ -50,17 +51,25 @@ module.exports = async function handler(req, res) {
       return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId });
     }
 
-    const dbClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    // Use anon key for JWT verification (as per existing pattern in api/leads.js)
+    const authClient = createClient(
+      supabaseUrl,
+      supabaseAnonKey || supabaseServiceKey,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
 
     // Verify JWT and get user
-    const { data: userData, error: userErr } = await dbClient.auth.getUser(jwt);
+    const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);
     if (userErr || !userData?.user) {
       return res.status(401).json({ ok: false, error: "Invalid session", requestId });
     }
 
     const user = userData.user;
+
+    // Service role client for DB operations
+    const dbClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
     // Verify doctor role
     const { data: profile, error: profErr } = await dbClient
@@ -77,6 +86,7 @@ module.exports = async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const ref = body.ref ? String(body.ref).trim() : null;
     const doctor_review_notes = body.doctor_review_notes ? String(body.doctor_review_notes).trim() : null;
+    const doctor_review_status = body.doctor_review_status ? String(body.doctor_review_status).trim() : "reviewed";
 
     if (!ref) {
       return res.status(400).json({ ok: false, error: "Missing ref parameter", requestId });
@@ -107,7 +117,7 @@ module.exports = async function handler(req, res) {
 
     // Update lead: mark as reviewed and save notes
     const updateData = {
-      doctor_review_status: "reviewed",
+      doctor_review_status: doctor_review_status,
       doctor_reviewed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

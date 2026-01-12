@@ -84,16 +84,19 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // Extract leadId from URL (App.tsx uses custom routing, not React Router)
   // Route: /admin/lead/:id OR from prop (admin/employee mode)
   // Route: /doctor/lead/:leadUuid OR from prop (doctor mode - always UUID)
-  const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/);
+  // ✅ Extract leadId from URL - support both /admin/lead/:id and /doctor/lead/:uuid
+  const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/) || currentPath.match(/\/doctor\/lead\/([^/]+)/);
   const urlLeadId = leadIdMatch ? leadIdMatch[1] : null;
+  
+  // ✅ Doctor route detection: if path starts with /doctor/lead, it's doctor mode
+  const isDoctorRoute = currentPath.startsWith('/doctor/lead/');
+  // ✅ Final doctor mode determination: from prop OR route OR role
+  const finalIsDoctorMode = doctorMode || isDoctorRoute || role === 'doctor';
+  
   const leadId = propLeadId || urlLeadId;
   
-  // ✅ Doctor mode: use leadUuid prop (always UUID)
-  // leadUuid is defined here so it can be used in fetchLeadForDoctor
-  const leadUuid = propLeadUuid;
-  
-  // In doctor mode, use doctor role
-  const isDoctorMode = doctorMode || role === 'doctor';
+  // ✅ Doctor mode: use leadUuid prop (always UUID) OR extract from route
+  const leadUuid = propLeadUuid || (isDoctorRoute ? urlLeadId : null);
   
   // Debug log
   useEffect(() => {
@@ -119,6 +122,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   // B2: AI Brief state
   const [briefData, setBriefData] = useState<BriefResponse | null>(null);
   const [isLoadingBrief, setIsLoadingBrief] = useState(false);
+  
+  // ✅ Doctor mode: Doctor AI Brief state
+  const [doctorBrief, setDoctorBrief] = useState<string | null>(null);
+  const [isLoadingDoctorBrief, setIsLoadingDoctorBrief] = useState(false);
   
   // B3: Normalize Notes state
   const [normalizeData, setNormalizeData] = useState<any | null>(null);
@@ -253,12 +260,15 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     // ✅ Auth yoksa hiç deneme
     if (!isAuthenticated) return;
 
-    // ✅ Doctor mode: leadUuid gerekli
-    if (isDoctorMode) {
-      if (!leadUuid) return;
+    // ✅ Doctor mode: leadUuid gerekli (from prop OR route)
+    const finalLeadUuid = finalIsDoctorMode ? (leadUuid || (isDoctorRoute ? urlLeadId : null)) : null;
+    const finalLeadId = finalIsDoctorMode ? null : (leadId || urlLeadId);
+    
+    if (finalIsDoctorMode) {
+      if (!finalLeadUuid) return;
     } else {
       // ✅ Admin/Employee mode: leadId gerekli
-      if (!leadId) return;
+      if (!finalLeadId) return;
     }
 
     const fetchLead = async () => {
@@ -269,10 +279,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         let loadedLead: Lead;
 
         // ✅ Doctor mode: Use privacy-safe doctor endpoint
-        if (isDoctorMode && leadUuid) {
+        if (finalIsDoctorMode && finalLeadUuid) {
           // ✅ Use /api/doctor/lead?ref=... for privacy-filtered data
           const result = await apiJsonAuth<{ ok: true; lead: any; documents?: any[] }>(
-            `/api/doctor/lead?ref=${encodeURIComponent(leadUuid)}`
+            `/api/doctor/lead?ref=${encodeURIComponent(finalLeadUuid)}`
           );
           if (!result.ok || !result.lead) {
             throw new Error("Lead not found or not assigned to you");
@@ -281,7 +291,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         } else {
           // ✅ Admin/Employee mode
           const result = await apiJsonAuth<{ ok: true; lead: Lead }>(
-            `/api/admin/lead/${encodeURIComponent(leadId!)}`
+            `/api/admin/lead/${encodeURIComponent(finalLeadId!)}`
           );
           if (!result.ok || !result.lead) throw new Error("Lead not found");
           loadedLead = result.lead as Lead;
@@ -314,14 +324,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchLead();
-  }, [leadId, leadUuid, isAuthenticated, isDoctorMode]);
+  }, [leadId, leadUuid, isAuthenticated, finalIsDoctorMode, urlLeadId, isDoctorRoute]);
 
   // Fetch notes
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
     
     // ✅ Doctor mode: notes are admin/employee only (disable for doctor)
-    if (isDoctorMode) {
+    if (finalIsDoctorMode) {
       setIsLoadingNotes(false);
       return;
     }
@@ -359,14 +369,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     loadNotes();
-  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadIdText, lead?.id]);
+  }, [leadId, isAuthenticated, finalIsDoctorMode, resolvedLeadIdText, lead?.id]);
 
   // B4: Fetch AI memory on page load
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
     
     // ✅ Doctor mode: AI memory is admin/employee only (disable for doctor)
-    if (isDoctorMode) {
+    if (finalIsDoctorMode) {
       setIsLoadingMemory(false);
       return;
     }
@@ -412,14 +422,14 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchAIMemory();
-  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadIdText, lead?.id]);
+  }, [leadId, isAuthenticated, finalIsDoctorMode, resolvedLeadIdText, lead?.id]);
 
   // B5: Fetch AI tasks on page load
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
     
     // ✅ Doctor mode: AI tasks is admin/employee only (disable for doctor)
-    if (isDoctorMode) {
+    if (finalIsDoctorMode) {
       setIsLoadingTasks(false);
       return;
     }
@@ -456,7 +466,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchTasks();
-  }, [leadId, isAuthenticated, isDoctorMode, resolvedLeadIdText, lead?.id]);
+  }, [leadId, isAuthenticated, finalIsDoctorMode, resolvedLeadIdText, lead?.id]);
   
   // B6: Fetch timeline events on page load
   useEffect(() => {
@@ -484,12 +494,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
     
     fetchTimeline();
-  }, [leadId, isAuthenticated, resolvedLeadIdText, lead?.id]);
+  }, [leadId, isAuthenticated, finalIsDoctorMode, resolvedLeadIdText, lead?.id]);
 
   // Doctors: Fetch on page load (admin/employee only, skip in doctorMode)
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (isDoctorMode) return; // ✅ doctor mode admin endpoint çağırmaz
+    if (finalIsDoctorMode) return; // ✅ doctor mode admin endpoint çağırmaz
 
     const fetchDoctors = async () => {
       setIsLoadingDoctors(true);
@@ -510,11 +520,17 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchDoctors();
-  }, [isAuthenticated, isDoctorMode]);
+  }, [isAuthenticated, finalIsDoctorMode]);
 
-  // Contact Events: Fetch on page load
+  // Contact Events: Fetch on page load (admin/employee only)
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
+    
+    // ✅ Doctor mode: contact events are admin/employee only (disable for doctor)
+    if (finalIsDoctorMode) {
+      setIsLoadingContactEvents(false);
+      return;
+    }
     
     const fetchContactEvents = async () => {
       setIsLoadingContactEvents(true);
@@ -538,7 +554,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
     
     fetchContactEvents();
-  }, [leadId, isAuthenticated, resolvedLeadIdText, lead?.id]);
+  }, [leadId, isAuthenticated, finalIsDoctorMode, resolvedLeadIdText, lead?.id]);
 
   // Helper: Log contact event
   const logContactEvent = async (channel: 'whatsapp' | 'phone' | 'email', note?: string) => {
@@ -651,7 +667,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     if (!leadId || !isAuthenticated) return;
     
     // ✅ Doctor mode: AI tasks is admin/employee only (disable for doctor)
-    if (isDoctorMode) {
+    if (finalIsDoctorMode) {
       toast.error('Task management is not available for doctors');
       return;
     }
@@ -780,7 +796,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     if (!isAuthenticated) return;
     
     // ✅ Doctor mode: Normalize is admin/employee only (disable for doctor)
-    if (isDoctorMode) {
+    if (finalIsDoctorMode) {
       toast.error('Note normalization is not available for doctors');
       return;
     }
@@ -832,7 +848,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     if (!leadId || !isAuthenticated || !briefData) return;
     
     // ✅ Doctor mode: AI memory sync is admin/employee only (disable for doctor)
-    if (isDoctorMode) {
+    if (finalIsDoctorMode) {
       toast.error('Memory sync is not available for doctors');
       return;
     }
@@ -845,15 +861,19 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       if (!resolvedLeadIdText) {
         throw new Error('Cannot sync AI memory: lead not loaded');
       }
-      await apiJsonAuth(`/api/admin/lead-ai/${encodeURIComponent(resolvedLeadIdText)}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          snapshot: briefData.brief?.snapshot || null,
-          callBrief: briefData.brief?.callBrief || null,
-          risk: briefData.brief?.risk || null,
-          memory: normalizeData?.memory || memoryData || null,
-        }),
-      });
+      const result = await apiJsonAuth<{ ok: true; data?: { memory?: any }; requestId?: string; error?: string }>(
+        `/api/admin/lead-ai/${encodeURIComponent(resolvedLeadIdText)}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            snapshot: briefData.brief?.snapshot || null,
+            callBrief: briefData.brief?.callBrief || null,
+            risk: briefData.brief?.risk || null,
+            memory: normalizeData?.memory || memoryData || null,
+          }),
+        }
+      );
+      
       if (!result.ok) {
         const requestId = result.requestId || 'unknown';
         throw new Error(`${result.error || 'Sync failed'} (id: ${requestId})`);
@@ -990,7 +1010,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                   AI Snapshot
                 </h2>
                 {/* ✅ Doctor mode: AI buttons hidden (privacy-first) */}
-                {!isDoctorMode && (
+                {!finalIsDoctorMode && (
                   <div className="flex items-center gap-2 relative z-20">
                     {(() => {
                       const btnBase =
@@ -1062,23 +1082,100 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
               </div>
 
               {/* Content - gradient container (buttons are OUTSIDE) */}
-              {/* ✅ Doctor mode: Show read-only snapshot from lead.snapshot (from /api/doctor/lead) */}
-              {isDoctorMode && (lead as any)?.snapshot ? (
-                <div className="border border-gray-200 rounded-lg bg-white p-6">
-                  <div className="mb-4 pb-4 border-b border-gray-100">
-                    <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-teal-600" />
-                      <span>Patient Snapshot (Read-Only)</span>
-                    </h4>
-                    <p className="text-xs text-gray-500 mt-1">Employee/admin summary for review</p>
-                  </div>
-                  <div className="prose prose-sm max-w-none">
-                    <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
-                      {String((lead as any).snapshot || '')}
+              {/* ✅ Doctor mode: Show read-only snapshot + Doctor AI Brief button */}
+              {finalIsDoctorMode ? (
+                <div className="space-y-4">
+                  {/* Patient Snapshot (Read-Only) */}
+                  {(lead as any)?.snapshot && (
+                    <div className="border border-gray-200 rounded-lg bg-white p-6">
+                      <div className="mb-4 pb-4 border-b border-gray-100">
+                        <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-teal-600" />
+                          <span>Patient Snapshot (Read-Only)</span>
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-1">Employee/admin summary for review</p>
+                      </div>
+                      <div className="prose prose-sm max-w-none">
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                          {String((lead as any).snapshot || '')}
+                        </div>
+                      </div>
                     </div>
+                  )}
+
+                  {/* Doctor AI Brief Section */}
+                  <div className="border border-gray-200 rounded-lg bg-white p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                        <Brain className="w-4 h-4 text-teal-600" />
+                        <span>Doctor AI Brief</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!lead) {
+                            toast.error("Lead not loaded");
+                            return;
+                          }
+                          const ref = (lead as any).lead_uuid || lead.id;
+                          if (!ref) {
+                            toast.error("Lead reference missing");
+                            return;
+                          }
+
+                          setIsLoadingDoctorBrief(true);
+                          try {
+                            const result = await apiJsonAuth<{ ok: true; brief: string; requestId?: string }>(
+                              `/api/doctor/ai/brief`,
+                              {
+                                method: 'POST',
+                                body: JSON.stringify({ ref }),
+                              }
+                            );
+
+                            if (result.ok && result.brief) {
+                              setDoctorBrief(result.brief);
+                              toast.success("Doctor brief generated");
+                            } else {
+                              throw new Error("Failed to generate brief");
+                            }
+                          } catch (err) {
+                            const errorMessage = err instanceof Error ? err.message : 'Failed to generate doctor brief';
+                            toast.error(errorMessage);
+                            console.error("[Doctor AI Brief] Error:", err);
+                          } finally {
+                            setIsLoadingDoctorBrief(false);
+                          }
+                        }}
+                        disabled={isLoadingDoctorBrief || !lead || !((lead as any)?.lead_uuid || lead?.id)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isLoadingDoctorBrief ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Brain className="w-4 h-4" />
+                            <span>Generate Doctor AI Brief</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {doctorBrief ? (
+                      <div className="prose prose-sm max-w-none">
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap break-words border-t border-gray-100 pt-4">
+                          {doctorBrief}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500">Click "Generate Doctor AI Brief" to create a PII-safe clinical review brief.</p>
+                    )}
                   </div>
                 </div>
-              ) : !isDoctorMode && briefData ? (
+              ) : !finalIsDoctorMode && briefData ? (
                 <div 
                   data-snapshot-section
                   className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all max-w-full overflow-hidden relative z-0"
@@ -1726,7 +1823,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           onChange={(e) => setDoctorReviewStatus(e.target.value)}
                           onBlur={async () => {
                             // ✅ Doctor mode: status updates only via Submit Review
-                            if (isDoctorMode) {
+                            if (finalIsDoctorMode) {
                               // Revert to original if changed (doctor must use Submit button)
                               setDoctorReviewStatus((lead as any)?.doctor_review_status || '');
                               return;
@@ -1777,7 +1874,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                               }
                             }
                           }}
-                          disabled={isUpdatingReview || !leadId || isDoctorMode}
+                          disabled={isUpdatingReview || !leadId || finalIsDoctorMode}
                           className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                         >
                           <option value="">Select status...</option>
@@ -1795,7 +1892,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           onChange={(e) => setDoctorReviewNotes(e.target.value)}
                           onBlur={async () => {
                             // ✅ Doctor mode: don't auto-save, require explicit submit
-                            if (isDoctorMode) return;
+                            if (finalIsDoctorMode) return;
                             
                             if (doctorReviewNotes !== ((lead as any)?.doctor_review_notes || '') && leadId) {
                               setIsUpdatingReview(true);
@@ -1837,19 +1934,19 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                       </div>
                       
                       {/* ✅ Doctor mode: Submit Review button */}
-                      {isDoctorMode && (
+                      {finalIsDoctorMode && (
                         <div className="mt-3">
                           <button
                             type="button"
                             onClick={async () => {
-                              if (!leadUuid && !leadId) {
+                              const ref = (lead as any)?.lead_uuid || lead?.id;
+                              if (!ref) {
                                 toast.error("Lead reference missing");
                                 return;
                               }
                               
                               setIsUpdatingReview(true);
                               try {
-                                const ref = leadUuid || leadId;
                                 const result = await apiJsonAuth<{ ok: true; lead: any }>(`/api/doctor/lead/review`, {
                                   method: 'POST',
                                   body: JSON.stringify({
@@ -1872,7 +1969,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 setIsUpdatingReview(false);
                               }
                             }}
-                            disabled={isUpdatingReview || (!leadUuid && !leadId)}
+                            disabled={isUpdatingReview || !ref}
                             className="w-full px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                           >
                             Submit Review & Mark as Reviewed
