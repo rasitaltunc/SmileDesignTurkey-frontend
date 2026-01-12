@@ -25,87 +25,136 @@ module.exports = async function handler(req, res) {
   const requestId = `doctor_brief_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-  try {
-    // CORS
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // ✅ CRASH-PROOF: Set JSON headers FIRST
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-    if (req.method === "OPTIONS") return res.status(200).end();
+  try {
+    if (req.method === "OPTIONS") return res.status(200).json({ ok: true });
 
     if (req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "Method not allowed", requestId });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
+    // ✅ Env check: require SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (do this FIRST)
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!SUPABASE_URL || !SERVICE_KEY) {
       return res.status(500).json({
         ok: false,
         error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+        step: "env_check",
         requestId,
       });
     }
 
     // ✅ OPENAI_API_KEY guard: if missing, return graceful error (don't crash)
-    if (!openaiKey || openaiKey.trim().length === 0) {
+    if (!OPENAI_API_KEY || OPENAI_API_KEY.trim().length === 0) {
       return res.status(503).json({
         ok: false,
         error: "AI not configured",
         message: "OPENAI_API_KEY missing or invalid",
+        step: "openai_check",
         requestId,
       });
     }
 
     const jwt = getBearerToken(req);
     if (!jwt) {
-      return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId });
+      return res.status(401).json({
+        ok: false,
+        error: "Missing Authorization Bearer token",
+        step: "auth_check",
+        requestId,
+      });
     }
 
-    // Use anon key for JWT verification (as per existing pattern)
+    // ✅ Use anon key for JWT verification (fallback to service key if anon key missing)
     const authClient = createClient(
-      supabaseUrl,
-      supabaseAnonKey || supabaseServiceKey,
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY || SERVICE_KEY,
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
     // Verify JWT and get user
-    const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);
-    if (userErr || !userData?.user) {
-      return res.status(401).json({ ok: false, error: "Invalid session", requestId });
+    let user;
+    try {
+      const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);
+      if (userErr || !userData?.user) {
+        return res.status(401).json({
+          ok: false,
+          error: "Invalid session",
+          step: "jwt_verify",
+          requestId,
+        });
+      }
+      user = userData.user;
+    } catch (authErr) {
+      return res.status(401).json({
+        ok: false,
+        error: "Auth verification failed",
+        step: "jwt_verify",
+        requestId,
+      });
     }
 
-    const user = userData.user;
-
-    // Service role client for DB operations
-    const dbClient = createClient(supabaseUrl, supabaseServiceKey, {
+    // ✅ Service role client for DB operations (MUST use SERVICE_KEY, not anon key)
+    const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Verify doctor role
-    const { data: profile, error: profErr } = await dbClient
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    // ✅ Verify doctor role
+    let profile;
+    try {
+      const { data: profData, error: profErr } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    if (profErr || profile?.role !== "doctor") {
-      return res.status(403).json({ ok: false, error: "Forbidden: doctor access only", requestId });
+      if (profErr || !profData || profData.role !== "doctor") {
+        return res.status(403).json({
+          ok: false,
+          error: "Forbidden: doctor access only",
+          step: "role_check",
+          requestId,
+        });
+      }
+      profile = profData;
+    } catch (roleErr) {
+      return res.status(500).json({
+        ok: false,
+        error: "Role check failed",
+        step: "role_check",
+        requestId,
+      });
     }
 
     // Parse request body or query
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const ref = body.ref || req.query?.ref ? String(body.ref || req.query.ref).trim() : null;
+    let ref = body.ref || req.query?.ref ? String(body.ref || req.query.ref).trim() : null;
 
     if (!ref) {
-      return res.status(400).json({ ok: false, error: "Missing ref parameter", requestId });
+      return res.status(400).json({
+        ok: false,
+        error: "Missing ref parameter",
+        step: "ref_parse",
+        requestId,
+      });
+    }
+
+    // ✅ Normalize: strip CASE- prefix if present
+    if (ref.startsWith("CASE-")) {
+      ref = ref.replace(/^CASE-/, "");
     }
 
     // ✅ Schema-safe: Use select("*") then map to allowlist
-    let q = dbClient
+    let q = supabase
       .from("leads")
       .select("*")
       .eq("doctor_id", user.id); // ✅ Doctor can only see their assigned leads
@@ -121,11 +170,21 @@ module.exports = async function handler(req, res) {
 
     if (leadErr) {
       console.error("[doctor/ai/brief] Lead query error:", leadErr, { requestId });
-      return res.status(500).json({ ok: false, error: leadErr.message, requestId });
+      return res.status(500).json({
+        ok: false,
+        error: leadErr.message || "Lead query failed",
+        step: "fetch_lead",
+        requestId,
+      });
     }
 
     if (!lead) {
-      return res.status(404).json({ ok: false, error: "Lead not found or not assigned to you", requestId });
+      return res.status(404).json({
+        ok: false,
+        error: "Lead not found or not assigned to you",
+        step: "fetch_lead",
+        requestId,
+      });
     }
 
     // ✅ Build sanitized context (PII-redacted, schema-safe)
@@ -136,10 +195,10 @@ module.exports = async function handler(req, res) {
     const snapshot = redactPII(lead.ai_summary || lead.snapshot || "");
     const reviewStatus = lead.doctor_review_status || "pending";
 
-    // Fetch documents (types only, no URLs that may contain tokens)
+    // ✅ Fetch documents (types only, no URLs that may contain tokens) - non-fatal
     let documentLabels = [];
     try {
-      const { data: docsData } = await dbClient
+      const { data: docsData } = await supabase
         .from("lead_documents")
         .select("type, filename, category")
         .eq("lead_id", lead.id)
@@ -220,7 +279,7 @@ Based on the above sanitized information, generate a clinical review brief in ma
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${openaiKey}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: model,
