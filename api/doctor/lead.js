@@ -214,18 +214,28 @@ module.exports = async function handler(req, res) {
           step: "fetch_lead",
           requestId,
           buildSha,
-          ...(debugMode ? { debug: { ref, refIsUuid, error: leadErr.message, code: leadErr.code } } : {}),
+          ...(debugMode ? { debug: { ref, refIsUuid, error: leadErr.message, code: leadErr.code, queryColumn: refIsUuid ? "lead_uuid" : "id" } } : {}),
         });
       }
 
       if (!leadData) {
+        // ✅ Enhanced debug: show what we searched for
+        console.warn("[doctor/lead] Lead not found:", { ref, refIsUuid, doctorId: user.id, searchedColumn: refIsUuid ? "lead_uuid" : "id" });
         return res.status(404).json({
           ok: false,
           error: "Lead not found or not assigned to you",
           step: "fetch_lead",
           requestId,
           buildSha,
-          ...(debugMode ? { debug: { ref, refIsUuid, doctorId: user.id } } : {}),
+          ...(debugMode ? { 
+            debug: { 
+              ref, 
+              refIsUuid, 
+              doctorId: user.id,
+              searchedColumn: refIsUuid ? "lead_uuid" : "id",
+              hint: refIsUuid ? "Searched in lead_uuid column" : "Searched in id (TEXT) column"
+            } 
+          } : {}),
         });
       }
 
@@ -256,18 +266,29 @@ module.exports = async function handler(req, res) {
     }
 
     // Fetch documents (if table exists) - exclude passport/ID, non-fatal
+    // ✅ Documents join key: lead_documents.lead_id is TEXT, so use lead.id (TEXT)
+    // But if lead_documents.lead_id is UUID, we'd need lead.lead_uuid
+    // Based on other endpoints, lead_documents.lead_id is TEXT, so use lead.id
     let documents = [];
     let docsError = null;
     try {
+      // ✅ Use lead.id (TEXT) as join key - this matches other endpoints (lead-notes, leads-contact-events)
+      const docJoinKey = lead.id; // TEXT column
       const { data: docsData, error: docsErr } = await dbClient
         .from("lead_documents")
         .select("*")
-        .eq("lead_id", lead.id) // ✅ Use lead.id (TEXT) as join key
+        .eq("lead_id", docJoinKey)
         .order("created_at", { ascending: false });
 
       if (docsErr) {
         docsError = docsErr;
-        console.debug("[doctor/lead] Documents query error (table may not exist):", docsErr?.message);
+        console.debug("[doctor/lead] Documents query error (table may not exist or join key mismatch):", {
+          error: docsErr?.message,
+          code: docsErr?.code,
+          joinKey: docJoinKey,
+          joinKeyType: typeof docJoinKey,
+          hint: "lead_documents.lead_id should be TEXT to match lead.id"
+        });
       } else if (docsData && Array.isArray(docsData)) {
         // ✅ Exclude passport/ID documents, only allow photos/x-rays/treatment-plan
         documents = docsData
