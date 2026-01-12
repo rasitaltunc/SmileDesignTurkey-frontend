@@ -1,11 +1,11 @@
-// api/employee/quote/generate-pdf.js
-// POST /api/employee/quote/generate-pdf
-// Generates proforma PDF, uploads to storage, stores pdf path
+// api/employee/quote/send.js
+// POST /api/employee/quote/send
+// Marks quote as sent to patient (optional endpoint for explicit "send" action)
 // Body: { quote_id }
 // Auth: Bearer JWT (employee/admin role required)
+// This updates lead stage to 'quote_sent' if not already done
 
 const { createClient } = require("@supabase/supabase-js");
-const { generateQuotePDF } = require("../../_pdfUtils");
 
 const buildSha =
   process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -22,7 +22,7 @@ function getBearerToken(req) {
 }
 
 module.exports = async function handler(req, res) {
-  const requestId = `quote_generate_pdf_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const requestId = `quote_send_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -158,10 +158,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Fetch quote with lead info
+    // ✅ Fetch quote
     const { data: quote, error: quoteErr } = await dbClient
       .from("quotes")
-      .select("*, leads(id, assigned_to)")
+      .select("*, leads(assigned_to)")
       .eq("id", quoteId)
       .maybeSingle();
 
@@ -186,82 +186,19 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Fetch quote items
-    const { data: quoteItems, error: itemsErr } = await dbClient
-      .from("quote_items")
-      .select("*")
-      .eq("quote_id", quoteId)
-      .order("created_at", { ascending: true });
-
-    if (itemsErr) {
-      console.error("[employee/quote/generate-pdf] Items query error:", itemsErr, { requestId });
-    }
-
-    // ✅ Generate case code
-    const caseCode = quote.lead_id ? `CASE-${quote.lead_id.substring(0, 8).toUpperCase()}` : "CASE-UNKNOWN";
-
-    // ✅ Generate PDF
-    let pdfBytes;
-    try {
-      pdfBytes = await generateQuotePDF({
-        clinicName: "Smile Design Turkey",
-        caseCode: caseCode,
-        leadId: quote.lead_id,
-        quoteNumber: quote.quote_number || `QUOTE-${quoteId}`,
-        items: (quoteItems || []).map((item) => ({
-          catalog_item_name: item.catalog_item_name,
-          qty: item.qty,
-          unit_price: item.unit_price,
-          total: item.qty * item.unit_price,
-        })),
-        discount: quote.discount || 0,
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (pdfErr) {
-      console.error("[employee/quote/generate-pdf] PDF generation error:", pdfErr, { requestId });
-      return res.status(500).json({
-        ok: false,
-        error: "Failed to generate PDF",
-        step: "generate_pdf",
-        requestId,
-        buildSha,
-      });
-    }
-
-    // ✅ Upload PDF to Supabase Storage
-    const fileName = `quote-${quoteId}-${Date.now()}.pdf`;
-    const storagePath = `${user.id}/${fileName}`;
-
-    const { error: uploadErr } = await dbClient.storage
-      .from("quotes")
-      .upload(storagePath, pdfBytes, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-
-    if (uploadErr) {
-      console.error("[employee/quote/generate-pdf] PDF upload error:", uploadErr, { requestId });
-      return res.status(500).json({
-        ok: false,
-        error: "Failed to upload PDF",
-        step: "upload_pdf",
-        requestId,
-        buildSha,
-      });
-    }
-
-    // ✅ Update quote: store PDF path
+    // ✅ Update quote: mark as sent
+    const sentAt = new Date().toISOString();
     const { error: updateErr } = await dbClient
       .from("quotes")
       .update({
-        pdf_storage_path: storagePath,
-        pdf_generated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        sent_at: sentAt,
+        status: "sent",
+        updated_at: sentAt,
       })
       .eq("id", quoteId);
 
     if (updateErr) {
-      console.error("[employee/quote/generate-pdf] Quote update error:", updateErr, { requestId });
+      console.error("[employee/quote/send] Quote update error:", updateErr, { requestId });
       return res.status(500).json({
         ok: false,
         error: "Failed to update quote",
@@ -277,22 +214,22 @@ module.exports = async function handler(req, res) {
         .from("leads")
         .update({
           stage: "quote_sent",
-          updated_at: new Date().toISOString(),
+          updated_at: sentAt,
         })
         .eq("id", quote.lead_id);
     } catch (stageErr) {
       // If stage column doesn't exist, log but don't fail
-      console.warn("[employee/quote/generate-pdf] Stage update skipped (column may not exist):", stageErr.message);
+      console.warn("[employee/quote/send] Stage update skipped (column may not exist):", stageErr.message);
     }
 
     return res.status(200).json({
       ok: true,
-      pdfPath: storagePath,
+      sentAt: sentAt,
       requestId,
       buildSha,
     });
   } catch (err) {
-    console.error("[employee/quote/generate-pdf] Handler crash:", err, { requestId });
+    console.error("[employee/quote/send] Handler crash:", err, { requestId });
     return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Server error",
