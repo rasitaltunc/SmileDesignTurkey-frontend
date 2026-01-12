@@ -323,17 +323,12 @@ export default function DoctorPortal() {
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // ✅ Use privacy-safe ref field for navigation (with fallbacks)
-                          const ref =
-                            (lead as any)?.ref ||
-                            (lead as any)?.lead_uuid ||
-                            lead?.id ||
-                            ((lead as any)?.case_code?.replace(/^CASE-/, "") || null) ||
-                            null;
+                          // ✅ Use ONLY lead.ref (from API) - backend guarantees ref
+                          const ref = (lead as any)?.ref || null;
 
                           if (!ref) {
-                            toast.error("Lead reference missing");
-                            console.error("[DoctorPortal] lead reference missing", lead);
+                            toast.error("Missing lead ref");
+                            console.error("[DoctorPortal] Missing lead ref", lead);
                             return;
                           }
                           navigate(`/doctor/lead/${encodeURIComponent(ref)}`);

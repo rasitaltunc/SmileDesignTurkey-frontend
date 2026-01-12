@@ -2,6 +2,7 @@
 // GET /api/doctor/lead?ref=... (ref = lead_uuid UUID or lead.id TEXT)
 // Returns privacy-filtered single lead with snapshot and documents
 // Auth: Bearer JWT (doctor role required) - schema-safe (no column assumptions)
+// ✅ CRASH-PROOF: Always returns JSON, never crashes
 
 const { createClient } = require("@supabase/supabase-js");
 const { toDoctorLeadDTO } = require("./_doctorPrivacy");
@@ -13,14 +14,6 @@ const buildSha =
   process.env.GITHUB_SHA ||
   null;
 
-function getBearerToken(req) {
-  const h = req.headers.authorization;
-  if (!h) return null;
-  const [type, token] = String(h).split(" ");
-  if (!type || type.toLowerCase() !== "bearer") return null;
-  return token || null;
-}
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isUuid(v) {
@@ -29,28 +22,100 @@ function isUuid(v) {
 
 module.exports = async function handler(req, res) {
   const requestId = `doctor_lead_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-  const debugMode = req.query?.debug === "1";
 
+  // ✅ CRASH-PROOF: Set JSON headers FIRST (before any parsing)
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Cache-Control", "no-store");
+
+  // ✅ CRASH-PROOF: Everything in one top-level try/catch
   try {
-    // CORS headers
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Cache-Control", "no-store");
-
+    // OPTIONS preflight
     if (req.method === "OPTIONS") {
-      return res.status(200).end();
+      return res.status(200).json({ ok: true });
     }
 
     if (req.method !== "GET") {
-      return res.status(405).json({ ok: false, error: "Method not allowed", requestId, buildSha });
+      return res.status(405).json({
+        ok: false,
+        error: "Method not allowed",
+        step: "method_check",
+        requestId,
+        buildSha,
+      });
     }
+
+    // ✅ CRASH-PROOF: Parse URL safely (do NOT use req.query)
+    let url;
+    try {
+      url = new URL(req.url, "http://localhost");
+    } catch (urlErr) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid URL",
+        step: "url_parse",
+        requestId,
+        buildSha,
+      });
+    }
+
+    const ping = url.searchParams.get("ping");
+    const debug = url.searchParams.get("debug") === "1";
 
     // ✅ Ping mode (no auth, no DB) — deploy verification
-    if (req.query?.ping === "1") {
-      return res.status(200).json({ ok: true, ping: "doctor/lead", requestId, buildSha });
+    if (ping === "1") {
+      return res.status(200).json({
+        ok: true,
+        ping: "doctor/lead",
+        requestId,
+        buildSha,
+      });
     }
 
+    // ✅ Extract ref from query with fallback keys
+    let ref =
+      url.searchParams.get("ref") ||
+      url.searchParams.get("lead_uuid") ||
+      url.searchParams.get("lead_id") ||
+      url.searchParams.get("leadId") ||
+      url.searchParams.get("leadUuid") ||
+      null;
+
+    // ✅ Normalize: strip CASE- prefix if present
+    if (ref) {
+      ref = String(ref).trim();
+      if (ref.startsWith("CASE-")) {
+        ref = ref.replace(/^CASE-/, "");
+      }
+    }
+
+    if (!ref) {
+      return res.status(400).json({
+        ok: false,
+        error: "Lead reference missing",
+        step: "ref_parse",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Auth: Extract Bearer token
+    const authHeader = req.headers.authorization || req.headers.Authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token) {
+      return res.status(401).json({
+        ok: false,
+        error: "Missing Authorization Bearer token",
+        step: "auth_check",
+        requestId,
+        buildSha,
+      });
+    }
+
+    // ✅ Env check: require SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -62,32 +127,26 @@ module.exports = async function handler(req, res) {
         step: "env_check",
         requestId,
         buildSha,
-        ...(debugMode ? { debug: { hasUrl: !!supabaseUrl, hasServiceKey: !!supabaseServiceKey } } : {}),
+        ...(debug ? { debug: { hasUrl: !!supabaseUrl, hasServiceKey: !!supabaseServiceKey } } : {}),
       });
     }
 
-    const jwt = getBearerToken(req);
-    if (!jwt) {
-      return res.status(401).json({
-        ok: false,
-        error: "Missing Authorization Bearer token",
-        step: "auth_check",
-        requestId,
-        buildSha,
-      });
-    }
+    // ✅ Supabase client with service role
+    const dbClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
-    // Use anon key for JWT verification
+    // ✅ Use anon key for JWT verification
     const authClient = createClient(
       supabaseUrl,
       supabaseAnonKey || supabaseServiceKey,
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
-    // Verify JWT and get user
+    // ✅ Verify user from token: supabase.auth.getUser(token)
     let user;
     try {
-      const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);
+      const { data: userData, error: userErr } = await authClient.auth.getUser(token);
       if (userErr || !userData?.user) {
         return res.status(401).json({
           ok: false,
@@ -95,7 +154,7 @@ module.exports = async function handler(req, res) {
           step: "jwt_verify",
           requestId,
           buildSha,
-          ...(debugMode ? { debug: { jwtError: userErr?.message } } : {}),
+          ...(debug ? { debug: { jwtError: userErr?.message } } : {}),
         });
       }
       user = userData.user;
@@ -106,16 +165,11 @@ module.exports = async function handler(req, res) {
         step: "jwt_verify",
         requestId,
         buildSha,
-        ...(debugMode ? { debug: { error: authErr?.message } } : {}),
+        ...(debug ? { debug: { error: authErr?.message } } : {}),
       });
     }
 
-    // Service role client for DB operations
-    const dbClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    // Verify doctor role
+    // ✅ Role check: fetch role from profiles
     let profile;
     try {
       const { data: profData, error: profErr } = await dbClient
@@ -131,7 +185,7 @@ module.exports = async function handler(req, res) {
           step: "role_check",
           requestId,
           buildSha,
-          ...(debugMode ? { debug: { role: profData?.role || "none", error: profErr?.message } } : {}),
+          ...(debug ? { debug: { role: profData?.role || "none", error: profErr?.message } } : {}),
         });
       }
       profile = profData;
@@ -142,40 +196,11 @@ module.exports = async function handler(req, res) {
         step: "role_check",
         requestId,
         buildSha,
-        ...(debugMode ? { debug: { error: roleErr?.message } } : {}),
+        ...(debug ? { debug: { error: roleErr?.message } } : {}),
       });
     }
 
-    // ✅ Parse ref from query/body: ref, lead_uuid, leadId, lead_id
-    const body = req.body && typeof req.body === "object" ? req.body : {};
-    let ref =
-      (req.query?.ref ? String(req.query.ref).trim() : null) ||
-      (req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null) ||
-      (req.query?.leadUuid ? String(req.query.leadUuid).trim() : null) ||
-      (req.query?.leadId ? String(req.query.leadId).trim() : null) ||
-      (req.query?.lead_id ? String(req.query.lead_id).trim() : null) ||
-      (body.ref ? String(body.ref).trim() : null) ||
-      (body.lead_uuid ? String(body.lead_uuid).trim() : null) ||
-      (body.leadUuid ? String(body.leadUuid).trim() : null) ||
-      (body.leadId ? String(body.leadId).trim() : null) ||
-      (body.lead_id ? String(body.lead_id).trim() : null);
-
-    if (!ref) {
-      return res.status(400).json({
-        ok: false,
-        error: "Missing ref parameter",
-        step: "ref_parse",
-        requestId,
-        buildSha,
-      });
-    }
-
-    // ✅ Normalize: strip CASE- prefix if present
-    ref = String(ref).trim();
-    if (ref.startsWith("CASE-")) {
-      ref = ref.slice(5); // Remove "CASE-" prefix
-    }
-
+    // ✅ Determine UUID via regex
     const refIsUuid = isUuid(ref);
 
     // ✅ AGE-PROOF: Explicit column allowlist (age/gender/snapshot ASLA yok)
@@ -195,7 +220,7 @@ module.exports = async function handler(req, res) {
       "ai_summary",
     ].join(",");
 
-    // Fetch lead with doctor_id filter
+    // ✅ Fetch lead: filter by doctor_id, resolve ref (UUID or TEXT id), use maybeSingle
     let lead;
     try {
       let q = dbClient
@@ -213,48 +238,83 @@ module.exports = async function handler(req, res) {
       const { data: leadData, error: leadErr } = await q.maybeSingle();
 
       if (leadErr) {
-        console.error("[doctor/lead] Query error:", leadErr, { requestId, buildSha, ref, refIsUuid });
+        // ✅ Do NOT log full lead rows (avoid PII in logs)
+        console.error("[doctor/lead] Query error:", {
+          requestId,
+          buildSha,
+          ref: ref.substring(0, 8) + "...",
+          refIsUuid,
+          error: leadErr.message,
+          code: leadErr.code,
+        });
         return res.status(500).json({
           ok: false,
           error: leadErr.message || "Lead query failed",
           step: "fetch_lead",
           requestId,
           buildSha,
-          ...(debugMode ? { debug: { ref, refIsUuid, error: leadErr.message, code: leadErr.code, queryColumn: refIsUuid ? "lead_uuid" : "id" } } : {}),
+          ...(debug
+            ? {
+                debug: {
+                  ref: ref.substring(0, 8) + "...",
+                  refIsUuid,
+                  error: leadErr.message,
+                  code: leadErr.code,
+                  queryColumn: refIsUuid ? "lead_uuid" : "id",
+                },
+              }
+            : {}),
         });
       }
 
       if (!leadData) {
-        // ✅ Enhanced debug: show what we searched for
-        console.warn("[doctor/lead] Lead not found:", { ref, refIsUuid, doctorId: user.id, searchedColumn: refIsUuid ? "lead_uuid" : "id" });
+        // ✅ Return 404 JSON (NOT 500) for not found
         return res.status(404).json({
           ok: false,
           error: "Lead not found or not assigned to you",
           step: "fetch_lead",
           requestId,
           buildSha,
-          ...(debugMode ? { 
-            debug: { 
-              ref, 
-              refIsUuid, 
-              doctorId: user.id,
-              searchedColumn: refIsUuid ? "lead_uuid" : "id",
-              hint: refIsUuid ? "Searched in lead_uuid column" : "Searched in id (TEXT) column"
-            } 
-          } : {}),
+          ...(debug
+            ? {
+                debug: {
+                  ref: ref.substring(0, 8) + "...",
+                  refIsUuid,
+                  doctorId: user.id.substring(0, 8) + "...",
+                  searchedColumn: refIsUuid ? "lead_uuid" : "id",
+                  hint: refIsUuid
+                    ? "Searched in lead_uuid column"
+                    : "Searched in id (TEXT) column",
+                },
+              }
+            : {}),
         });
       }
 
       lead = leadData;
     } catch (fetchErr) {
-      console.error("[doctor/lead] Fetch crash:", fetchErr, { requestId, buildSha });
+      // ✅ Do NOT log full lead rows (avoid PII in logs)
+      console.error("[doctor/lead] Fetch crash:", {
+        requestId,
+        buildSha,
+        ref: ref.substring(0, 8) + "...",
+        error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+      });
       return res.status(500).json({
         ok: false,
         error: fetchErr instanceof Error ? fetchErr.message : "Lead fetch failed",
         step: "fetch_lead",
         requestId,
         buildSha,
-        ...(debugMode ? { debug: { ref, refIsUuid, error: String(fetchErr) } } : {}),
+        ...(debug
+          ? {
+              debug: {
+                ref: ref.substring(0, 8) + "...",
+                refIsUuid,
+                error: String(fetchErr),
+              },
+            }
+          : {}),
       });
     }
 
@@ -271,8 +331,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Fetch documents (if table exists) - exclude passport/ID, non-fatal
-    // ✅ Documents fetch MUST NOT crash: try lead_id = lead.id first, fallback to lead_uuid if needed
+    // ✅ Documents: NON-FATAL (try/catch around docs query)
     let documents = [];
     let docsError = null;
     try {
@@ -286,12 +345,6 @@ module.exports = async function handler(req, res) {
 
       // If error mentions missing column or type mismatch, try fallback with lead_uuid
       if (docsErr && (docsErr.message?.includes("column") || docsErr.code === "PGRST116" || docsErr.code === "42804")) {
-        console.debug("[doctor/lead] Documents query error, trying fallback with lead_uuid:", {
-          error: docsErr?.message,
-          code: docsErr?.code,
-          firstJoinKey: docJoinKey,
-        });
-        
         // Try 2: lead_documents by lead_uuid = lead.lead_uuid (if available)
         if (lead.lead_uuid) {
           docJoinKey = lead.lead_uuid;
@@ -300,7 +353,7 @@ module.exports = async function handler(req, res) {
             .select("*")
             .eq("lead_uuid", docJoinKey)
             .order("created_at", { ascending: false });
-          
+
           docsData = fallbackResult.data;
           docsErr = fallbackResult.error;
         }
@@ -308,11 +361,11 @@ module.exports = async function handler(req, res) {
 
       if (docsErr) {
         docsError = docsErr;
-        console.debug("[doctor/lead] Documents query error (table may not exist or join key mismatch):", {
+        // ✅ Do NOT log full lead rows (avoid PII in logs)
+        console.debug("[doctor/lead] Documents query error:", {
           error: docsErr?.message,
           code: docsErr?.code,
-          joinKey: docJoinKey,
-          joinKeyType: typeof docJoinKey,
+          joinKey: String(docJoinKey).substring(0, 8) + "...",
         });
       } else if (docsData && Array.isArray(docsData)) {
         // ✅ Exclude passport/ID documents, only allow photos/x-rays/treatment-plan
@@ -339,6 +392,7 @@ module.exports = async function handler(req, res) {
               type.includes("xray") ||
               type.includes("x-ray") ||
               type.includes("treatment") ||
+              type.includes("plan") ||
               category.includes("photo") ||
               category.includes("xray") ||
               category.includes("treatment")
@@ -358,23 +412,40 @@ module.exports = async function handler(req, res) {
       console.debug("[doctor/lead] Documents fetch skipped:", docsErr?.message);
     }
 
+    // ✅ Return success with DTO, documents, requestId, buildSha
     return res.status(200).json({
       ok: true,
       lead: safeLead,
       documents: documents,
       requestId,
       buildSha,
-      ...(debugMode && docsError ? { debug: { docsError: docsError.message } } : {}),
+      ...(debug && docsError
+        ? { debug: { docsError: docsError.message } }
+        : {}),
     });
   } catch (err) {
-    console.error("[doctor/lead] Handler crash:", err, { requestId, buildSha });
+    // ✅ CRASH-PROOF: Top-level catch - always return JSON
+    // ✅ Do NOT log full lead rows (avoid PII in logs)
+    console.error("[doctor/lead] Handler crash:", {
+      requestId,
+      buildSha,
+      error: err instanceof Error ? err.message : String(err),
+      step: "handler",
+    });
     return res.status(500).json({
       ok: false,
-      error: err instanceof Error ? err.message : "Internal server error",
+      error: err instanceof Error ? err.message : "Server error",
       step: "handler",
       requestId,
       buildSha,
-      ...(debugMode ? { debug: { error: String(err), stack: err?.stack?.split("\n").slice(0, 3) } } : {}),
+      ...(req.url?.includes("debug=1")
+        ? {
+            debug: {
+              error: String(err),
+              stack: err?.stack?.split("\n").slice(0, 3),
+            },
+          }
+        : {}),
     });
   }
 };
