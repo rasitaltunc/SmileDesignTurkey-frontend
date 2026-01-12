@@ -5,7 +5,8 @@
 // ✅ CRASH-PROOF: Always returns JSON, never crashes
 
 const { createClient } = require("@supabase/supabase-js");
-const { toDoctorLeadDTO } = require("./_doctorPrivacy");
+// ✅ Vercel module resolution: _doctorPrivacy.js is in parent directory (api/), not api/doctor/
+const { toDoctorLeadDTO } = require("../_doctorPrivacy");
 
 // ✅ Build SHA for deployment verification
 const buildSha =
