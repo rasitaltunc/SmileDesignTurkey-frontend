@@ -1131,9 +1131,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                             toast.error("Lead not loaded");
                             return;
                           }
-                          const ref = (lead as any).lead_uuid || lead.id;
-                          if (!ref) {
+                          const briefRef = (lead as any)?.ref || (lead as any).lead_uuid || lead.id || leadRef;
+                          if (!briefRef) {
                             toast.error("Lead reference missing");
+                            console.error("[AdminPatientProfile] Lead reference missing for brief", { lead, leadRef });
                             return;
                           }
 
@@ -1143,7 +1144,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                               `/api/doctor/ai/brief`,
                               {
                                 method: 'POST',
-                                body: JSON.stringify({ ref }),
+                                body: JSON.stringify({ ref: briefRef }),
                               }
                             );
 
@@ -1953,10 +1954,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           <button
                             type="button"
                             onClick={async () => {
-                              // ✅ Use privacy-safe ref field from DTO
-                              const ref = (lead as any)?.ref || null;
-                              if (!ref) {
+                              // ✅ Use privacy-safe ref field from DTO, fallback to leadRef from route
+                              const reviewRef = (lead as any)?.ref || leadRef || null;
+                              if (!reviewRef) {
                                 toast.error("Lead reference missing");
+                                console.error("[AdminPatientProfile] Lead reference missing for review", { lead, leadRef });
                                 return;
                               }
                               
@@ -1965,7 +1967,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 const result = await apiJsonAuth<{ ok: true; lead: any }>(`/api/doctor/lead/review`, {
                                   method: 'POST',
                                   body: JSON.stringify({
-                                    ref: ref,
+                                    ref: reviewRef,
                                     doctor_review_notes: doctorReviewNotes || null,
                                   }),
                                 });
@@ -1984,7 +1986,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                 setIsUpdatingReview(false);
                               }
                             }}
-                            disabled={isUpdatingReview || !reviewRef}
+                            disabled={isUpdatingReview || !leadRef}
                             className="w-full px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                           >
                             Submit Review & Mark as Reviewed
