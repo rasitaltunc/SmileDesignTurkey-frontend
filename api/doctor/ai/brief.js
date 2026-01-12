@@ -4,7 +4,8 @@
 // Auth: Bearer JWT (doctor role required)
 
 const { createClient } = require("@supabase/supabase-js");
-const { redactPII, caseCodeFromLead } = require("../_privacy");
+// ✅ Vercel module resolution: _privacy.js is in api/ directory, two levels up from api/doctor/ai/
+const { redactPII, caseCodeFromLead } = require("../../_privacy");
 
 function getBearerToken(req) {
   const h = req.headers.authorization;
