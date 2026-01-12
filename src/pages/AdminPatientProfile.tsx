@@ -1567,7 +1567,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                 </div>
                 
                 {/* D) Booking Section (Admin/Employee only) */}
-                {!isDoctorMode && (() => {
+                {!finalIsDoctorMode && (() => {
                   // Show booking section if:
                   // 1. next_action === 'ready_for_booking' (doctor review sonrası, booking öncesi)
                   // 2. status === 'appointment_set' (booking olduktan sonra)
@@ -1670,7 +1670,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                 })()}
 
                 {/* E) Next Action & Follow-up (Admin/Employee only) */}
-                {!isDoctorMode && (
+                {!finalIsDoctorMode && (
                   <div className="mb-4 pb-4 border-b border-gray-100">
                     <h4 className="text-xs font-semibold text-gray-700 mb-3">Next Action</h4>
                   <div className="space-y-3">
@@ -1757,7 +1757,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                 )}
 
                 {/* F) Assign Doctor (Admin/Employee only) */}
-                {!isDoctorMode && (
+                {!finalIsDoctorMode && (
                   <div className="mb-4 pb-4 border-b border-gray-100">
                     <h4 className="text-xs font-semibold text-gray-700 mb-3">Assign Doctor</h4>
                   <select
@@ -1817,7 +1817,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                 )}
 
                 {/* G) Doctor Review (Doctor mode only) */}
-                {isDoctorMode && (
+                {finalIsDoctorMode && (
                   <div className="mb-4 pb-4 border-b border-gray-100">
                     <h4 className="text-xs font-semibold text-gray-700 mb-3">Review</h4>
                     <div className="space-y-3">
@@ -1932,7 +1932,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                             }
                           }}
                           disabled={isUpdatingReview || !leadId}
-                          placeholder={isDoctorMode ? "Add your review notes..." : "Add review notes..."}
+                          placeholder={finalIsDoctorMode ? "Add your review notes..." : "Add review notes..."}
                           rows={4}
                           className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
                         />
