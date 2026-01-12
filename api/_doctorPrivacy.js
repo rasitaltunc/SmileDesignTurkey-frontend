@@ -17,7 +17,9 @@ function toDoctorLeadDTO(lead) {
   const rawSnapshot = (lead && typeof lead.ai_summary === "string" ? lead.ai_summary : "") || "";
   
   // ✅ REF: Privacy-safe reference (prefer lead_uuid UUID, fallback to id TEXT)
-  const ref = (lead.lead_uuid && String(lead.lead_uuid).trim()) || (lead.id && String(lead.id).trim()) || null;
+  const leadUuid = lead.lead_uuid ? String(lead.lead_uuid).trim() : null;
+  const leadId = lead.id ? String(lead.id).trim() : null;
+  const ref = leadUuid || leadId || null;
   
   // ✅ CASE_CODE: Unique case code derived from ref (use last 10 alphanumeric chars)
   let case_code = null;

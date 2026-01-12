@@ -1,5 +1,5 @@
 // api/doctor/lead.js
-// GET /api/doctor/lead?ref=... (ref = lead_uuid or lead.id)
+// GET /api/doctor/lead?ref=... (ref = lead_uuid UUID or lead.id TEXT)
 // Returns privacy-filtered single lead with snapshot and documents
 // Auth: Bearer JWT (doctor role required) - schema-safe (no column assumptions)
 
@@ -31,21 +31,28 @@ module.exports = async function handler(req, res) {
   const requestId = `doctor_lead_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
   try {
-    // CORS
+    // CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Cache-Control", "no-store");
 
-    if (req.method === "OPTIONS") return res.status(200).end();
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
 
     if (req.method !== "GET") {
       return res.status(405).json({ ok: false, error: "Method not allowed", requestId, buildSha });
     }
 
+    // ✅ Ping mode (DB'ye hiç girmez) — deploy doğru mu test
+    if (req.query?.ping === "1") {
+      return res.status(200).json({ ok: true, ping: "doctor/lead", requestId, buildSha });
+    }
+
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY; // For JWT verification
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return res.status(500).json({
@@ -61,7 +68,7 @@ module.exports = async function handler(req, res) {
       return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId, buildSha });
     }
 
-    // Use anon key for JWT verification (as per existing pattern in api/leads.js)
+    // Use anon key for JWT verification
     const authClient = createClient(
       supabaseUrl,
       supabaseAnonKey || supabaseServiceKey,
@@ -84,24 +91,50 @@ module.exports = async function handler(req, res) {
     // Verify doctor role
     const { data: profile, error: profErr } = await dbClient
       .from("profiles")
-      .select("role")
+      .select("id, role")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (profErr || profile?.role !== "doctor") {
+    if (profErr || !profile || profile.role !== "doctor") {
       return res.status(403).json({ ok: false, error: "Forbidden: doctor access only", requestId, buildSha });
     }
 
-    // Get ref parameter (UUID or TEXT id)
-    const ref = req.query?.ref ? String(req.query.ref).trim() : null;
+    // ✅ Parse ref from query or body (backward compatibility)
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const ref =
+      (req.query?.ref ? String(req.query.ref).trim() : null) ||
+      (req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null) ||
+      (req.query?.leadId ? String(req.query.leadId).trim() : null) ||
+      (req.query?.lead_id ? String(req.query.lead_id).trim() : null) ||
+      (body.ref ? String(body.ref).trim() : null) ||
+      (body.lead_uuid ? String(body.lead_uuid).trim() : null) ||
+      (body.leadId ? String(body.leadId).trim() : null) ||
+      (body.lead_id ? String(body.lead_id).trim() : null);
+
     if (!ref) {
       return res.status(400).json({ ok: false, error: "Missing ref parameter", requestId, buildSha });
     }
 
-    // ✅ Schema-safe: Use select("*") then map to allowlist (no column assumptions)
+    // ✅ AGE-PROOF: Explicit column allowlist (age/gender/snapshot ASLA yok)
+    const selectColumns = [
+      "id",
+      "lead_uuid",
+      "name",
+      "treatment",
+      "timeline",
+      "message",
+      "status",
+      "doctor_id",
+      "doctor_review_status",
+      "doctor_assigned_at",
+      "updated_at",
+      "created_at",
+      "ai_summary",
+    ].join(",");
+
     let q = dbClient
       .from("leads")
-      .select("*")
+      .select(selectColumns)
       .eq("doctor_id", user.id); // ✅ Doctor can only see their assigned leads
 
     // Resolve ref (UUID or TEXT id)
@@ -111,11 +144,11 @@ module.exports = async function handler(req, res) {
       q = q.eq("id", ref);
     }
 
-    const { data: lead, error } = await q.maybeSingle();
+    const { data: lead, error: leadErr } = await q.maybeSingle();
 
-    if (error) {
-      console.error("[doctor/lead] Query error:", error, { requestId, buildSha });
-      return res.status(500).json({ ok: false, error: error.message, requestId, buildSha });
+    if (leadErr) {
+      console.error("[doctor/lead] Query error:", leadErr, { requestId, buildSha });
+      return res.status(500).json({ ok: false, error: leadErr.message, requestId, buildSha });
     }
 
     if (!lead) {
@@ -124,7 +157,7 @@ module.exports = async function handler(req, res) {
 
     // ✅ Privacy filter: map to safe response using helper - schema-safe
     const safeLead = toDoctorLeadDTO(lead);
-    
+
     if (!safeLead) {
       return res.status(404).json({ ok: false, error: "Lead not found or not assigned to you", requestId, buildSha });
     }
@@ -141,14 +174,14 @@ module.exports = async function handler(req, res) {
       if (docsErr) {
         console.debug("[doctor/lead] Documents query error (table may not exist):", docsErr?.message);
       } else if (docsData && Array.isArray(docsData)) {
-        // ✅ Exclude passport/ID documents
+        // ✅ Exclude passport/ID documents, only allow photos/x-rays/treatment-plan
         documents = docsData
           .filter((doc) => {
             const type = String(doc.type || "").toLowerCase();
             const filename = String(doc.filename || "").toLowerCase();
             const category = String(doc.category || "").toLowerCase();
-            
-            // Exclude if contains passport/ID indicators
+
+            // Exclude passport/ID
             if (
               type.includes("passport") ||
               type.includes("id") ||
@@ -159,7 +192,16 @@ module.exports = async function handler(req, res) {
             ) {
               return false;
             }
-            return true;
+            // Only allow photos, x-rays, treatment-plan
+            return (
+              type.includes("photo") ||
+              type.includes("xray") ||
+              type.includes("x-ray") ||
+              type.includes("treatment") ||
+              category.includes("photo") ||
+              category.includes("xray") ||
+              category.includes("treatment")
+            );
           })
           .map((doc) => ({
             id: doc.id || null,
@@ -191,4 +233,3 @@ module.exports = async function handler(req, res) {
     });
   }
 };
-

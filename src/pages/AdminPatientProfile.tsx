@@ -83,8 +83,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   
   // Extract leadId from URL (App.tsx uses custom routing, not React Router)
   // Route: /admin/lead/:id OR from prop (admin/employee mode)
-  // Route: /doctor/lead/:leadUuid OR from prop (doctor mode - always UUID)
-  // ✅ Extract leadId from URL - support both /admin/lead/:id and /doctor/lead/:uuid
+  // Route: /doctor/lead/:ref OR from prop (doctor mode - ref can be UUID or TEXT id)
+  // ✅ Extract leadId from URL - support both /admin/lead/:id and /doctor/lead/:ref
   const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/) || currentPath.match(/\/doctor\/lead\/([^/]+)/);
   const urlLeadId = leadIdMatch ? leadIdMatch[1] : null;
   
@@ -95,8 +95,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   
   const leadId = propLeadId || urlLeadId;
   
-  // ✅ Doctor mode: use leadUuid prop (always UUID) OR extract from route
-  const leadUuid = propLeadUuid || (isDoctorRoute ? urlLeadId : null);
+  // ✅ Doctor mode: use leadUuid prop OR extract ref from route (ref can be UUID or TEXT id)
+  const leadRef = propLeadUuid || (isDoctorRoute ? urlLeadId : null);
   
   // Debug log
   useEffect(() => {
@@ -260,12 +260,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     // ✅ Auth yoksa hiç deneme
     if (!isAuthenticated) return;
 
-    // ✅ Doctor mode: leadUuid gerekli (from prop OR route)
-    const finalLeadUuid = finalIsDoctorMode ? (leadUuid || (isDoctorRoute ? urlLeadId : null)) : null;
+    // ✅ Doctor mode: ref gerekli (from prop OR route - can be UUID or TEXT id)
+    const finalRef = finalIsDoctorMode ? (leadRef || (isDoctorRoute ? urlLeadId : null)) : null;
     const finalLeadId = finalIsDoctorMode ? null : (leadId || urlLeadId);
     
     if (finalIsDoctorMode) {
-      if (!finalLeadUuid) return;
+      if (!finalRef) return;
     } else {
       // ✅ Admin/Employee mode: leadId gerekli
       if (!finalLeadId) return;
@@ -279,10 +279,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         let loadedLead: Lead;
 
         // ✅ Doctor mode: Use privacy-safe doctor endpoint
-        if (finalIsDoctorMode && finalLeadUuid) {
-          // ✅ Use /api/doctor/lead?ref=... for privacy-filtered data
+        if (finalIsDoctorMode && finalRef) {
+          // ✅ Use /api/doctor/lead?ref=... for privacy-filtered data (ref can be UUID or TEXT id)
           const result = await apiJsonAuth<{ ok: true; lead: any; documents?: any[] }>(
-            `/api/doctor/lead?ref=${encodeURIComponent(finalLeadUuid)}`
+            `/api/doctor/lead?ref=${encodeURIComponent(finalRef)}`
           );
           if (!result.ok || !result.lead) {
             throw new Error("Lead not found or not assigned to you");
@@ -324,7 +324,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchLead();
-  }, [leadId, leadUuid, isAuthenticated, finalIsDoctorMode, urlLeadId, isDoctorRoute]);
+  }, [leadId, leadRef, isAuthenticated, finalIsDoctorMode, urlLeadId, isDoctorRoute]);
 
   // Fetch notes
   useEffect(() => {
@@ -1939,7 +1939,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           <button
                             type="button"
                             onClick={async () => {
-                              const ref = (lead as any)?.lead_uuid || lead?.id;
+                              // ✅ Use privacy-safe ref field from DTO
+                              const ref = (lead as any)?.ref || null;
                               if (!ref) {
                                 toast.error("Lead reference missing");
                                 return;
