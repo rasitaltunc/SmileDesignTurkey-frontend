@@ -2247,7 +2247,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
             </div>
 
             {/* Contact Events Log (Admin/Employee only) */}
-            {!isDoctorMode && (
+            {!finalIsDoctorMode && (
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Phone className="w-4 h-4 text-gray-600" />
