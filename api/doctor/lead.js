@@ -29,6 +29,7 @@ function isUuid(v) {
 
 module.exports = async function handler(req, res) {
   const requestId = `doctor_lead_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const debugMode = req.query?.debug === "1";
 
   try {
     // CORS headers
@@ -45,7 +46,7 @@ module.exports = async function handler(req, res) {
       return res.status(405).json({ ok: false, error: "Method not allowed", requestId, buildSha });
     }
 
-    // ✅ Ping mode (DB'ye hiç girmez) — deploy doğru mu test
+    // ✅ Ping mode (no auth, no DB) — deploy verification
     if (req.query?.ping === "1") {
       return res.status(200).json({ ok: true, ping: "doctor/lead", requestId, buildSha });
     }
@@ -58,14 +59,22 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({
         ok: false,
         error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+        step: "env_check",
         requestId,
         buildSha,
+        ...(debugMode ? { debug: { hasUrl: !!supabaseUrl, hasServiceKey: !!supabaseServiceKey } } : {}),
       });
     }
 
     const jwt = getBearerToken(req);
     if (!jwt) {
-      return res.status(401).json({ ok: false, error: "Missing Authorization Bearer token", requestId, buildSha });
+      return res.status(401).json({
+        ok: false,
+        error: "Missing Authorization Bearer token",
+        step: "auth_check",
+        requestId,
+        buildSha,
+      });
     }
 
     // Use anon key for JWT verification
@@ -76,12 +85,30 @@ module.exports = async function handler(req, res) {
     );
 
     // Verify JWT and get user
-    const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);
-    if (userErr || !userData?.user) {
-      return res.status(401).json({ ok: false, error: "Invalid session", requestId, buildSha });
+    let user;
+    try {
+      const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);
+      if (userErr || !userData?.user) {
+        return res.status(401).json({
+          ok: false,
+          error: "Invalid session",
+          step: "jwt_verify",
+          requestId,
+          buildSha,
+          ...(debugMode ? { debug: { jwtError: userErr?.message } } : {}),
+        });
+      }
+      user = userData.user;
+    } catch (authErr) {
+      return res.status(401).json({
+        ok: false,
+        error: "Auth verification failed",
+        step: "jwt_verify",
+        requestId,
+        buildSha,
+        ...(debugMode ? { debug: { error: authErr?.message } } : {}),
+      });
     }
-
-    const user = userData.user;
 
     // Service role client for DB operations
     const dbClient = createClient(supabaseUrl, supabaseServiceKey, {
@@ -89,14 +116,34 @@ module.exports = async function handler(req, res) {
     });
 
     // Verify doctor role
-    const { data: profile, error: profErr } = await dbClient
-      .from("profiles")
-      .select("id, role")
-      .eq("id", user.id)
-      .maybeSingle();
+    let profile;
+    try {
+      const { data: profData, error: profErr } = await dbClient
+        .from("profiles")
+        .select("id, role")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    if (profErr || !profile || profile.role !== "doctor") {
-      return res.status(403).json({ ok: false, error: "Forbidden: doctor access only", requestId, buildSha });
+      if (profErr || !profData || profData.role !== "doctor") {
+        return res.status(403).json({
+          ok: false,
+          error: "Forbidden: doctor access only",
+          step: "role_check",
+          requestId,
+          buildSha,
+          ...(debugMode ? { debug: { role: profData?.role || "none", error: profErr?.message } } : {}),
+        });
+      }
+      profile = profData;
+    } catch (roleErr) {
+      return res.status(500).json({
+        ok: false,
+        error: "Role check failed",
+        step: "role_check",
+        requestId,
+        buildSha,
+        ...(debugMode ? { debug: { error: roleErr?.message } } : {}),
+      });
     }
 
     // ✅ Parse ref from query or body (backward compatibility)
@@ -104,16 +151,26 @@ module.exports = async function handler(req, res) {
     const ref =
       (req.query?.ref ? String(req.query.ref).trim() : null) ||
       (req.query?.lead_uuid ? String(req.query.lead_uuid).trim() : null) ||
+      (req.query?.leadUuid ? String(req.query.leadUuid).trim() : null) ||
       (req.query?.leadId ? String(req.query.leadId).trim() : null) ||
       (req.query?.lead_id ? String(req.query.lead_id).trim() : null) ||
       (body.ref ? String(body.ref).trim() : null) ||
       (body.lead_uuid ? String(body.lead_uuid).trim() : null) ||
+      (body.leadUuid ? String(body.leadUuid).trim() : null) ||
       (body.leadId ? String(body.leadId).trim() : null) ||
       (body.lead_id ? String(body.lead_id).trim() : null);
 
     if (!ref) {
-      return res.status(400).json({ ok: false, error: "Missing ref parameter", requestId, buildSha });
+      return res.status(400).json({
+        ok: false,
+        error: "Missing ref parameter",
+        step: "ref_parse",
+        requestId,
+        buildSha,
+      });
     }
+
+    const refIsUuid = isUuid(ref);
 
     // ✅ AGE-PROOF: Explicit column allowlist (age/gender/snapshot ASLA yok)
     const selectColumns = [
@@ -132,46 +189,84 @@ module.exports = async function handler(req, res) {
       "ai_summary",
     ].join(",");
 
-    let q = dbClient
-      .from("leads")
-      .select(selectColumns)
-      .eq("doctor_id", user.id); // ✅ Doctor can only see their assigned leads
+    // Fetch lead with doctor_id filter
+    let lead;
+    try {
+      let q = dbClient
+        .from("leads")
+        .select(selectColumns)
+        .eq("doctor_id", user.id); // ✅ Doctor can only see their assigned leads
 
-    // Resolve ref (UUID or TEXT id)
-    if (isUuid(ref)) {
-      q = q.eq("lead_uuid", ref);
-    } else {
-      q = q.eq("id", ref);
-    }
+      // Resolve ref (UUID or TEXT id)
+      if (refIsUuid) {
+        q = q.eq("lead_uuid", ref);
+      } else {
+        q = q.eq("id", ref);
+      }
 
-    const { data: lead, error: leadErr } = await q.maybeSingle();
+      const { data: leadData, error: leadErr } = await q.maybeSingle();
 
-    if (leadErr) {
-      console.error("[doctor/lead] Query error:", leadErr, { requestId, buildSha });
-      return res.status(500).json({ ok: false, error: leadErr.message, requestId, buildSha });
-    }
+      if (leadErr) {
+        console.error("[doctor/lead] Query error:", leadErr, { requestId, buildSha, ref, refIsUuid });
+        return res.status(500).json({
+          ok: false,
+          error: leadErr.message || "Lead query failed",
+          step: "fetch_lead",
+          requestId,
+          buildSha,
+          ...(debugMode ? { debug: { ref, refIsUuid, error: leadErr.message, code: leadErr.code } } : {}),
+        });
+      }
 
-    if (!lead) {
-      return res.status(404).json({ ok: false, error: "Lead not found or not assigned to you", requestId, buildSha });
+      if (!leadData) {
+        return res.status(404).json({
+          ok: false,
+          error: "Lead not found or not assigned to you",
+          step: "fetch_lead",
+          requestId,
+          buildSha,
+          ...(debugMode ? { debug: { ref, refIsUuid, doctorId: user.id } } : {}),
+        });
+      }
+
+      lead = leadData;
+    } catch (fetchErr) {
+      console.error("[doctor/lead] Fetch crash:", fetchErr, { requestId, buildSha });
+      return res.status(500).json({
+        ok: false,
+        error: fetchErr instanceof Error ? fetchErr.message : "Lead fetch failed",
+        step: "fetch_lead",
+        requestId,
+        buildSha,
+        ...(debugMode ? { debug: { ref, refIsUuid, error: String(fetchErr) } } : {}),
+      });
     }
 
     // ✅ Privacy filter: map to safe response using helper - schema-safe
     const safeLead = toDoctorLeadDTO(lead);
 
     if (!safeLead) {
-      return res.status(404).json({ ok: false, error: "Lead not found or not assigned to you", requestId, buildSha });
+      return res.status(404).json({
+        ok: false,
+        error: "Lead not found or not assigned to you",
+        step: "dto_map",
+        requestId,
+        buildSha,
+      });
     }
 
-    // Fetch documents (if table exists) - exclude passport/ID
+    // Fetch documents (if table exists) - exclude passport/ID, non-fatal
     let documents = [];
+    let docsError = null;
     try {
       const { data: docsData, error: docsErr } = await dbClient
         .from("lead_documents")
         .select("*")
-        .eq("lead_id", lead.id)
+        .eq("lead_id", lead.id) // ✅ Use lead.id (TEXT) as join key
         .order("created_at", { ascending: false });
 
       if (docsErr) {
+        docsError = docsErr;
         console.debug("[doctor/lead] Documents query error (table may not exist):", docsErr?.message);
       } else if (docsData && Array.isArray(docsData)) {
         // ✅ Exclude passport/ID documents, only allow photos/x-rays/treatment-plan
@@ -213,6 +308,7 @@ module.exports = async function handler(req, res) {
       }
     } catch (docsErr) {
       // Table might not exist, continue without crashing
+      docsError = docsErr;
       console.debug("[doctor/lead] Documents fetch skipped:", docsErr?.message);
     }
 
@@ -222,14 +318,17 @@ module.exports = async function handler(req, res) {
       documents: documents,
       requestId,
       buildSha,
+      ...(debugMode && docsError ? { debug: { docsError: docsError.message } } : {}),
     });
   } catch (err) {
     console.error("[doctor/lead] Handler crash:", err, { requestId, buildSha });
     return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal server error",
+      step: "handler",
       requestId,
       buildSha,
+      ...(debugMode ? { debug: { error: String(err), stack: err?.stack?.split("\n").slice(0, 3) } } : {}),
     });
   }
 };

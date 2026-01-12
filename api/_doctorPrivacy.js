@@ -21,13 +21,15 @@ function toDoctorLeadDTO(lead) {
   const leadId = lead.id ? String(lead.id).trim() : null;
   const ref = leadUuid || leadId || null;
   
-  // ✅ CASE_CODE: Unique case code derived from ref (use last 10 alphanumeric chars)
+  // ✅ CASE_CODE: Prefer lead.id (TEXT) if exists, else fallback to lead_uuid
   let case_code = null;
-  if (ref) {
-    // Extract last 10 alphanumeric characters from ref (remove dashes, take last 10)
-    const cleaned = String(ref).replace(/[^a-zA-Z0-9]/g, '');
-    const tail = cleaned.slice(-10).toUpperCase();
-    case_code = tail ? `CASE-${tail}` : null;
+  if (leadId) {
+    // Use lead.id (TEXT) directly
+    case_code = `CASE-${String(leadId).slice(0, 8).toUpperCase()}`;
+  } else if (leadUuid) {
+    // Fallback to lead_uuid (first 8 chars, uppercase, no dashes)
+    const cleaned = String(leadUuid).replace(/-/g, '').slice(0, 8).toUpperCase();
+    case_code = cleaned ? `CASE-${cleaned}` : null;
   }
   
   return {
