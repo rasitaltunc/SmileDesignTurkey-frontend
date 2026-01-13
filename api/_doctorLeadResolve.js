@@ -27,34 +27,118 @@ function normalizeRef(raw) {
  * @param {Object} supabase - Supabase client
  * @param {string} leadRef - Lead reference (UUID or TEXT id)
  * @param {string} doctorUserId - Doctor user ID for assignment check
- * @returns {Promise<{lead: Object|null, ref: string|null}>}
+ * @returns {Promise<{lead: Object|null, ref: string|null, error?: string}>}
  */
 async function fetchLeadByRef(supabase, leadRef, doctorUserId) {
   const ref = normalizeRef(leadRef);
   if (!ref) return { lead: null, ref: null };
 
-  let q = supabase
-    .from("leads")
-    .select("id, lead_uuid, case_code, doctor_id")
-    .limit(1);
+  try {
+    // ✅ UUID ise önce id, sonra lead_uuid dene
+    if (isUuid(ref)) {
+      // Try 1: id column
+      let { data, error } = await supabase
+        .from("leads")
+        .select("id, lead_uuid, case_code, doctor_id")
+        .eq("id", ref)
+        .limit(1)
+        .maybeSingle();
 
-  if (isUuid(ref)) {
-    // ✅ CRITICAL: UUID ise iki kolonu da dene (id OR lead_uuid)
-    q = q.or(`id.eq.${ref},lead_uuid.eq.${ref}`);
-  } else {
-    // TEXT id: try id, case_code, CASE-{case_code}
-    q = q.or(`case_code.eq.${ref},case_code.eq.CASE-${ref},id.eq.${ref}`);
+      if (!error && data) {
+        // Check assignment
+        if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
+          return { lead: null, ref, error: "Lead not assigned to doctor" };
+        }
+        return { lead: data, ref };
+      }
+
+      // Try 2: lead_uuid column
+      ({ data, error } = await supabase
+        .from("leads")
+        .select("id, lead_uuid, case_code, doctor_id")
+        .eq("lead_uuid", ref)
+        .limit(1)
+        .maybeSingle());
+
+      if (!error && data) {
+        // Check assignment
+        if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
+          return { lead: null, ref, error: "Lead not assigned to doctor" };
+        }
+        return { lead: data, ref };
+      }
+
+      // Both failed
+      if (error) {
+        console.error("[fetchLeadByRef] UUID query error:", error, { ref, doctorUserId });
+        return { lead: null, ref, error: error.message || "Lead query failed" };
+      }
+      return { lead: null, ref };
+    } else {
+      // ✅ TEXT id: try id, case_code, CASE-{case_code} sequentially
+      // Try 1: id column (text)
+      let { data, error } = await supabase
+        .from("leads")
+        .select("id, lead_uuid, case_code, doctor_id")
+        .eq("id", ref)
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        // Check assignment
+        if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
+          return { lead: null, ref, error: "Lead not assigned to doctor" };
+        }
+        return { lead: data, ref };
+      }
+
+      // Try 2: case_code
+      ({ data, error } = await supabase
+        .from("leads")
+        .select("id, lead_uuid, case_code, doctor_id")
+        .eq("case_code", ref)
+        .limit(1)
+        .maybeSingle());
+
+      if (!error && data) {
+        // Check assignment
+        if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
+          return { lead: null, ref, error: "Lead not assigned to doctor" };
+        }
+        return { lead: data, ref };
+      }
+
+      // Try 3: CASE-{ref}
+      ({ data, error } = await supabase
+        .from("leads")
+        .select("id, lead_uuid, case_code, doctor_id")
+        .eq("case_code", `CASE-${ref}`)
+        .limit(1)
+        .maybeSingle());
+
+      if (!error && data) {
+        // Check assignment
+        if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
+          return { lead: null, ref, error: "Lead not assigned to doctor" };
+        }
+        return { lead: data, ref };
+      }
+
+      // All attempts failed
+      if (error) {
+        console.error("[fetchLeadByRef] TEXT query error:", error, { ref, doctorUserId });
+        return { lead: null, ref, error: error.message || "Lead query failed" };
+      }
+      return { lead: null, ref };
+    }
+  } catch (err) {
+    console.error("[fetchLeadByRef] Exception:", err, { ref, doctorUserId });
+    return {
+      lead: null,
+      ref,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
-
-  const { data, error } = await q.maybeSingle();
-  if (error) throw error;
-
-  // Güvenlik: doctor_id kontrol (optional - can be relaxed if needed)
-  if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
-    return { lead: null, ref };
-  }
-
-  return { lead: data || null, ref };
 }
 
 module.exports = {

@@ -168,13 +168,31 @@ module.exports = async function handler(req, res) {
     // ✅ Fetch lead using robust resolve helper
     let lead;
     try {
-      const { lead: leadData, ref: resolvedRef } = await fetchLeadByRef(
-        dbClient,
-        leadRef,
-        user.id
-      );
+      const result = await fetchLeadByRef(dbClient, leadRef, user.id);
 
-      if (!leadData) {
+      if (result.error) {
+        console.error("[doctor/note] Lead fetch error:", result.error, { requestId, leadRef });
+        // If assignment error, return 403; otherwise 404
+        if (result.error.includes("not assigned")) {
+          return res.status(403).json({
+            ok: false,
+            error: result.error,
+            step: "fetch_lead",
+            requestId,
+            buildSha,
+          });
+        }
+        return res.status(404).json({
+          ok: false,
+          error: result.error || "Lead not found",
+          step: "fetch_lead",
+          requestId,
+          buildSha,
+          leadRef: String(leadRef || ""),
+        });
+      }
+
+      if (!result.lead) {
         return res.status(404).json({
           ok: false,
           error: "Lead not found",
@@ -185,12 +203,12 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      lead = leadData;
+      lead = result.lead;
     } catch (leadErr) {
-      console.error("[doctor/note] Lead fetch error:", leadErr, { requestId });
+      console.error("[doctor/note] Lead fetch exception:", leadErr, { requestId, leadRef });
       return res.status(500).json({
         ok: false,
-        error: leadErr.message || "Lead query failed",
+        error: leadErr instanceof Error ? leadErr.message : "Lead query failed",
         step: "fetch_lead",
         requestId,
         buildSha,
