@@ -5,7 +5,7 @@
 // Auth: Bearer JWT (doctor role required)
 
 const { createClient } = require("@supabase/supabase-js");
-const { normalizeRef, fetchLeadByRef } = require("../_doctorLeadResolve");
+const { normalizeRef, fetchLeadByRef } = require("../../_doctorLeadResolve");
 
 const buildSha =
   process.env.VERCEL_GIT_COMMIT_SHA ||
