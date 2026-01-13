@@ -1078,16 +1078,19 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4 min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href = '/admin/leads';
-                }}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors shrink-0"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="font-medium">Back to Leads</span>
-              </button>
+              {/* ✅ "Back to Leads" butonu doktor modunda gizli (doktor /doctor/portal kullanır) */}
+              {!finalIsDoctorMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = '/admin/leads';
+                  }}
+                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors shrink-0"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  <span className="font-medium">Back to Leads</span>
+                </button>
+              )}
               <div className="min-w-0 flex-1">
                 <h1 className="text-2xl font-semibold text-gray-900 break-words">{leadName}</h1>
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
