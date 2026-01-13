@@ -191,14 +191,12 @@ export default function App() {
     }
   };
 
-  // Update currentPath when React Router location changes
-  useEffect(() => {
-    setCurrentPath(location.pathname);
-  }, [location.pathname]);
-
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isEmployeeRoute = location.pathname.startsWith('/employee');
   const navbarVariant = (isAdminRoute || isEmployeeRoute) ? 'admin' : 'public';
+
+  // Check if demo login is enabled
+  const ENABLE_DEMO_LOGIN = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
 
   return (
     <NavigationContext.Provider value={{ navigate: syncNavigate, currentPath, params }}>
