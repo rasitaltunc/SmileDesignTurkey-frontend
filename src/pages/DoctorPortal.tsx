@@ -93,19 +93,27 @@ export default function DoctorPortal() {
     }
   }, [role, user, activeTab]);
 
+  // Helper to pick ref from lead object
+  const pickRef = (lead: any) => {
+    const raw =
+      lead?.lead_uuid ||
+      lead?.ref ||
+      lead?.case_code ||
+      lead?.id ||
+      lead?.lead_id ||
+      null;
+    return raw ? String(raw).replace(/^CASE-/, "").trim() : null;
+  };
+
   const openLead = (lead: any) => {
-    // ✅ Build ref from all possible sources
-    const ref = (lead as any)?.ref || lead?.lead_uuid || lead?.id || (lead as any)?.case_code;
+    const ref = pickRef(lead);
+    console.log("[DoctorPortal] open lead", { ref, lead });
     if (!ref) {
-      toast.error("Lead reference missing");
-      console.error("[DoctorPortal] Missing lead ref", lead);
+      toast.error("Lead ref missing on row. Check lead fields.");
       return;
     }
-    
-    // ✅ Normalize: strip CASE- prefix
-    const safeRef = String(ref).replace(/^CASE-/, "").trim();
     // ✅ Navigate to clean DoctorLeadView route (not AdminPatientProfile)
-    navigate(`/doctor/lead/${encodeURIComponent(safeRef)}`);
+    navigate(`/doctor/lead/${encodeURIComponent(ref)}`);
   };
 
   const getReviewStatusBadge = (status: string | null) => {

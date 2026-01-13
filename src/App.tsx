@@ -1,4 +1,5 @@
 import { useState, createContext, useEffect, ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
@@ -26,6 +27,18 @@ import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
 import BuildStamp from './components/BuildStamp';
 
+// NotFound component for route debugging
+function NotFound() {
+  const loc = useLocation();
+  return (
+    <div style={{ padding: 24 }}>
+      <h1>404 - Route Not Found</h1>
+      <p><b>Path:</b> {loc.pathname}{loc.search}</p>
+      <p>Bu ekranı görüyorsan route match olmuyor demektir.</p>
+    </div>
+  );
+}
+
 // RequireRole component for role-based access control
 function RequireRole({ 
   roles, 
@@ -38,7 +51,7 @@ function RequireRole({
   isLoading?: boolean;
   navigate: (path: string) => void;
 }) {
-  const { role, isLoading: authLoading } = useAuthStore();
+  const { role, user, isLoading: authLoading } = useAuthStore();
   const isLoading = externalLoading ?? authLoading;
 
   // ✅ Redirect to role's home if role is known but not allowed
@@ -65,14 +78,27 @@ function RequireRole({
     );
   }
 
-  // ✅ Role yoksa → Unauthorized göster
-  if (!role) {
+  // ✅ User yoksa → Login'e yönlendir
+  if (!user) {
+    // Navigate to login (handled by useEffect in parent, but show message)
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-600 text-xl font-semibold mb-2">Unauthorized</div>
           <p className="text-gray-600">You don't have access to this page.</p>
           <p className="text-sm text-gray-500 mt-2">Please log in to continue.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Role yoksa → Unauthorized göster
+  if (!role) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 text-xl font-semibold mb-2">Unauthorized</div>
+          <p className="text-gray-600">Role not assigned. Please contact administrator.</p>
         </div>
       </div>
     );
@@ -297,11 +323,13 @@ export default function App() {
           </RequireRole>
         );
       case '/doctor/settings':
-        return (
-          <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-            <DoctorSettings />
-          </RequireRole>
-        );
+        // TEMP: Test without RequireRole to isolate route issues
+        return <DoctorSettings />;
+        // return (
+        //   <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
+        //     <DoctorSettings />
+        //   </RequireRole>
+        // );
       case '/admin':
         // Redirect /admin to /admin/leads
         navigate('/admin/leads', { replace: true });
@@ -342,11 +370,13 @@ export default function App() {
           // Set params in NavigationContext for useParams() hook
           setParams({ ref, leadRef: ref, leadId: ref, id: ref });
           
-          return (
-            <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-              <DoctorLeadView />
-            </RequireRole>
-          );
+          // TEMP: Test without RequireRole to isolate route issues
+          return <DoctorLeadView />;
+          // return (
+          //   <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
+          //     <DoctorLeadView />
+          //   </RequireRole>
+          // );
         }
         
         // Backward compatible: /doctor/leads/:ref -> redirect to /doctor/lead/:ref
@@ -358,7 +388,9 @@ export default function App() {
             return null;
           }
         }
-        return <Home />;
+        
+        // Catch-all: 404 Not Found (for route debugging)
+        return <NotFound />;
     }
   };
 
