@@ -1,5 +1,5 @@
 import { useState, createContext, useEffect, ReactNode } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
