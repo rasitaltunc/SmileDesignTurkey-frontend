@@ -20,6 +20,7 @@ import Intake from './pages/Intake';
 import PatientPortal from './pages/PatientPortal';
 import DoctorPortal from './pages/DoctorPortal';
 import DoctorSettings from './pages/DoctorSettings';
+import DoctorLeadView from './pages/DoctorLeadView';
 import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
@@ -331,11 +332,11 @@ export default function App() {
           );
         }
         
-        // Handle dynamic doctor lead routes (canonical + backward compatible)
-        // Support: /doctor/lead/:ref, /doctor/leads/:ref, /doctor/lead/:id
-        if (currentPath.startsWith('/doctor/lead/') || currentPath.startsWith('/doctor/leads/')) {
-          // Extract ref/id from path (supports both /lead/ and /leads/)
-          const match = currentPath.match(/\/doctor\/leads?\/([^/?#]+)/);
+        // Handle dynamic doctor lead routes
+        // Canonical: /doctor/lead/:ref -> DoctorLeadView (clean, no AdminPatientProfile)
+        if (currentPath.startsWith('/doctor/lead/')) {
+          // Extract ref from path
+          const match = currentPath.match(/\/doctor\/lead\/([^/?#]+)/);
           const ref = match ? match[1] : null;
           
           // Set params in NavigationContext for useParams() hook
@@ -343,9 +344,19 @@ export default function App() {
           
           return (
             <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-              <AdminPatientProfile doctorMode={true} leadUuid={ref} />
+              <DoctorLeadView />
             </RequireRole>
           );
+        }
+        
+        // Backward compatible: /doctor/leads/:ref -> redirect to /doctor/lead/:ref
+        if (currentPath.startsWith('/doctor/leads/')) {
+          const match = currentPath.match(/\/doctor\/leads\/([^/?#]+)/);
+          const ref = match ? match[1] : null;
+          if (ref) {
+            navigate(`/doctor/lead/${ref}`, { replace: true });
+            return null;
+          }
         }
         return <Home />;
     }
