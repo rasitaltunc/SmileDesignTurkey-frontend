@@ -36,9 +36,9 @@ export default function DoctorLayout() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/doctor" className="font-semibold text-sky-700">
+          <NavLink to="/doctor" end className="font-semibold text-sky-700 hover:text-sky-800">
             GuideHealth
-          </Link>
+          </NavLink>
 
           <nav className="flex items-center gap-2">
             <NavLink
