@@ -151,7 +151,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
         '/api/doctor/note/create',
         {
           method: 'POST',
-          body: JSON.stringify({ lead_id: effectiveRef }),
+          body: JSON.stringify({ leadRef: effectiveRef }),
         }
       );
 
