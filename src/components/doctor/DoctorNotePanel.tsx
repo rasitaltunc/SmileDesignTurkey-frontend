@@ -1,7 +1,7 @@
 // src/components/doctor/DoctorNotePanel.tsx
 // Doctor Note Panel - Create, edit, approve notes with signature and PDF
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiJsonAuth } from '@/lib/api';
 import { toast } from 'sonner';
 import {
@@ -101,8 +101,8 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
   // ✅ Mount log
   console.log("[DoctorNotePanel] MOUNT", { leadRef: propLeadRef, effectiveRef, lead: !!lead });
 
-  // Fetch note and related data
-  const fetchNote = async () => {
+  // Fetch note and related data (useCallback to prevent loop)
+  const fetchNote = useCallback(async () => {
     if (!effectiveRef) {
       setIsLoading(false);
       return;
@@ -137,7 +137,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [effectiveRef]);
 
   // Create note
   const createNote = async () => {
@@ -315,8 +315,8 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
     }
   };
 
-  // Fetch signature
-  const fetchSignature = async () => {
+  // Fetch signature (useCallback to prevent loop)
+  const fetchSignature = useCallback(async () => {
     setIsLoadingSignature(true);
     try {
       const result = await apiJsonAuth<{
@@ -341,7 +341,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
     } finally {
       setIsLoadingSignature(false);
     }
-  };
+  }, []);
 
   // Upload signature
   const handleSignatureUpload = async (file: File) => {
@@ -517,24 +517,49 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
     setItems(items.filter((_, i) => i !== index));
   };
 
-  // Initialize
+  // Initialize (useCallback functions in deps to prevent loop)
   useEffect(() => {
-    if (effectiveRef) {
-      fetchNote();
-      fetchSignature();
-    } else {
+    // ✅ Guard: only run if effectiveRef exists
+    if (!effectiveRef) {
       setIsLoading(false);
       if (propLeadRef) {
         toast.error('Lead reference missing');
       }
+      return;
     }
-  }, [effectiveRef, propLeadRef]);
+
+    fetchNote();
+    fetchSignature();
+  }, [effectiveRef, propLeadRef, fetchNote, fetchSignature]);
 
   // Load catalog when modal opens
   useEffect(() => {
-    if (showAddItemModal) {
-      fetchCatalogItems();
-    }
+    if (!showAddItemModal) return;
+
+    let cancelled = false;
+
+    const loadCatalog = async () => {
+      try {
+        const result = await apiJsonAuth<{ ok: true; items: CatalogItem[] }>(
+          `/api/catalog/items?kind=${catalogKind}`
+        );
+        if (!cancelled && result.ok && result.items) {
+          setCatalogItems(result.items);
+        }
+      } catch (err) {
+        // Catalog endpoint might not exist, that's OK
+        if (!cancelled) {
+          console.debug('[DoctorNotePanel] Catalog endpoint not available:', err);
+          setCatalogItems([]);
+        }
+      }
+    };
+
+    loadCatalog();
+
+    return () => {
+      cancelled = true;
+    };
   }, [showAddItemModal, catalogKind]);
 
   const isApproved = note?.status === 'approved';

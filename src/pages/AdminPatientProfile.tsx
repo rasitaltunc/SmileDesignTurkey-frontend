@@ -1251,10 +1251,9 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                       <button
                         type="button"
                         onClick={async () => {
-                          const briefRef = (lead as any)?.ref || (lead as any).lead_uuid || lead?.id || leadRef;
-                          if (!briefRef) {
-                            toast.error("Lead reference missing");
-                            console.error("[AdminPatientProfile] Lead reference missing for brief", { lead, leadRef });
+                          // ✅ Doctor mode: use leadRef from URL, don't wait for lead object
+                          if (!leadRef) {
+                            toast.error("LeadRef missing in URL.");
                             return;
                           }
 
@@ -1264,7 +1263,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                               `/api/doctor/ai/brief`,
                               {
                                 method: 'POST',
-                                body: JSON.stringify({ ref: briefRef }),
+                                body: JSON.stringify({ ref: leadRef }),
                               }
                             );
 
@@ -1490,8 +1489,12 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
               </div>
             )}
 
+            {/* TEMP: isolate render loop */}
             {finalIsDoctorMode && leadRef && (
-              <DoctorNotePanel lead={lead} leadRef={leadRef} />
+              // <DoctorNotePanel lead={lead} leadRef={leadRef} />
+              <div className="p-3 rounded bg-yellow-50 text-yellow-900 text-sm">
+                DoctorNotePanel temporarily disabled for loop isolation ✅
+              </div>
             )}
 
             {finalIsDoctorMode && !leadRef && (
