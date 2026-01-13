@@ -2047,8 +2047,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                         <select
                           value={doctorReviewStatus}
                           onChange={(e) => setDoctorReviewStatus(e.target.value)}
-                          disabled={isDoctorPath}
-                          className={isDoctorPath ? "opacity-60 cursor-not-allowed" : ""}
+                          disabled={isUpdatingReview || !leadId || finalIsDoctorMode || isDoctorPath}
+                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                           onBlur={async () => {
                             // ✅ Doctor mode: status updates only via Submit Review (disabled)
                             if (finalIsDoctorMode || isDoctorPath) {
@@ -2102,8 +2102,6 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                               }
                             }
                           }}
-                          disabled={isUpdatingReview || !leadId || finalIsDoctorMode}
-                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                         >
                           <option value="">Select status...</option>
                           <option value="pending">Pending</option>
