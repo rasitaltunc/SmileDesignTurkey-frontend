@@ -12,7 +12,7 @@ export function getHomePath(role: string | null | undefined): string {
     case "employee":
       return "/employee/leads";
     case "doctor":
-      return "/doctor/portal";
+      return "/doctor";
     case "patient":
       return "/patient/portal";
     default:

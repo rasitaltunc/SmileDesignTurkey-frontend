@@ -259,7 +259,9 @@ export default function App() {
             />
           </Route>
           
-          {/* Backward compatible: /doctor/leads/:ref -> redirect to /doctor/lead/:ref */}
+          {/* Backward compatible redirects */}
+          <Route path="/doctor/portal" element={<Navigate to="/doctor" replace />} />
+          <Route path="/doctor/inbox" element={<Navigate to="/doctor" replace />} />
           <Route 
             path="/doctor/leads/:ref" 
             element={<DoctorLeadsRedirect />} 

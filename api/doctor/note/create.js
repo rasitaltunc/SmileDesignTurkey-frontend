@@ -5,6 +5,7 @@
 // Auth: Bearer JWT (doctor role required)
 
 const { createClient } = require("@supabase/supabase-js");
+const { normalizeRef, fetchLeadByRef } = require("../_doctorLeadResolve");
 
 const buildSha =
   process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -132,29 +133,49 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Parse body
+    // ✅ Parse body - support multiple param names
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const leadId = body.lead_id ? String(body.lead_id).trim() : null;
+    const leadRef =
+      body.leadRef ||
+      body.lead_id ||
+      body.ref ||
+      body.id ||
+      body.leadId ||
+      null;
 
-    if (!leadId) {
+    if (!leadRef) {
       return res.status(400).json({
         ok: false,
-        error: "Missing lead_id parameter",
+        error: "Missing leadRef parameter",
         step: "param_check",
         requestId,
         buildSha,
       });
     }
 
-    // ✅ Verify lead exists and is assigned to this doctor
-    const { data: lead, error: leadErr } = await dbClient
-      .from("leads")
-      .select("id, doctor_id")
-      .eq("id", leadId)
-      .maybeSingle();
+    // ✅ Fetch lead using robust resolve helper
+    let lead;
+    try {
+      const { lead: leadData, ref: resolvedRef } = await fetchLeadByRef(
+        dbClient,
+        leadRef,
+        user.id
+      );
 
-    if (leadErr) {
-      console.error("[doctor/note/create] Lead query error:", leadErr, { requestId });
+      if (!leadData) {
+        return res.status(404).json({
+          ok: false,
+          error: "Lead not found",
+          step: "fetch_lead",
+          requestId,
+          buildSha,
+          leadRef: String(leadRef || ""),
+        });
+      }
+
+      lead = leadData;
+    } catch (leadErr) {
+      console.error("[doctor/note/create] Lead fetch error:", leadErr, { requestId });
       return res.status(500).json({
         ok: false,
         error: leadErr.message || "Lead query failed",
@@ -164,25 +185,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    if (!lead) {
-      return res.status(404).json({
-        ok: false,
-        error: "Lead not found",
-        step: "fetch_lead",
-        requestId,
-        buildSha,
-      });
-    }
-
-    if (lead.doctor_id !== user.id) {
-      return res.status(403).json({
-        ok: false,
-        error: "Lead not assigned to you",
-        step: "lead_assignment_check",
-        requestId,
-        buildSha,
-      });
-    }
+    const leadId = lead.id; // Use resolved lead.id for note creation
 
     // ✅ Create draft doctor_note
     const { data: note, error: noteErr } = await dbClient

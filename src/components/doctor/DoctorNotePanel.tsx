@@ -116,7 +116,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
         items: DoctorNoteItem[];
         signature: SignatureInfo | null;
         pdfUrl: string | null;
-      }>(`/api/doctor/note?lead_id=${encodeURIComponent(effectiveRef)}`);
+      }>(`/api/doctor/note?leadRef=${encodeURIComponent(effectiveRef)}`);
 
       if (result.ok) {
         if (result.note) {

@@ -2193,7 +2193,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                                   toast.success('Review submitted');
                                   // ✅ Navigate to reviewed tab
                                   setTimeout(() => {
-                                    window.location.href = '/doctor/portal?tab=reviewed';
+                                    window.location.href = '/doctor?tab=reviewed';
                                   }, 1000);
                                 }
                               } catch (err) {

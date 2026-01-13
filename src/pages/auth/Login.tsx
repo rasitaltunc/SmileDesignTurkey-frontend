@@ -40,7 +40,7 @@ export default function Login() {
     if (role === 'admin') return '/admin/leads';
     if (role === 'employee') return '/employee/leads';
     if (role === 'patient') return '/patient/portal';
-    if (role === 'doctor') return '/doctor/portal';
+    if (role === 'doctor') return '/doctor';
     return '/';
   };
 
