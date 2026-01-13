@@ -5,15 +5,18 @@ import "./index.css";
 import { initPosthog } from "./lib/posthog";
 import { LanguageProvider } from "./lib/i18n";
 import { Toaster } from "sonner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Initialize PostHog once at app startup
 initPosthog();
 
 createRoot(document.getElementById("root")!).render(
-  <HelmetProvider>
-    <LanguageProvider>
-      <App />
-      <Toaster richColors position="top-right" />
-    </LanguageProvider>
-  </HelmetProvider>
+  <ErrorBoundary>
+    <HelmetProvider>
+      <LanguageProvider>
+        <App />
+        <Toaster richColors position="top-right" />
+      </LanguageProvider>
+    </HelmetProvider>
+  </ErrorBoundary>
 );
