@@ -68,7 +68,20 @@ export default function DoctorLeadView() {
     const fetchLead = async () => {
       setIsLoadingLead(true);
       try {
-        // Try fetching from leads list and filter (this endpoint exists and respects doctor RLS)
+        // Try single lead endpoint first (if it exists)
+        try {
+          const result = await apiJsonAuth<{ ok: true; lead: Lead }>(
+            `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
+          );
+          if (result.ok && result.lead) {
+            setLead(result.lead);
+            return;
+          }
+        } catch (singleErr) {
+          // Endpoint might not exist, fall back to list filtering
+        }
+
+        // Fallback: fetch from leads list and filter (this endpoint exists and respects doctor RLS)
         const leadsResult = await apiJsonAuth<{ ok: true; leads: Lead[] }>(
           '/api/doctor/leads?bucket=unread'
         );
@@ -82,29 +95,29 @@ export default function DoctorLeadView() {
           );
           if (found) {
             setLead(found);
-          } else {
-            // Try reviewed bucket
-            const reviewedResult = await apiJsonAuth<{ ok: true; leads: Lead[] }>(
-              '/api/doctor/leads?bucket=reviewed'
-            );
-            if (reviewedResult.ok && reviewedResult.leads) {
-              const foundReviewed = reviewedResult.leads.find(
-                (l) =>
-                  l.id === leadRef ||
-                  l.lead_uuid === leadRef ||
-                  l.case_code === leadRef ||
-                  l.case_code === `CASE-${leadRef}`
-              );
-              if (foundReviewed) {
-                setLead(foundReviewed);
-              } else {
-                toast.error('Lead not found in your assigned leads');
-              }
-            } else {
-              toast.error('Lead not found in your assigned leads');
-            }
+            return;
           }
         }
+
+        // Try reviewed bucket
+        const reviewedResult = await apiJsonAuth<{ ok: true; leads: Lead[] }>(
+          '/api/doctor/leads?bucket=reviewed'
+        );
+        if (reviewedResult.ok && reviewedResult.leads) {
+          const foundReviewed = reviewedResult.leads.find(
+            (l) =>
+              l.id === leadRef ||
+              l.lead_uuid === leadRef ||
+              l.case_code === leadRef ||
+              l.case_code === `CASE-${leadRef}`
+          );
+          if (foundReviewed) {
+            setLead(foundReviewed);
+            return;
+          }
+        }
+
+        toast.error('Lead not found in your assigned leads');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
         toast.error(errorMessage);
