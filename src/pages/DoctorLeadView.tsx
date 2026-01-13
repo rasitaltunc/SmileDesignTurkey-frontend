@@ -237,7 +237,7 @@ export default function DoctorLeadView() {
                 type="button"
                 onClick={handleGenerateBrief}
                 disabled={isLoadingDoctorBrief || !leadRef}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoadingDoctorBrief ? (
                   <>
