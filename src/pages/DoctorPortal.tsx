@@ -336,7 +336,8 @@ export default function DoctorPortal() {
                             
                             // ✅ Normalize: strip CASE- prefix
                             const safeRef = String(ref).replace(/^CASE-/, "").trim();
-                            navigate(`/doctor/leads/${encodeURIComponent(safeRef)}`);
+                            // ✅ Navigate to clean DoctorLeadView route (not AdminPatientProfile)
+                            navigate(`/doctor/lead/${encodeURIComponent(safeRef)}`);
                           }}
                       >
                         Review →

@@ -6,6 +6,8 @@ import { useParams, useLocation } from 'react-router-dom';
 import { NavigationContext } from '@/App';
 import { useAuthStore } from '@/store/authStore';
 import { apiJsonAuth } from '@/lib/api';
+import { getSupabaseClient } from '@/lib/supabaseClient';
+import { isUuid } from '@/lib/isUuid';
 import { toast } from 'sonner';
 import { ArrowLeft, Brain, RefreshCw, FileText } from 'lucide-react';
 import DoctorNotePanel from '@/components/doctor/DoctorNotePanel';
@@ -27,7 +29,7 @@ export default function DoctorLeadView() {
   const { ref } = useParams<{ ref?: string }>();
   const location = useLocation();
   const { navigate, params: contextParams } = useContext(NavigationContext);
-  const { role } = useAuthStore();
+  const { role, user } = useAuthStore();
 
   // Compute leadRef robustly (from params, query, context, or pathname)
   const qs = new URLSearchParams(location.search);
@@ -58,7 +60,7 @@ export default function DoctorLeadView() {
     }
   }, [role, navigate]);
 
-  // Fetch lead minimal info
+  // Fetch lead minimal info via Supabase (doctor RLS will restrict)
   useEffect(() => {
     if (!leadRef) {
       setIsLoadingLead(false);
@@ -68,13 +70,63 @@ export default function DoctorLeadView() {
     const fetchLead = async () => {
       setIsLoadingLead(true);
       try {
-        // Use single lead endpoint (exists and respects doctor RLS)
-        const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
-          `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
-        );
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          // Fallback to API endpoint if Supabase not configured
+          const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
+            `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
+          );
+          if (result.ok && result.lead) {
+            setLead(result.lead);
+          } else {
+            toast.error('Lead not found or not assigned to you');
+          }
+          return;
+        }
 
-        if (result.ok && result.lead) {
-          setLead(result.lead);
+        // Build query based on leadRef type
+        let query = supabase
+          .from('leads')
+          .select('id, lead_uuid, case_code, created_at, name, message, initial_message, status')
+          .eq('doctor_id', user?.id || ''); // Doctor RLS: only see assigned leads
+
+        // Resolve ref: UUID or TEXT id
+        if (isUuid(leadRef)) {
+          query = query.eq('lead_uuid', leadRef);
+        } else {
+          // Try multiple matches: id, case_code, CASE-{case_code}
+          query = query.or(`id.eq.${leadRef},case_code.eq.${leadRef},case_code.eq.CASE-${leadRef}`);
+        }
+
+        const { data, error } = await query.maybeSingle();
+
+        if (error) {
+          console.error('[DoctorLeadView] Supabase error:', error);
+          // Fallback to API endpoint
+          const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
+            `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
+          );
+          if (result.ok && result.lead) {
+            setLead(result.lead);
+          } else {
+            toast.error('Lead not found or not assigned to you');
+          }
+          return;
+        }
+
+        if (data) {
+          // Map Supabase response to Lead interface
+          setLead({
+            id: data.id,
+            lead_uuid: data.lead_uuid || null,
+            case_code: data.case_code || null,
+            created_at: data.created_at || null,
+            patient_name: data.name || null,
+            original_message: data.message || data.initial_message || null,
+            initial_message: data.initial_message || null,
+            message: data.message || null,
+            stage: data.status || null,
+          });
         } else {
           toast.error('Lead not found or not assigned to you');
         }
@@ -88,7 +140,7 @@ export default function DoctorLeadView() {
     };
 
     fetchLead();
-  }, [leadRef]);
+  }, [leadRef, user?.id]);
 
   // Generate Doctor AI Brief
   const handleGenerateBrief = async () => {
