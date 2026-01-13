@@ -259,142 +259,6 @@ export default function App() {
     }
   }
 
-  // Only require auth for private routes
-  if (!isAuthenticated && isPrivateRoute) {
-    // Redirect to /login with next parameter
-    const next = encodeURIComponent(currentPath);
-    window.history.replaceState({}, '', `/login?next=${next}`);
-    setCurrentPath('/login');
-    return <Login />;
-  }
-
-  const isAdminRoute = currentPath.startsWith('/admin');
-  const isEmployeeRoute = currentPath.startsWith('/employee');
-  const navbarVariant = (isAdminRoute || isEmployeeRoute) ? 'admin' : 'public';
-
-  const renderPage = () => {
-    if (!isAuthenticated && currentPath === '/') {
-      return <Home />;
-    }
-
-    switch (currentPath) {
-      case '/':
-        return <Home />;
-      case '/treatments':
-        return <Treatments />;
-      case '/treatment-detail':
-        return <TreatmentDetail />;
-      case '/pricing':
-        return <Pricing />;
-      case '/process':
-        return <Process />;
-      case '/reviews':
-        return <Reviews />;
-      case '/faq':
-        return <FAQ />;
-      case '/contact':
-        return <Contact />;
-      case '/upload-center':
-        return <UploadCenter />;
-      case '/onboarding':
-        return <Onboarding />;
-      case '/plan-dashboard':
-        return <PlanDashboard />;
-      case '/intake':
-        return <Intake />;
-      case '/login':
-        // Already handled above, but keep for completeness
-        return <Login />;
-      case '/demo-login':
-        // Only render if enabled, else redirect handled above
-        if (ENABLE_DEMO_LOGIN) {
-          return <Login />;
-        }
-        return null;
-      case '/patient/portal':
-        return (
-          <RequireRole roles={['patient']} navigate={navigate}>
-            <PatientPortal />
-          </RequireRole>
-        );
-      case '/doctor/portal':
-        return (
-          <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-            <DoctorPortal />
-          </RequireRole>
-        );
-      case '/doctor/settings':
-        // TEMP: Test without RequireRole to isolate route issues
-        return <DoctorSettings />;
-        // return (
-        //   <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-        //     <DoctorSettings />
-        //   </RequireRole>
-        // );
-      case '/admin':
-        // Redirect /admin to /admin/leads
-        navigate('/admin/leads', { replace: true });
-        return null;
-      case '/employee':
-        // Redirect /employee to /employee/leads
-        navigate('/employee/leads', { replace: true });
-        return null;
-      case '/admin/leads':
-        return (
-          <RequireRole roles={['admin']} navigate={navigate} isLoading={isLoading}>
-            <AdminLeads />
-          </RequireRole>
-        );
-      case '/employee/leads':
-        return (
-          <RequireRole roles={['employee', 'admin']} navigate={navigate} isLoading={isLoading}>
-            <AdminLeads />
-          </RequireRole>
-        );
-      default:
-        // Handle dynamic /admin/lead/:id route
-        if (currentPath.startsWith('/admin/lead/')) {
-          return (
-            <RequireRole roles={['admin', 'employee']} navigate={navigate} isLoading={isLoading}>
-              <AdminPatientProfile />
-            </RequireRole>
-          );
-        }
-        
-        // Handle dynamic doctor lead routes
-        // Canonical: /doctor/lead/:ref -> DoctorLeadView (clean, no AdminPatientProfile)
-        if (currentPath.startsWith('/doctor/lead/')) {
-          // Extract ref from path
-          const match = currentPath.match(/\/doctor\/lead\/([^/?#]+)/);
-          const ref = match ? match[1] : null;
-          
-          // Set params in NavigationContext for useParams() hook
-          setParams({ ref, leadRef: ref, leadId: ref, id: ref });
-          
-          // TEMP: Test without RequireRole to isolate route issues
-          return <DoctorLeadView />;
-          // return (
-          //   <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-          //     <DoctorLeadView />
-          //   </RequireRole>
-          // );
-        }
-        
-        // Backward compatible: /doctor/leads/:ref -> redirect to /doctor/lead/:ref
-        if (currentPath.startsWith('/doctor/leads/')) {
-          const match = currentPath.match(/\/doctor\/leads\/([^/?#]+)/);
-          const ref = match ? match[1] : null;
-          if (ref) {
-            navigate(`/doctor/lead/${ref}`, { replace: true });
-            return null;
-          }
-        }
-        
-        // Catch-all: 404 Not Found (for route debugging)
-        return <NotFound />;
-    }
-  };
-
   const location = useLocation();
   const reactRouterNavigate = useNavigate();
   
@@ -412,6 +276,10 @@ export default function App() {
   useEffect(() => {
     setCurrentPath(location.pathname);
   }, [location.pathname]);
+
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isEmployeeRoute = location.pathname.startsWith('/employee');
+  const navbarVariant = (isAdminRoute || isEmployeeRoute) ? 'admin' : 'public';
 
   return (
     <NavigationContext.Provider value={{ navigate: syncNavigate, currentPath, params }}>
@@ -477,7 +345,7 @@ export default function App() {
           {/* Backward compatible: /doctor/leads/:ref -> redirect to /doctor/lead/:ref */}
           <Route 
             path="/doctor/leads/:ref" 
-            element={<Navigate to="/doctor/lead/:ref" replace />} 
+            element={<DoctorLeadsRedirect />} 
           />
           
           {/* Admin routes */}
