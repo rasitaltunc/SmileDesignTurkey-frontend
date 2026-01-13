@@ -68,56 +68,16 @@ export default function DoctorLeadView() {
     const fetchLead = async () => {
       setIsLoadingLead(true);
       try {
-        // Try single lead endpoint first (if it exists)
-        try {
-          const result = await apiJsonAuth<{ ok: true; lead: Lead }>(
-            `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
-          );
-          if (result.ok && result.lead) {
-            setLead(result.lead);
-            return;
-          }
-        } catch (singleErr) {
-          // Endpoint might not exist, fall back to list filtering
-        }
-
-        // Fallback: fetch from leads list and filter (this endpoint exists and respects doctor RLS)
-        const leadsResult = await apiJsonAuth<{ ok: true; leads: Lead[] }>(
-          '/api/doctor/leads?bucket=unread'
+        // Use single lead endpoint (exists and respects doctor RLS)
+        const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
+          `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
         );
-        if (leadsResult.ok && leadsResult.leads) {
-          const found = leadsResult.leads.find(
-            (l) =>
-              l.id === leadRef ||
-              l.lead_uuid === leadRef ||
-              l.case_code === leadRef ||
-              l.case_code === `CASE-${leadRef}`
-          );
-          if (found) {
-            setLead(found);
-            return;
-          }
-        }
 
-        // Try reviewed bucket
-        const reviewedResult = await apiJsonAuth<{ ok: true; leads: Lead[] }>(
-          '/api/doctor/leads?bucket=reviewed'
-        );
-        if (reviewedResult.ok && reviewedResult.leads) {
-          const foundReviewed = reviewedResult.leads.find(
-            (l) =>
-              l.id === leadRef ||
-              l.lead_uuid === leadRef ||
-              l.case_code === leadRef ||
-              l.case_code === `CASE-${leadRef}`
-          );
-          if (foundReviewed) {
-            setLead(foundReviewed);
-            return;
-          }
+        if (result.ok && result.lead) {
+          setLead(result.lead);
+        } else {
+          toast.error('Lead not found or not assigned to you');
         }
-
-        toast.error('Lead not found in your assigned leads');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
         toast.error(errorMessage);
@@ -189,7 +149,8 @@ export default function DoctorLeadView() {
     );
   }
 
-  const messageText = lead?.original_message || lead?.initial_message || lead?.message || 'No message available';
+  const messageText =
+    lead?.original_message || lead?.initial_message || lead?.message || 'No message available';
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
