@@ -139,8 +139,8 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
     }
   }, [effectiveRef]);
 
-  // Create note
-  const createNote = async () => {
+  // Create note (useCallback to prevent loop)
+  const createNote = useCallback(async () => {
     if (!effectiveRef) {
       toast.error('Lead reference missing');
       return;
@@ -164,7 +164,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
       toast.error(errorMessage);
       console.error('[DoctorNotePanel] Create error:', err);
     }
-  };
+  }, [effectiveRef, fetchNote]);
 
   // Save note (auto-create if missing)
   const handleSave = async () => {
