@@ -211,31 +211,31 @@ export default function DoctorPortal() {
         {/* Tabs */}
         <div className="mb-4 flex items-center justify-between border-b border-gray-200">
           <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setActiveTab('unread');
-                loadLeads('unread');
-              }}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'unread'
-                  ? 'border-teal-600 text-teal-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Unread ({leads.filter(l => (l.doctor_review_status || 'pending') !== 'reviewed').length})
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('reviewed');
-                loadLeads('reviewed');
-              }}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'reviewed'
-                  ? 'border-teal-600 text-teal-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Reviewed ({leads.filter(l => l.doctor_review_status === 'reviewed').length})
+          <button
+            onClick={() => {
+              setActiveTab('unread');
+              loadLeads('unread');
+            }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'unread'
+                ? 'border-teal-600 text-teal-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Unread ({leads.filter(l => (l.doctor_review_status || 'pending') !== 'reviewed').length})
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('reviewed');
+              loadLeads('reviewed');
+            }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'reviewed'
+                ? 'border-teal-600 text-teal-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Reviewed ({leads.filter(l => l.doctor_review_status === 'reviewed').length})
             </button>
           </div>
           <button
@@ -332,17 +332,17 @@ export default function DoctorPortal() {
                       <button
                         type="button"
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                        onClick={(e) => {
+                          e.stopPropagation();
                             const ref = pickRef(lead);
                             console.log("[DoctorPortal] Review button click", { ref, lead });
-                            if (!ref) {
+                          if (!ref) {
                               toast.error("Lead ref missing on row. Check lead fields.");
-                              return;
-                            }
+                            return;
+                          }
                             // ✅ Navigate to clean DoctorLeadView route (not AdminPatientProfile)
-                            navigate(`/doctor/lead/${encodeURIComponent(ref)}`);
-                          }}
+                          navigate(`/doctor/lead/${encodeURIComponent(ref)}`);
+                        }}
                       >
                         Review →
                       </button>

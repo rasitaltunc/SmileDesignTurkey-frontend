@@ -434,7 +434,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           if (finalIsDoctorMode) {
             toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
           } else {
-            console.warn('[AdminPatientProfile] Cannot load AI memory: lead not loaded');
+          console.warn('[AdminPatientProfile] Cannot load AI memory: lead not loaded');
           }
           return;
         }
@@ -491,7 +491,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           if (finalIsDoctorMode) {
             toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
           } else {
-            console.warn('[AdminPatientProfile] Cannot load AI tasks: lead not loaded');
+          console.warn('[AdminPatientProfile] Cannot load AI tasks: lead not loaded');
           }
           return;
         }
@@ -533,7 +533,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           if (finalIsDoctorMode) {
             toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
           } else {
-            console.warn('[AdminPatientProfile] Skipping timeline: lead not loaded');
+          console.warn('[AdminPatientProfile] Skipping timeline: lead not loaded');
           }
           return;
         }
@@ -632,7 +632,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
           if (finalIsDoctorMode) {
             toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
           } else {
-            console.warn('[AdminPatientProfile] Skipping contact events: lead not loaded');
+          console.warn('[AdminPatientProfile] Skipping contact events: lead not loaded');
           }
           return;
         }
@@ -663,7 +663,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         if (finalIsDoctorMode) {
           toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
         } else {
-          console.warn('[AdminPatientProfile] Cannot log contact event: lead not loaded');
+        console.warn('[AdminPatientProfile] Cannot log contact event: lead not loaded');
         }
         return;
       }
@@ -1080,16 +1080,16 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
             <div className="flex items-center gap-4 min-w-0 flex-1">
               {/* ✅ "Back to Leads" butonu doktor modunda gizli (doktor /doctor/portal kullanır) */}
               {!finalIsDoctorMode && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = '/admin/leads';
-                  }}
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors shrink-0"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                  <span className="font-medium">Back to Leads</span>
-                </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/admin/leads';
+                }}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span className="font-medium">Back to Leads</span>
+              </button>
               )}
               <div className="min-w-0 flex-1">
                 <h1 className="text-2xl font-semibold text-gray-900 break-words">{leadName}</h1>
@@ -1505,64 +1505,64 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
             {/* Legacy Notes UI - Hidden in doctor mode */}
             {!finalIsDoctorMode && (
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
-                  <FileText className="w-5 h-5 text-gray-600" />
-                  Notes
-                </h2>
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-gray-600" />
+                Notes
+              </h2>
 
-                {/* Add Note */}
-                <div className="mb-6">
-                  <textarea
-                    value={newNoteContent}
-                    onChange={(e) => setNewNoteContent(e.target.value)}
-                    placeholder="Add a note..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none break-words"
-                    disabled={isSavingNote}
-                  />
-                  <button
-                    type="button"
-                    onClick={createNote}
-                    disabled={isSavingNote || !newNoteContent.trim()}
-                    className="mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSavingNote ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Add Note'
-                    )}
-                  </button>
-                </div>
-
-                {/* Notes List */}
-                {isLoadingNotes ? (
-                  <div className="text-center py-8">
-                    <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Loading notes...</p>
-                  </div>
-                ) : notes.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 text-sm">
-                    No notes yet. Add your first note above.
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-w-full">
-                    {notes.map((note) => (
-                      <div key={note.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 max-w-full">
-                        <p className="text-sm text-gray-900 break-words whitespace-normal mb-2">
-                          {note.note || note.content || ''}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(note.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Add Note */}
+              <div className="mb-6">
+                <textarea
+                  value={newNoteContent}
+                  onChange={(e) => setNewNoteContent(e.target.value)}
+                  placeholder="Add a note..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none break-words"
+                  disabled={isSavingNote}
+                />
+                <button
+                  type="button"
+                  onClick={createNote}
+                  disabled={isSavingNote || !newNoteContent.trim()}
+                  className="mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingNote ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Add Note'
+                  )}
+                </button>
               </div>
+
+              {/* Notes List */}
+              {isLoadingNotes ? (
+                <div className="text-center py-8">
+                  <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Loading notes...</p>
+                </div>
+              ) : notes.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  No notes yet. Add your first note above.
+                </div>
+              ) : (
+                <div className="space-y-3 max-w-full">
+                  {notes.map((note) => (
+                    <div key={note.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 max-w-full">
+                      <p className="text-sm text-gray-900 break-words whitespace-normal mb-2">
+                        {note.note || note.content || ''}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(note.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             )}
           </div>
 
@@ -2039,8 +2039,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                       </div>
                     ) : (
                       <p className="text-xs text-gray-500">No preferences configured</p>
-                    )}
-                  </div>
+                  )}
+                </div>
                 )}
 
                 {/* G) Doctor Review (Doctor mode only) */}
@@ -2425,52 +2425,52 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                   
                   {/* Add Event Controls - Hidden in doctor mode (READ-ONLY) */}
                   {!isDoctorPath && (
-                    <div className="border-t border-gray-200 pt-3 space-y-2">
-                      <select
-                        value={newTimelineStage}
-                        onChange={(e) => setNewTimelineStage(e.target.value)}
-                        disabled={isAddingTimelineEvent}
-                        className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      >
-                        <option value="">Select stage...</option>
-                        {TIMELINE_STAGES.map((s) => (
-                          <option key={s} value={s}>
-                            {TIMELINE_STAGE_LABEL[s]}
-                          </option>
-                        ))}
-                      </select>
-                      <textarea
-                        value={newTimelineNote}
-                        onChange={(e) => setNewTimelineNote(e.target.value)}
-                        disabled={isAddingTimelineEvent}
-                        placeholder="Optional note..."
-                        rows={2}
-                        className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none break-words"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddTimelineEvent}
-                        disabled={isAddingTimelineEvent || !newTimelineStage.trim()}
-                        className={[
-                          "w-full inline-flex items-center justify-center gap-2 h-8",
-                          "px-3 rounded-lg text-xs font-semibold",
-                          "border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2",
-                          "disabled:cursor-not-allowed",
-                          isAddingTimelineEvent || !newTimelineStage.trim()
-                            ? "bg-gray-100 text-gray-400 border-gray-200"
-                            : "bg-teal-600 text-white border-teal-600 hover:bg-teal-700",
-                        ].join(" ")}
-                      >
-                        {isAddingTimelineEvent ? (
-                          <>
-                            <RefreshCw className="w-3 h-3 animate-spin" />
-                            <span>Adding...</span>
-                          </>
-                        ) : (
-                          <span>Add Event</span>
-                        )}
-                      </button>
-                    </div>
+                  <div className="border-t border-gray-200 pt-3 space-y-2">
+                    <select
+                      value={newTimelineStage}
+                      onChange={(e) => setNewTimelineStage(e.target.value)}
+                      disabled={isAddingTimelineEvent}
+                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select stage...</option>
+                      {TIMELINE_STAGES.map((s) => (
+                        <option key={s} value={s}>
+                          {TIMELINE_STAGE_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                    <textarea
+                      value={newTimelineNote}
+                      onChange={(e) => setNewTimelineNote(e.target.value)}
+                      disabled={isAddingTimelineEvent}
+                      placeholder="Optional note..."
+                      rows={2}
+                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none break-words"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTimelineEvent}
+                      disabled={isAddingTimelineEvent || !newTimelineStage.trim()}
+                      className={[
+                        "w-full inline-flex items-center justify-center gap-2 h-8",
+                        "px-3 rounded-lg text-xs font-semibold",
+                        "border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2",
+                        "disabled:cursor-not-allowed",
+                        isAddingTimelineEvent || !newTimelineStage.trim()
+                          ? "bg-gray-100 text-gray-400 border-gray-200"
+                          : "bg-teal-600 text-white border-teal-600 hover:bg-teal-700",
+                      ].join(" ")}
+                    >
+                      {isAddingTimelineEvent ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>Adding...</span>
+                        </>
+                      ) : (
+                        <span>Add Event</span>
+                      )}
+                    </button>
+                  </div>
                   )}
                 </div>
               )}

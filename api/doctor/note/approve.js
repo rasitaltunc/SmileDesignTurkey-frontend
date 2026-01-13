@@ -179,11 +179,11 @@ module.exports = async function handler(req, res) {
     // ✅ Fetch signature (get signed URL from storage)
     let signatureImageUrl = null;
     try {
-      const { data: signature } = await dbClient
-        .from("doctor_signatures")
+    const { data: signature } = await dbClient
+      .from("doctor_signatures")
         .select("signature_storage_path")
-        .eq("doctor_id", user.id)
-        .maybeSingle();
+      .eq("doctor_id", user.id)
+      .maybeSingle();
 
       if (signature?.signature_storage_path) {
         // Generate signed URL for signature image

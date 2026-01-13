@@ -275,21 +275,21 @@ module.exports = async function handler(req, res) {
       if (docsData && Array.isArray(docsData)) {
         // ✅ Exclude passport/ID documents
         const filteredDocs = docsData.filter((doc) => {
-          const type = String(doc.type || "").toLowerCase();
-          const filename = String(doc.filename || "").toLowerCase();
-          const category = String(doc.category || "").toLowerCase();
-          
-          if (
-            type.includes("passport") ||
-            type.includes("id") ||
-            filename.includes("passport") ||
-            filename.includes("id") ||
-            category.includes("passport") ||
-            category.includes("id")
-          ) {
-            return false;
-          }
-          return true;
+            const type = String(doc.type || "").toLowerCase();
+            const filename = String(doc.filename || "").toLowerCase();
+            const category = String(doc.category || "").toLowerCase();
+            
+            if (
+              type.includes("passport") ||
+              type.includes("id") ||
+              filename.includes("passport") ||
+              filename.includes("id") ||
+              category.includes("passport") ||
+              category.includes("id")
+            ) {
+              return false;
+            }
+            return true;
         });
 
         // ✅ Check for specific document types

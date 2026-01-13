@@ -14,12 +14,12 @@ initPosthog();
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <BrowserRouter>
-      <HelmetProvider>
-        <LanguageProvider>
-          <App />
-          <Toaster richColors position="top-right" />
-        </LanguageProvider>
-      </HelmetProvider>
+  <HelmetProvider>
+    <LanguageProvider>
+      <App />
+      <Toaster richColors position="top-right" />
+    </LanguageProvider>
+  </HelmetProvider>
     </BrowserRouter>
   </ErrorBoundary>
 );

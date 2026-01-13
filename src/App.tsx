@@ -72,8 +72,8 @@ function RequireRole({
       const normalizedRole = (role || "").toLowerCase().trim();
       const normalizedRoles = roles.map((r) => (r || "").toLowerCase().trim());
       if (!normalizedRoles.includes(normalizedRole)) {
-        const homePath = getHomePath(role);
-        navigate(homePath, { replace: true });
+      const homePath = getHomePath(role);
+      navigate(homePath, { replace: true });
       }
     }
   }, [role, roles, isLoading, navigate]);
@@ -150,8 +150,14 @@ export const NavigationContext = createContext<{
 });
 
 export default function App() {
+  // ✅ ALL HOOKS FIRST - never after conditional returns
   const { isAuthenticated, isLoading, role, checkSession } = useAuthStore();
+  const location = useLocation();
+  const reactRouterNavigate = useNavigate();
   
+  const [currentPath, setCurrentPath] = useState(location.pathname);
+  const [params, setParams] = useState<any>({});
+
   // Install session recovery on mount
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -169,51 +175,11 @@ export default function App() {
   useEffect(() => {
     checkSession();
   }, [checkSession]);
-  
-  const getPathFromUrl = () => {
-    return window.location.pathname || '/';
-  };
 
-  const [currentPath, setCurrentPath] = useState(getPathFromUrl());
-  const [params, setParams] = useState<any>({});
-
+  // Update currentPath when React Router location changes
   useEffect(() => {
-    const handlePopState = () => {
-      setCurrentPath(getPathFromUrl());
-    };
-
-    setCurrentPath(getPathFromUrl());
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, []);
-
-  const navigate = (path: string, newParams?: any) => {
-    setCurrentPath(path);
-    if (newParams) {
-      setParams(newParams);
-    }
-    window.history.pushState({}, '', path);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Check if demo login is enabled
-  const ENABLE_DEMO_LOGIN = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
-
-  const location = useLocation();
-  const reactRouterNavigate = useNavigate();
+    setCurrentPath(location.pathname);
+  }, [location.pathname]);
   
   // Sync custom navigate with React Router
   const syncNavigate = (path: string, options?: { replace?: boolean }) => {
@@ -262,8 +228,8 @@ export default function App() {
             path="/patient/portal" 
             element={
               <RequireRole roles={['patient']} navigate={syncNavigate}>
-                <PatientPortal />
-              </RequireRole>
+            <PatientPortal />
+          </RequireRole>
             } 
           />
           
@@ -273,8 +239,8 @@ export default function App() {
               index 
               element={
                 <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
-                  <DoctorPortal />
-                </RequireRole>
+            <DoctorPortal />
+          </RequireRole>
               } 
             />
             <Route 
@@ -290,7 +256,7 @@ export default function App() {
               element={
                 <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
                   <DoctorLeadView />
-                </RequireRole>
+          </RequireRole>
               } 
             />
           </Route>
@@ -307,16 +273,16 @@ export default function App() {
             path="/admin/leads" 
             element={
               <RequireRole roles={['admin']} navigate={syncNavigate} isLoading={isLoading}>
-                <AdminLeads />
-              </RequireRole>
+            <AdminLeads />
+          </RequireRole>
             } 
           />
           <Route 
             path="/admin/lead/:id" 
             element={
               <RequireRole roles={['admin', 'employee']} navigate={syncNavigate} isLoading={isLoading}>
-                <AdminPatientProfile />
-              </RequireRole>
+              <AdminPatientProfile />
+            </RequireRole>
             } 
           />
           
@@ -327,7 +293,7 @@ export default function App() {
             element={
               <RequireRole roles={['employee', 'admin']} navigate={syncNavigate} isLoading={isLoading}>
                 <AdminLeads />
-              </RequireRole>
+            </RequireRole>
             } 
           />
           
