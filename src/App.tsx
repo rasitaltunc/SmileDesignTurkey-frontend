@@ -40,6 +40,17 @@ function NotFound() {
   );
 }
 
+// NotFound page component (for Routes)
+function NotFoundPage() {
+  return <NotFound />;
+}
+
+// Redirect component for /doctor/leads/:ref -> /doctor/lead/:ref
+function DoctorLeadsRedirect() {
+  const { ref } = useParams<{ ref?: string }>();
+  return <Navigate to={`/doctor/lead/${ref || ''}`} replace />;
+}
+
 // RequireRole component for role-based access control
 function RequireRole({ 
   roles, 
@@ -198,66 +209,8 @@ export default function App() {
     );
   }
 
-  // Public routes that don't require authentication
-  const PUBLIC_ROUTES = new Set([
-    '/',
-    '/treatments',
-    '/treatment-detail',
-    '/pricing',
-    '/process',
-    '/reviews',
-    '/faq',
-    '/contact',
-    '/upload-center',
-    '/onboarding',
-    '/intake',
-  ]);
-
-  // Private routes that require authentication
-  const PRIVATE_ROUTES = new Set([
-    '/admin',
-    '/admin/leads',
-    '/employee',
-    '/employee/leads',
-    '/patient/portal',
-    '/doctor/portal',
-    '/doctor/settings',
-    '/plan-dashboard',
-  ]);
-
-  const isPublicRoute = PUBLIC_ROUTES.has(currentPath);
-  const isPrivateRoute = PRIVATE_ROUTES.has(currentPath) || currentPath.startsWith('/admin/') || currentPath.startsWith('/employee/');
-
   // Check if demo login is enabled
   const ENABLE_DEMO_LOGIN = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
-
-  // Handle /demo-login route (only if enabled, else redirect to /login)
-  if (currentPath === '/demo-login') {
-    if (!ENABLE_DEMO_LOGIN) {
-      // Redirect to /login in prod
-      window.history.replaceState({}, '', '/login');
-      setCurrentPath('/login');
-    }
-  }
-
-  // Handle /login route
-  if (currentPath === '/login') {
-    // If authenticated, redirect to role-based home or next param
-    if (isAuthenticated && role) {
-      const params = new URLSearchParams(window.location.search);
-      const next = params.get('next');
-      const defaultHome = role === 'admin' ? '/admin/leads' 
-        : role === 'employee' ? '/employee/leads'
-        : role === 'patient' ? '/patient/portal'
-        : role === 'doctor' ? '/doctor/portal'
-        : '/';
-      const target = next || defaultHome;
-      window.history.replaceState({}, '', target);
-      setCurrentPath(target);
-    } else {
-      return <Login />;
-    }
-  }
 
   const location = useLocation();
   const reactRouterNavigate = useNavigate();
