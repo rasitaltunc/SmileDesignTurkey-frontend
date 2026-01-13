@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink, Outlet, useLocation, Navigate } from "react-router-dom";
+import { Outlet, NavLink, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 
 export default function DoctorLayout() {
