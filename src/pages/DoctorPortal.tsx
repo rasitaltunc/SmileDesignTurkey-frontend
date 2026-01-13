@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/authStore';
 import { NavigationContext } from '@/App';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
-import { RefreshCw, LogOut, Clock, FileText, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { RefreshCw, LogOut, Clock, FileText, CheckCircle2, XCircle, AlertCircle, Settings } from 'lucide-react';
 import AdminPatientProfile from './AdminPatientProfile';
 import { apiJsonAuth, apiFetchAuth } from '@/lib/api';
 
@@ -25,7 +25,6 @@ export default function DoctorPortal() {
   const { navigate } = useContext(NavigationContext);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'unread' | 'reviewed'>('unread');
 
@@ -95,9 +94,17 @@ export default function DoctorPortal() {
   }, [role, user, activeTab]);
 
   const openLead = (lead: any) => {
-    const key = lead?.lead_uuid; // ✅ doktor için bu anahtar
-    if (!key) return toast.error("Lead UUID missing");
-    navigate(`/doctor/lead/${encodeURIComponent(key)}`);
+    // ✅ Build ref from all possible sources
+    const ref = (lead as any)?.ref || lead?.lead_uuid || lead?.id || (lead as any)?.case_code;
+    if (!ref) {
+      toast.error("Lead reference missing");
+      console.error("[DoctorPortal] Missing lead ref", lead);
+      return;
+    }
+    
+    // ✅ Normalize: strip CASE- prefix
+    const safeRef = String(ref).replace(/^CASE-/, "").trim();
+    navigate(`/doctor/leads/${encodeURIComponent(safeRef)}`);
   };
 
   const getReviewStatusBadge = (status: string | null) => {
@@ -136,22 +143,8 @@ export default function DoctorPortal() {
     return null;
   };
 
-  // If lead selected, show profile in doctor mode
-  if (selectedLeadId) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <button
-            onClick={() => setSelectedLeadId(null)}
-            className="mb-4 flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-          >
-            ← Back to Inbox
-          </button>
-          <AdminPatientProfile doctorMode={true} />
-        </div>
-      </div>
-    );
-  }
+  // ✅ Removed: No longer use state-based selection, use URL routing instead
+  // Leads are now opened via /doctor/leads/:ref route
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -207,32 +200,41 @@ export default function DoctorPortal() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-4 flex gap-2 border-b border-gray-200">
+        <div className="mb-4 flex items-center justify-between border-b border-gray-200">
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setActiveTab('unread');
+                loadLeads('unread');
+              }}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'unread'
+                  ? 'border-teal-600 text-teal-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Unread ({leads.filter(l => (l.doctor_review_status || 'pending') !== 'reviewed').length})
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('reviewed');
+                loadLeads('reviewed');
+              }}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'reviewed'
+                  ? 'border-teal-600 text-teal-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Reviewed ({leads.filter(l => l.doctor_review_status === 'reviewed').length})
+            </button>
+          </div>
           <button
-            onClick={() => {
-              setActiveTab('unread');
-              loadLeads('unread');
-            }}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'unread'
-                ? 'border-teal-600 text-teal-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
+            onClick={() => navigate('/doctor/settings')}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            Unread ({leads.filter(l => (l.doctor_review_status || 'pending') !== 'reviewed').length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('reviewed');
-              loadLeads('reviewed');
-            }}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'reviewed'
-                ? 'border-teal-600 text-teal-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Reviewed ({leads.filter(l => l.doctor_review_status === 'reviewed').length})
+            <Settings className="w-4 h-4" />
+            Doctor Profile
           </button>
         </div>
 
@@ -321,18 +323,20 @@ export default function DoctorPortal() {
                       <button
                         type="button"
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // ✅ Use ONLY lead.ref (from API) - backend guarantees ref
-                          const ref = (lead as any)?.ref || null;
-
-                          if (!ref) {
-                            toast.error("Missing lead ref");
-                            console.error("[DoctorPortal] Missing lead ref", lead);
-                            return;
-                          }
-                          navigate(`/doctor/lead/${encodeURIComponent(ref)}`);
-                        }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // ✅ Build ref from all possible sources
+                            const ref = (lead as any)?.ref || lead?.lead_uuid || lead?.id || (lead as any)?.case_code;
+                            if (!ref) {
+                              toast.error("Missing lead ref");
+                              console.error("[DoctorPortal] Missing lead ref", lead);
+                              return;
+                            }
+                            
+                            // ✅ Normalize: strip CASE- prefix
+                            const safeRef = String(ref).replace(/^CASE-/, "").trim();
+                            navigate(`/doctor/leads/${encodeURIComponent(safeRef)}`);
+                          }}
                       >
                         Review →
                       </button>

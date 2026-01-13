@@ -176,15 +176,26 @@ module.exports = async function handler(req, res) {
       console.error("[doctor/note/approve] Items query error:", itemsErr, { requestId });
     }
 
-    // ✅ Fetch signature
+    // ✅ Fetch signature (get signed URL from storage)
     let signatureImageUrl = null;
-    const { data: signature } = await dbClient
-      .from("doctor_signatures")
-      .select("signature_image_url")
-      .eq("doctor_id", user.id)
-      .maybeSingle();
+    try {
+      const { data: signature } = await dbClient
+        .from("doctor_signatures")
+        .select("signature_storage_path")
+        .eq("doctor_id", user.id)
+        .maybeSingle();
 
-    signatureImageUrl = signature?.signature_image_url || null;
+      if (signature?.signature_storage_path) {
+        // Generate signed URL for signature image
+        const { data: urlData } = await dbClient.storage
+          .from("signatures")
+          .createSignedUrl(signature.signature_storage_path, 3600); // 1 hour expiry
+
+        signatureImageUrl = urlData?.signedUrl || null;
+      }
+    } catch (sigErr) {
+      console.debug("[doctor/note/approve] Signature fetch skipped:", sigErr?.message);
+    }
 
     // ✅ Generate case code
     const caseCode = note.lead_id ? `CASE-${note.lead_id.substring(0, 8).toUpperCase()}` : "CASE-UNKNOWN";
@@ -220,15 +231,14 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Upload PDF to Supabase Storage
-    const fileName = `doctor-note-${noteId}-${Date.now()}.pdf`;
-    const storagePath = `${user.id}/${fileName}`;
+    // ✅ Upload PDF to Supabase Storage (path: pdf/doctor-notes/{note_id}.pdf)
+    const storagePath = `pdf/doctor-notes/${noteId}.pdf`;
 
     const { error: uploadErr } = await dbClient.storage
-      .from("doctor-notes")
+      .from("pdf")
       .upload(storagePath, pdfBytes, {
         contentType: "application/pdf",
-        upsert: false,
+        upsert: true, // Allow overwrite if regenerated
       });
 
     if (uploadErr) {
@@ -299,6 +309,7 @@ module.exports = async function handler(req, res) {
           type: "doctor_note_approved",
           title: "Doctor Note Approved",
           message: `Doctor ${profile.full_name || "Unknown"} has approved and signed a note for case ${caseCode}`,
+          link: `/employee/leads/${note.lead_id}`, // Link to employee lead view
           metadata: {
             doctor_note_id: noteId,
             lead_id: note.lead_id,

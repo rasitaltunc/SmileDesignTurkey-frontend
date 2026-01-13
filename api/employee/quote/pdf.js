@@ -1,11 +1,9 @@
-// api/employee/quote/generate-pdf.js
-// POST /api/employee/quote/generate-pdf
-// Generates proforma PDF, uploads to storage, stores pdf path
-// Body: { quote_id }
-// Auth: Bearer JWT (employee/admin role required)
+// api/employee/quote/pdf.js
+// GET /api/employee/quote/pdf?quote_id=...
+// Returns signed URL for quote PDF (employee/admin role required)
+// Auth: Bearer JWT
 
 const { createClient } = require("@supabase/supabase-js");
-const { generateQuotePDF } = require("../../_pdfUtils");
 
 const buildSha =
   process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -22,11 +20,11 @@ function getBearerToken(req) {
 }
 
 module.exports = async function handler(req, res) {
-  const requestId = `quote_generate_pdf_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const requestId = `quote_pdf_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   try {
@@ -34,7 +32,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    if (req.method !== "POST") {
+    if (req.method !== "GET") {
       return res.status(405).json({
         ok: false,
         error: "Method not allowed",
@@ -100,7 +98,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Verify employee/admin role
+    // ✅ Verify role (employee/admin)
     const dbClient = createClient(SUPABASE_URL, SERVICE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -144,14 +142,14 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Parse body
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const quoteId = body.quote_id ? String(body.quote_id).trim() : null;
+    // ✅ Get quote_id from query
+    const query = req.query || {};
+    const quoteId = query.quote_id ? String(query.quote_id).trim() : null;
 
     if (!quoteId) {
       return res.status(400).json({
         ok: false,
-        error: "Missing quote_id parameter",
+        error: "Missing quote_id query parameter",
         step: "param_check",
         requestId,
         buildSha,
@@ -175,123 +173,44 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Verify lead assignment
+    // ✅ Authorization checks
     if (profile.role === "employee" && quote.leads?.assigned_to !== user.id) {
       return res.status(403).json({
         ok: false,
         error: "Lead not assigned to you",
-        step: "lead_assignment_check",
+        step: "authorization_check",
         requestId,
         buildSha,
       });
     }
 
-    // ✅ Fetch quote items
-    const { data: quoteItems, error: itemsErr } = await dbClient
-      .from("quote_items")
-      .select("*")
-      .eq("quote_id", quoteId)
-      .order("created_at", { ascending: true });
+    // ✅ Get PDF storage path
+    const pdfPath = quote.pdf_storage_path || `pdf/quotes/${quoteId}.pdf`;
 
-    if (itemsErr) {
-      console.error("[employee/quote/generate-pdf] Items query error:", itemsErr, { requestId });
-    }
-
-    // ✅ Generate case code
-    const caseCode = quote.lead_id ? `CASE-${quote.lead_id.substring(0, 8).toUpperCase()}` : "CASE-UNKNOWN";
-
-    // ✅ Generate PDF
-    let pdfBytes;
-    try {
-      pdfBytes = await generateQuotePDF({
-        clinicName: "Smile Design Turkey",
-        caseCode: caseCode,
-        leadId: quote.lead_id,
-        quoteNumber: quote.quote_number || `QUOTE-${quoteId}`,
-        items: (quoteItems || []).map((item) => ({
-          catalog_item_name: item.catalog_item_name,
-          qty: item.qty,
-          unit_price: item.unit_price,
-          total: item.qty * item.unit_price,
-        })),
-        discount: quote.discount || 0,
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (pdfErr) {
-      console.error("[employee/quote/generate-pdf] PDF generation error:", pdfErr, { requestId });
-      return res.status(500).json({
-        ok: false,
-        error: "Failed to generate PDF",
-        step: "generate_pdf",
-        requestId,
-        buildSha,
-      });
-    }
-
-    // ✅ Upload PDF to Supabase Storage (path: pdf/quotes/{quote_id}.pdf)
-    const storagePath = `pdf/quotes/${quoteId}.pdf`;
-
-    const { error: uploadErr } = await dbClient.storage
+    // ✅ Generate signed URL (1 hour expiry)
+    const { data: urlData, error: urlErr } = await dbClient.storage
       .from("pdf")
-      .upload(storagePath, pdfBytes, {
-        contentType: "application/pdf",
-        upsert: true, // Allow overwrite if regenerated
-      });
+      .createSignedUrl(pdfPath, 3600);
 
-    if (uploadErr) {
-      console.error("[employee/quote/generate-pdf] PDF upload error:", uploadErr, { requestId });
+    if (urlErr || !urlData?.signedUrl) {
+      console.error("[employee/quote/pdf] Signed URL error:", urlErr, { requestId });
       return res.status(500).json({
         ok: false,
-        error: "Failed to upload PDF",
-        step: "upload_pdf",
+        error: "Failed to generate signed URL",
+        step: "generate_url",
         requestId,
         buildSha,
       });
-    }
-
-    // ✅ Update quote: store PDF path
-    const { error: updateErr } = await dbClient
-      .from("quotes")
-      .update({
-        pdf_storage_path: storagePath,
-        pdf_generated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", quoteId);
-
-    if (updateErr) {
-      console.error("[employee/quote/generate-pdf] Quote update error:", updateErr, { requestId });
-      return res.status(500).json({
-        ok: false,
-        error: "Failed to update quote",
-        step: "update_quote",
-        requestId,
-        buildSha,
-      });
-    }
-
-    // ✅ Update lead stage to 'quote_sent' (pipeline automation)
-    try {
-      await dbClient
-        .from("leads")
-        .update({
-          stage: "quote_sent",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", quote.lead_id);
-    } catch (stageErr) {
-      // If stage column doesn't exist, log but don't fail
-      console.warn("[employee/quote/generate-pdf] Stage update skipped (column may not exist):", stageErr.message);
     }
 
     return res.status(200).json({
       ok: true,
-      pdfPath: storagePath,
+      signedUrl: urlData.signedUrl,
       requestId,
       buildSha,
     });
   } catch (err) {
-    console.error("[employee/quote/generate-pdf] Handler crash:", err, { requestId });
+    console.error("[employee/quote/pdf] Handler crash:", err, { requestId });
     return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Server error",

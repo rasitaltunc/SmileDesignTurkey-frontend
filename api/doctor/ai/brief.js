@@ -187,6 +187,69 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // ✅ Load clinic_settings (default)
+    let clinicSettings = { brand_voice: "", legal_disclaimer: "" };
+    try {
+      const { data: settings } = await supabase
+        .from("clinic_settings")
+        .select("brand_voice, legal_disclaimer")
+        .eq("key", "default")
+        .maybeSingle();
+      if (settings) {
+        clinicSettings.brand_voice = settings.brand_voice || "";
+        clinicSettings.legal_disclaimer = settings.legal_disclaimer || "";
+      }
+    } catch (settingsErr) {
+      console.debug("[doctor/ai/brief] Clinic settings fetch skipped:", settingsErr?.message);
+    }
+
+    // ✅ Load prompt template (doctor_brief_v1, active)
+    let templateText = null;
+    try {
+      const { data: template } = await supabase
+        .from("prompt_templates")
+        .select("template")
+        .eq("key", "doctor_brief_v1")
+        .eq("is_active", true)
+        .maybeSingle();
+      if (template) {
+        templateText = template.template;
+      }
+    } catch (templateErr) {
+      console.debug("[doctor/ai/brief] Template fetch skipped:", templateErr?.message);
+    }
+
+    // ✅ Load doctor preferences
+    let doctorPrefs = {
+      locale: "en",
+      brief_style: "bullets",
+      tone: "warm_expert",
+      risk_tolerance: "balanced",
+      specialties: [],
+      preferred_materials: {},
+      clinic_protocol_notes: null,
+    };
+    try {
+      const { data: prefs } = await supabase
+        .from("doctor_preferences")
+        .select("*")
+        .eq("doctor_id", user.id)
+        .maybeSingle();
+      if (prefs) {
+        doctorPrefs = {
+          locale: prefs.locale || "en",
+          brief_style: prefs.brief_style || "bullets",
+          tone: prefs.tone || "warm_expert",
+          risk_tolerance: prefs.risk_tolerance || "balanced",
+          specialties: prefs.specialties || [],
+          preferred_materials: prefs.preferred_materials || {},
+          clinic_protocol_notes: prefs.clinic_protocol_notes || null,
+        };
+      }
+    } catch (prefsErr) {
+      console.debug("[doctor/ai/brief] Doctor preferences fetch skipped:", prefsErr?.message);
+    }
+
     // ✅ Build sanitized context (PII-redacted, schema-safe)
     const caseCode = caseCodeFromLead(lead) || "UNKNOWN";
     const treatment = lead.treatment || "General inquiry";
@@ -197,6 +260,11 @@ module.exports = async function handler(req, res) {
 
     // ✅ Fetch documents (types only, no URLs that may contain tokens) - non-fatal
     let documentLabels = [];
+    let hasXray = false;
+    let hasCbct = false;
+    let hasPano = false;
+    let hasPhotos = false;
+    
     try {
       const { data: docsData } = await supabase
         .from("lead_documents")
@@ -206,47 +274,131 @@ module.exports = async function handler(req, res) {
 
       if (docsData && Array.isArray(docsData)) {
         // ✅ Exclude passport/ID documents
-        documentLabels = docsData
-          .filter((doc) => {
-            const type = String(doc.type || "").toLowerCase();
-            const filename = String(doc.filename || "").toLowerCase();
-            const category = String(doc.category || "").toLowerCase();
-            
-            if (
-              type.includes("passport") ||
-              type.includes("id") ||
-              filename.includes("passport") ||
-              filename.includes("id") ||
-              category.includes("passport") ||
-              category.includes("id")
-            ) {
-              return false;
-            }
-            return true;
-          })
-          .map((doc) => `${doc.type || "document"}${doc.category ? ` (${doc.category})` : ""}`);
+        const filteredDocs = docsData.filter((doc) => {
+          const type = String(doc.type || "").toLowerCase();
+          const filename = String(doc.filename || "").toLowerCase();
+          const category = String(doc.category || "").toLowerCase();
+          
+          if (
+            type.includes("passport") ||
+            type.includes("id") ||
+            filename.includes("passport") ||
+            filename.includes("id") ||
+            category.includes("passport") ||
+            category.includes("id")
+          ) {
+            return false;
+          }
+          return true;
+        });
+
+        // ✅ Check for specific document types
+        for (const doc of filteredDocs) {
+          const type = String(doc.type || "").toLowerCase();
+          const filename = String(doc.filename || "").toLowerCase();
+          const category = String(doc.category || "").toLowerCase();
+          const combined = `${type} ${filename} ${category}`.toLowerCase();
+
+          if (combined.includes("cbct") || combined.includes("cone beam")) {
+            hasCbct = true;
+          }
+          if (combined.includes("panoramic") || combined.includes("pano") || combined.includes("pan")) {
+            hasPano = true;
+          }
+          if (combined.includes("xray") || combined.includes("x-ray") || combined.includes("radiograph")) {
+            hasXray = true;
+          }
+          if (
+            combined.includes("photo") ||
+            combined.includes("image") ||
+            type.includes("photo") ||
+            type.includes("image")
+          ) {
+            hasPhotos = true;
+          }
+        }
+
+        documentLabels = filteredDocs.map(
+          (doc) => `${doc.type || "document"}${doc.category ? ` (${doc.category})` : ""}`
+        );
       }
     } catch (docsErr) {
       // Table might not exist, continue
       console.debug("[doctor/ai/brief] Documents fetch skipped:", docsErr?.message);
     }
 
-    // ✅ Build PII-safe prompt for doctor
-    const prompt = `You are an AI assistant helping a dental clinic doctor review a patient case. 
+    // ✅ Format doctor preferences for template
+    const doctorPrefsText = `Locale: ${doctorPrefs.locale}
+Brief Style: ${doctorPrefs.brief_style}
+Tone: ${doctorPrefs.tone}
+Risk Tolerance: ${doctorPrefs.risk_tolerance}
+Specialties: ${doctorPrefs.specialties.join(", ") || "None specified"}
+Preferred Materials: ${JSON.stringify(doctorPrefs.preferred_materials)}
+Protocol Notes: ${doctorPrefs.clinic_protocol_notes || "None"}`;
+
+    // ✅ Build documents metadata with missing diagnostics info
+    const missingDiagnostics = [];
+    if (!hasCbct && !hasPano && !hasXray) {
+      missingDiagnostics.push("CBCT or Panoramic X-ray");
+    } else if (!hasCbct) {
+      missingDiagnostics.push("CBCT (3D imaging)");
+    }
+    if (!hasPano && !hasXray) {
+      missingDiagnostics.push("Panoramic X-ray");
+    }
+    
+    const documentsMeta = documentLabels.length > 0
+      ? `- Available Documents: ${documentLabels.join(", ")}`
+      : "- Documents: None";
+    
+    const missingDiagnosticsText = missingDiagnostics.length > 0
+      ? `\n\nIMPORTANT: Missing Diagnostic Imaging: ${missingDiagnostics.join(", ")}. This is a PROVISIONAL estimate based on available information. A definitive treatment plan requires the missing diagnostic imaging (CBCT/Panoramic X-ray) for accurate assessment.`
+      : "";
+
+    // ✅ Use template if available, otherwise fallback to hardcoded prompt
+    let prompt;
+    if (templateText) {
+      // Replace template placeholders
+      prompt = templateText
+        .replace(/\{\{brand_voice\}\}/g, clinicSettings.brand_voice || "")
+        .replace(/\{\{legal_disclaimer\}\}/g, clinicSettings.legal_disclaimer || "")
+        .replace(/\{\{doctor_preferences\}\}/g, doctorPrefsText)
+        .replace(/\{\{case_code\}\}/g, caseCode)
+        .replace(/\{\{treatment\}\}/g, treatment)
+        .replace(/\{\{timeline\}\}/g, timeline)
+        .replace(/\{\{review_status\}\}/g, reviewStatus)
+        .replace(/\{\{documents_meta\}\}/g, documentsMeta + missingDiagnosticsText)
+        .replace(/\{\{lead_message\}\}/g, message || "No patient message available")
+        .replace(/\{\{snapshot\}\}/g, snapshot || "No summary available yet")
+        .replace(/\{\{lead\}\}/g, JSON.stringify({ case_code: caseCode, treatment, timeline }));
+    } else {
+      // Fallback to original hardcoded prompt (with doctor preferences context added)
+      prompt = `You are an AI assistant helping a dental clinic doctor review a patient case. 
 You MUST NOT output any emails, phone numbers, links, or addresses. If present in the input, ignore them completely.
+
+Clinic Brand Voice:
+${clinicSettings.brand_voice || "Professional, warm, and patient-centered."}
+
+Legal Disclaimer:
+${clinicSettings.legal_disclaimer || "This is a preliminary assessment. Final treatment plan requires in-person consultation."}
+
+Doctor Preferences:
+${doctorPrefsText}
 
 Case Information:
 - Case Code: ${caseCode}
 - Treatment Interest: ${treatment}
 - Timeline: ${timeline}
 - Review Status: ${reviewStatus}
-${documentLabels.length > 0 ? `- Available Documents: ${documentLabels.join(", ")}` : "- Documents: None"}
+${documentsMeta}${missingDiagnosticsText}
 
 Patient Message (PII-redacted):
 ${message || "No patient message available"}
 
 Employee/Admin Summary (PII-redacted):
 ${snapshot || "No summary available yet"}
+
+${missingDiagnostics.length > 0 ? `NOTE: This is a PROVISIONAL assessment. Missing diagnostic imaging: ${missingDiagnostics.join(", ")}. Generate a provisional plan that clearly states what diagnostics are needed for definitive assessment.` : ""}
 
 Based on the above sanitized information, generate a clinical review brief in markdown format. Output ONLY the following sections (no other text):
 
@@ -273,6 +425,7 @@ Based on the above sanitized information, generate a clinical review brief in ma
 
 ## Draft Doctor Review Text
 [Short, professional review text suitable for doctor_review_notes field - 2-3 sentences max]`;
+    }
 
     // Call OpenAI via fetch (no SDK to avoid module issues)
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -286,7 +439,11 @@ Based on the above sanitized information, generate a clinical review brief in ma
         messages: [
           {
             role: "system",
-            content: "You are an AI assistant for dental clinic doctors. You MUST NOT output any emails, phone numbers, links, addresses, or any PII. Always output markdown format. Be concise and professional.",
+            content: `You are an AI assistant for dental clinic doctors. You MUST NOT output any emails, phone numbers, links, addresses, or any PII. Always output markdown format. Be concise and professional.${
+              missingDiagnostics.length > 0
+                ? ` IMPORTANT: When diagnostic imaging (CBCT/Panoramic X-ray) is missing, still generate a PROVISIONAL plan that clearly states what diagnostics are needed for definitive assessment. Use a warm, expert, and inviting tone.`
+                : ""
+            }`,
           },
           {
             role: "user",
@@ -323,18 +480,48 @@ Based on the above sanitized information, generate a clinical review brief in ma
       });
     }
 
-    // Return markdown brief (PII-safe)
+    // ✅ Parse brief JSON if possible, also return rendered summary
+    let briefJson = null;
+    try {
+      // Try to parse as JSON (if AI returns structured data)
+      briefJson = JSON.parse(aiText);
+    } catch {
+      // Not JSON, that's fine - it's markdown
+    }
+
+    // Return markdown brief (PII-safe) + JSON if available + missing_inputs
+    const buildSha =
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      process.env.VERCEL_GIT_COMMIT_REF ||
+      process.env.GITHUB_SHA ||
+      null;
+
     return res.status(200).json({
       ok: true,
       brief: aiText.trim(),
+      brief_json: briefJson,
+      missing_inputs: {
+        has_xray: hasXray,
+        has_cbct: hasCbct,
+        has_pano: hasPano,
+        has_photos: hasPhotos,
+      },
       requestId,
+      buildSha,
     });
   } catch (err) {
     console.error("[doctor/ai/brief] Handler crash:", err, { requestId });
+    const buildSha =
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      process.env.VERCEL_GIT_COMMIT_REF ||
+      process.env.GITHUB_SHA ||
+      null;
+
     return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal server error",
       requestId,
+      buildSha,
     });
   }
 };

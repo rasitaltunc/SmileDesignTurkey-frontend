@@ -19,6 +19,7 @@ import AdminPatientProfile from './pages/AdminPatientProfile';
 import Intake from './pages/Intake';
 import PatientPortal from './pages/PatientPortal';
 import DoctorPortal from './pages/DoctorPortal';
+import DoctorSettings from './pages/DoctorSettings';
 import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
@@ -40,9 +41,13 @@ function RequireRole({
 
   // ✅ Redirect to role's home if role is known but not allowed
   useEffect(() => {
-    if (!isLoading && role && !roles.includes(role)) {
-      const homePath = getHomePath(role);
-      navigate(homePath, { replace: true });
+    if (!isLoading && role) {
+      const normalizedRole = (role || "").toLowerCase().trim();
+      const normalizedRoles = roles.map((r) => (r || "").toLowerCase().trim());
+      if (!normalizedRoles.includes(normalizedRole)) {
+        const homePath = getHomePath(role);
+        navigate(homePath, { replace: true });
+      }
     }
   }, [role, roles, isLoading, navigate]);
 
@@ -73,9 +78,11 @@ function RequireRole({
 
   // ✅ Role biliniyorsa ama allowed değilse → kendi home'una redirect (useEffect ile)
   // Bu durumda redirect gerçekleşene kadar "Redirecting..." göster
-  if (!roles.includes(role)) {
+  const normalizedRole = (role || "").toLowerCase().trim();
+  const normalizedRoles = roles.map((r) => (r || "").toLowerCase().trim());
+  if (!normalizedRoles.includes(normalizedRole)) {
     if (import.meta.env.DEV) {
-      console.log("RequireRole blocked:", { role, allowed: roles });
+      console.log("RequireRole blocked:", { role: normalizedRole, allowed: normalizedRoles });
     }
     
     // ✅ Redirect is handled in useEffect above, show loading while redirecting
@@ -185,6 +192,7 @@ export default function App() {
     '/employee/leads',
     '/patient/portal',
     '/doctor/portal',
+    '/doctor/settings',
     '/plan-dashboard',
   ]);
 
@@ -286,6 +294,12 @@ export default function App() {
             <DoctorPortal />
           </RequireRole>
         );
+      case '/doctor/settings':
+        return (
+          <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
+            <DoctorSettings />
+          </RequireRole>
+        );
       case '/admin':
         // Redirect /admin to /admin/leads
         navigate('/admin/leads', { replace: true });
@@ -316,14 +330,19 @@ export default function App() {
           );
         }
         
-        // Handle dynamic /doctor/lead/:leadUuid route (for doctor mode)
-        // ✅ Route param is always UUID (lead_uuid)
-        if (currentPath.startsWith('/doctor/lead/')) {
-          const leadUuidMatch = currentPath.match(/\/doctor\/lead\/([^/]+)/);
-          const leadUuid = leadUuidMatch ? leadUuidMatch[1] : null;
+        // Handle dynamic doctor lead routes (canonical + backward compatible)
+        // Support: /doctor/lead/:ref, /doctor/leads/:ref, /doctor/lead/:id
+        if (currentPath.startsWith('/doctor/lead/') || currentPath.startsWith('/doctor/leads/')) {
+          // Extract ref/id from path (supports both /lead/ and /leads/)
+          const match = currentPath.match(/\/doctor\/leads?\/([^/?#]+)/);
+          const ref = match ? match[1] : null;
+          
+          // Set params in NavigationContext for useParams() hook
+          setParams({ ref, leadRef: ref, leadId: ref, id: ref });
+          
           return (
             <RequireRole roles={['doctor']} navigate={navigate} isLoading={isLoading}>
-              <AdminPatientProfile doctorMode={true} leadUuid={leadUuid} />
+              <AdminPatientProfile doctorMode={true} leadUuid={ref} />
             </RequireRole>
           );
         }

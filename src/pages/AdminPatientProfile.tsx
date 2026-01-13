@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { ArrowLeft, Brain, RefreshCw, FileText, AlertTriangle, CheckCircle2, Circle, ListTodo, Clock, User, Phone, Mail, MessageCircle, FolderOpen, Image, FileText as FileTextIcon, FileCheck, File, Calendar } from 'lucide-react';
+import { useLocation, useParams } from 'react-router-dom';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -11,7 +12,9 @@ import { BRAND } from '@/config';
 import CalEmbed from '../components/CalEmbed';
 import { authedFetch } from '@/lib/authedFetch';
 import { apiJsonAuth } from '@/lib/api';
+import DoctorNotePanel from '@/components/doctor/DoctorNotePanel';
 import { isUuid } from '@/lib/isUuid';
+import DebugHud from '@/components/DebugHud';
 
 // Import single source of truth from AdminLeads
 // Note: In a real refactor, this would be in a shared constants file
@@ -80,32 +83,48 @@ interface AdminPatientProfileProps {
 export default function AdminPatientProfile({ doctorMode = false, leadId: propLeadId = null, leadUuid: propLeadUuid = null }: AdminPatientProfileProps = {}) {
   const { isAuthenticated, user, role } = useAuthStore();
   const { currentPath } = useContext(NavigationContext);
+  const location = useLocation();
+  const params = useParams() as Record<string, string | undefined>;
+  
+  // ✅ Doctor mode'u path ile kilitle
+  const isDoctorPath = location.pathname.startsWith("/doctor/");
+  const finalIsDoctorMode = isDoctorPath; // ✅ doktor path = doktor mode (kesin)
+  
+  // ✅ leadRef çözümü: param adı farklı / query var / yok / refresh gibi her şeyi çözer. Son segmenti bile alır.
+  const leadRef = (() => {
+    const qs = new URLSearchParams(location.search);
+
+    const raw =
+      params.ref ||
+      params.leadRef ||
+      params.leadId ||
+      params.id ||
+      params.case_code ||
+      qs.get("ref") ||
+      qs.get("lead_id") ||
+      qs.get("id") ||
+      // son çare: path'in son parçası
+      location.pathname.split("/").filter(Boolean).pop() ||
+      null;
+
+    return raw ? decodeURIComponent(String(raw)).replace(/^CASE-/, "").trim() : null;
+  })();
   
   // Extract leadId from URL (App.tsx uses custom routing, not React Router)
   // Route: /admin/lead/:id OR from prop (admin/employee mode)
-  // Route: /doctor/lead/:ref OR from prop (doctor mode - ref can be UUID or TEXT id)
-  // ✅ Extract leadId from URL - support both /admin/lead/:id and /doctor/lead/:ref
-  const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/) || currentPath.match(/\/doctor\/lead\/([^/]+)/);
+  const leadIdMatch = currentPath.match(/\/admin\/lead\/([^/]+)/);
   const urlLeadId = leadIdMatch ? leadIdMatch[1] : null;
   
-  // ✅ Doctor route detection: if path starts with /doctor/lead, it's doctor mode
-  const isDoctorRoute = currentPath.startsWith('/doctor/lead/');
-  // ✅ Final doctor mode determination: from prop OR route OR role
-  const finalIsDoctorMode = doctorMode || isDoctorRoute || role === 'doctor';
+  console.log("[DEBUG] doctorLead", {
+    path: currentPath,
+    search: typeof window !== 'undefined' ? window.location.search : '',
+    params,
+    leadRef,
+    isDoctorPath,
+    finalIsDoctorMode,
+  });
   
   const leadId = propLeadId || urlLeadId;
-  
-  // ✅ Doctor mode: use leadUuid prop OR extract ref from route (ref can be UUID or TEXT id)
-  // ✅ Normalize route param: extract ref from URL, strip CASE- prefix if present
-  const routeRefRaw = propLeadUuid || (isDoctorRoute ? urlLeadId : null);
-  const leadRef = typeof routeRefRaw === "string"
-    ? routeRefRaw.replace(/^CASE-/, "").trim()
-    : (routeRefRaw || null);
-  
-  // ✅ Guard: ref yoksa crash yerine düzgün hata (doctor mode için)
-  if (finalIsDoctorMode && !leadRef) {
-    console.error("[AdminPatientProfile] Lead reference missing (route param empty)", { currentPath, propLeadUuid, urlLeadId });
-  }
   
   // Debug log
   useEffect(() => {
@@ -179,6 +198,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [isUpdatingDoctor, setIsUpdatingDoctor] = useState(false);
 
+  // Doctor preferences state (for read-only display)
+  const [doctorPreferences, setDoctorPreferences] = useState<any>(null);
+  const [isLoadingDoctorPrefs, setIsLoadingDoctorPrefs] = useState(false);
+
   // Doctor review state
   const [doctorReviewStatus, setDoctorReviewStatus] = useState<string>('');
   const [doctorReviewNotes, setDoctorReviewNotes] = useState<string>('');
@@ -226,7 +249,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // ✅ Resolved UUID state (for child endpoints that require UUID)
   // ✅ Resolved lead ID (TEXT) for child table queries
-  const resolvedLeadIdText = lead?.id ?? null;
+  // ✅ Doktor modunda tek gerçek kaynak: URL leadRef
+  const resolvedLeadIdText = finalIsDoctorMode ? leadRef : (lead?.id ?? null);
 
   // ✅ Doctor-friendly lead fetch function - auto-detect UUID vs TEXT id
   const isUuid = (v: string) =>
@@ -270,7 +294,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     if (!isAuthenticated) return;
 
     // ✅ Doctor mode: ref gerekli (from prop OR route - can be UUID or TEXT id)
-    const finalRef = finalIsDoctorMode ? (leadRef || (isDoctorRoute ? urlLeadId : null)) : null;
+    const finalRef = finalIsDoctorMode ? (leadRef || (isDoctorPath ? urlLeadId : null)) : null;
     const finalLeadId = finalIsDoctorMode ? null : (leadId || urlLeadId);
     
     if (finalIsDoctorMode) {
@@ -338,7 +362,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     };
 
     fetchLead();
-  }, [leadId, leadRef, isAuthenticated, finalIsDoctorMode, urlLeadId, isDoctorRoute]);
+  }, [leadId, leadRef, isAuthenticated, finalIsDoctorMode, urlLeadId, isDoctorPath]);
 
   // Fetch notes
   useEffect(() => {
@@ -367,8 +391,15 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         }
 
         // ✅ Use lead.id (TEXT) for child table queries
+        // ✅ Doktor modunda: leadRef yeterli, lead objesi gerekmez
         if (!resolvedLeadIdText) {
-          throw new Error('Cannot load notes: lead not loaded');
+          if (finalIsDoctorMode) {
+            toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
+          } else {
+            console.warn('[AdminPatientProfile] Cannot load notes: lead not loaded');
+          }
+          setNotes([]);
+          return;
         }
         
         const result = await apiJsonAuth<{ notes: any[] }>(`/api/lead-notes?lead_id=${encodeURIComponent(resolvedLeadIdText)}`);
@@ -400,7 +431,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       try {
         // ✅ Use lead.id (TEXT) for admin endpoints (they accept lead_id)
         if (!resolvedLeadIdText) {
-          console.warn('[AdminPatientProfile] Cannot load AI memory: lead not loaded');
+          if (finalIsDoctorMode) {
+            toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
+          } else {
+            console.warn('[AdminPatientProfile] Cannot load AI memory: lead not loaded');
+          }
           return;
         }
         
@@ -453,7 +488,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       try {
         // ✅ Use lead.id (TEXT) for admin endpoints
         if (!resolvedLeadIdText) {
-          console.warn('[AdminPatientProfile] Cannot load AI tasks: lead not loaded');
+          if (finalIsDoctorMode) {
+            toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
+          } else {
+            console.warn('[AdminPatientProfile] Cannot load AI tasks: lead not loaded');
+          }
           return;
         }
         const result = await apiJsonAuth<{ ok: true; tasks: any[] }>(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadIdText)}`).catch((err) => {
@@ -491,7 +530,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       try {
         // ✅ Use lead.id (TEXT) for timeline endpoint
         if (!resolvedLeadIdText) {
-          console.warn('[AdminPatientProfile] Skipping timeline: lead not loaded');
+          if (finalIsDoctorMode) {
+            toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
+          } else {
+            console.warn('[AdminPatientProfile] Skipping timeline: lead not loaded');
+          }
           return;
         }
         
@@ -536,6 +579,41 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     fetchDoctors();
   }, [isAuthenticated, finalIsDoctorMode]);
 
+  // Load doctor preferences when doctor is assigned (admin/employee only, read-only)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (finalIsDoctorMode) return; // Skip in doctor mode
+    if (!lead?.doctor_id) {
+      setDoctorPreferences(null);
+      return;
+    }
+
+    const fetchDoctorPrefs = async () => {
+      setIsLoadingDoctorPrefs(true);
+      try {
+        const result = await apiJsonAuth<{ ok: true; preferences: any }>(
+          `/api/doctor/preferences?doctor_id=${encodeURIComponent(lead.doctor_id)}`
+        ).catch((err) => {
+          console.warn('[AdminPatientProfile] Failed to fetch doctor preferences:', err);
+          return { ok: false, preferences: null };
+        });
+
+        if (result.ok && result.preferences) {
+          setDoctorPreferences(result.preferences);
+        } else {
+          setDoctorPreferences(null);
+        }
+      } catch (err) {
+        console.error('[AdminPatientProfile] Error fetching doctor preferences:', err);
+        setDoctorPreferences(null);
+      } finally {
+        setIsLoadingDoctorPrefs(false);
+      }
+    };
+
+    fetchDoctorPrefs();
+  }, [lead?.doctor_id, isAuthenticated, finalIsDoctorMode]);
+
   // Contact Events: Fetch on page load (admin/employee only)
   useEffect(() => {
     if (!leadId || !isAuthenticated) return;
@@ -551,7 +629,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       try {
         // ✅ Use lead.id (TEXT) for contact events endpoint
         if (!resolvedLeadIdText) {
-          console.warn('[AdminPatientProfile] Skipping contact events: lead not loaded');
+          if (finalIsDoctorMode) {
+            toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
+          } else {
+            console.warn('[AdminPatientProfile] Skipping contact events: lead not loaded');
+          }
           return;
         }
         
@@ -578,7 +660,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       // ✅ IMPORTANT: Use resolved UUID (MUST be UUID for contact events endpoint)
       // ✅ Use lead.id (TEXT) for contact events endpoint
       if (!resolvedLeadIdText) {
-        console.warn('[AdminPatientProfile] Cannot log contact event: lead not loaded');
+        if (finalIsDoctorMode) {
+          toast.error("Lead reference missing in URL. Go back to Doctor Inbox and open the lead again.");
+        } else {
+          console.warn('[AdminPatientProfile] Cannot log contact event: lead not loaded');
+        }
         return;
       }
       
@@ -608,16 +694,32 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
   
   // B6: Add timeline event
   const handleAddTimelineEvent = async () => {
+    // ✅ Doctor mode: Timeline edit is READ-ONLY
+    if (isDoctorPath || finalIsDoctorMode) {
+      toast.error("Timeline editing is not available in doctor mode");
+      return;
+    }
+    
     if (!leadId || !isAuthenticated || !newTimelineStage.trim() || isAddingTimelineEvent) return;
+    
+    // ✅ Check if lead is loaded before proceeding
+    // ✅ Doktor modunda: leadRef yeterli, lead objesi gerekmez
+    if (!resolvedLeadIdText) {
+      toast.error(finalIsDoctorMode 
+        ? "Lead reference missing in URL. Go back to Doctor Inbox and open the lead again."
+        : "Lead not ready yet. Please wait 1–2 seconds and try again.");
+      return;
+    }
+    if (!finalIsDoctorMode && !lead) {
+      toast.error("Lead not ready yet. Please wait 1–2 seconds and try again.");
+      return;
+    }
     
     setIsAddingTimelineEvent(true);
     const toastId = toast.loading('Adding timeline event...');
     
     try {
       // ✅ Use lead.id (TEXT) for timeline endpoint
-      if (!resolvedLeadIdText) {
-        throw new Error('Cannot add timeline event: lead not loaded');
-      }
       
       const result = await apiJsonAuth<{ ok: true; data: any }>(`/api/admin/lead-timeline/${encodeURIComponent(resolvedLeadIdText)}?leadId=${encodeURIComponent(resolvedLeadIdText)}`, {
         method: 'POST',
@@ -681,15 +783,23 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     if (!leadId || !isAuthenticated) return;
     
     // ✅ Doctor mode: AI tasks is admin/employee only (disable for doctor)
-    if (finalIsDoctorMode) {
+    if (isDoctorPath || finalIsDoctorMode) {
       toast.error('Task management is not available for doctors');
       return;
     }
 
     try {
       // ✅ Use lead.id (TEXT) for admin endpoints
+      // ✅ Doktor modunda: leadRef yeterli, lead objesi gerekmez
       if (!resolvedLeadIdText) {
-        throw new Error('Cannot mark task done: lead not loaded');
+        toast.error(finalIsDoctorMode 
+          ? "Lead reference missing in URL. Go back to Doctor Inbox and open the lead again."
+          : "Lead not ready yet. Please wait 1–2 seconds and try again.");
+        return;
+      }
+      if (!finalIsDoctorMode && !lead) {
+        toast.error("Lead not ready yet. Please wait 1–2 seconds and try again.");
+        return;
       }
       await apiJsonAuth(`/api/admin/lead-tasks/${encodeURIComponent(resolvedLeadIdText)}`, {
         method: 'POST',
@@ -722,8 +832,16 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
       }
 
       // ✅ Use lead.id (TEXT) for notes endpoint
+      // ✅ Doktor modunda: leadRef yeterli, lead objesi gerekmez
       if (!resolvedLeadIdText) {
-        throw new Error('Cannot create note: lead not loaded');
+        toast.error(finalIsDoctorMode 
+          ? "Lead reference missing in URL. Go back to Doctor Inbox and open the lead again."
+          : "Lead not ready yet. Please wait 1–2 seconds and try again.");
+        return;
+      }
+      if (!finalIsDoctorMode && !lead) {
+        toast.error("Lead not ready yet. Please wait 1–2 seconds and try again.");
+        return;
       }
       
       const result = await apiJsonAuth<{ ok: true; note: any }>(`/api/lead-notes`, {
@@ -873,7 +991,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
     try {
       // ✅ Use lead.id (TEXT) for admin endpoints
       if (!resolvedLeadIdText) {
-        throw new Error('Cannot sync AI memory: lead not loaded');
+        toast.error(finalIsDoctorMode 
+          ? "Lead reference missing in URL. Go back to Doctor Inbox and open the lead again."
+          : "Cannot sync AI memory: lead not loaded");
+        return;
       }
       const result = await apiJsonAuth<{ ok: true; data?: { memory?: any }; requestId?: string; error?: string }>(
         `/api/admin/lead-ai/${encodeURIComponent(resolvedLeadIdText)}`,
@@ -1127,11 +1248,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!lead) {
-                            toast.error("Lead not loaded");
-                            return;
-                          }
-                          const briefRef = (lead as any)?.ref || (lead as any).lead_uuid || lead.id || leadRef;
+                          const briefRef = (lead as any)?.ref || (lead as any).lead_uuid || lead?.id || leadRef;
                           if (!briefRef) {
                             toast.error("Lead reference missing");
                             console.error("[AdminPatientProfile] Lead reference missing for brief", { lead, leadRef });
@@ -1162,7 +1279,15 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                             setIsLoadingDoctorBrief(false);
                           }
                         }}
-                        disabled={isLoadingDoctorBrief || !lead || !((lead as any)?.lead_uuid || lead?.id)}
+                        disabled={(function() {
+                          const briefDisabled = isLoadingDoctorBrief || !leadRef;
+                          console.log("[DEBUG] briefDisabled", { isLoadingDoctorBrief, leadRef, briefDisabled });
+                          return briefDisabled;
+                        })()}
+                        title={(function() {
+                          const briefDisabled = isLoadingDoctorBrief || !leadRef;
+                          return briefDisabled ? `disabled: loading=${isLoadingDoctorBrief} leadRef=${leadRef}` : "ready";
+                        })()}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                       >
                         {isLoadingDoctorBrief ? (
@@ -1177,6 +1302,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                           </>
                         )}
                       </button>
+                      {/* Debug HUD */}
+                      <div className="mt-2 text-xs text-gray-400">
+                        leadRef: <span className="font-mono">{leadRef ?? "NULL"}</span>
+                      </div>
                     </div>
                     
                     {doctorBrief ? (
@@ -1350,65 +1479,85 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
               )}
             </div>
 
-            {/* Notes Section */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
-                <FileText className="w-5 h-5 text-gray-600" />
-                Notes
-              </h2>
-
-              {/* Add Note */}
-              <div className="mb-6">
-                <textarea
-                  value={newNoteContent}
-                  onChange={(e) => setNewNoteContent(e.target.value)}
-                  placeholder="Add a note..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none break-words"
-                  disabled={isSavingNote}
-                />
-                <button
-                  type="button"
-                  onClick={createNote}
-                  disabled={isSavingNote || !newNoteContent.trim()}
-                  className="mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSavingNote ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Add Note'
-                  )}
-                </button>
+            {/* Notes Section - Doctor mode uses DoctorNotePanel, legacy for admin/employee */}
+            {/* ✅ Doctor Mode: Debug marker + DoctorNotePanel */}
+            {finalIsDoctorMode && (
+              <div className="mb-4 p-2 rounded bg-yellow-50 text-yellow-900 text-xs">
+                DoctorMode ✅ leadRef: <b>{leadRef || "MISSING"}</b>
               </div>
+            )}
 
-              {/* Notes List */}
-              {isLoadingNotes ? (
-                <div className="text-center py-8">
-                  <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">Loading notes...</p>
+            {finalIsDoctorMode && leadRef && (
+              <DoctorNotePanel lead={lead} leadRef={leadRef} />
+            )}
+
+            {finalIsDoctorMode && !leadRef && (
+              <div className="p-3 rounded bg-red-50 text-red-700 text-sm">
+                LeadRef missing in URL. Please open this lead from Doctor Inbox again.
+              </div>
+            )}
+
+            {/* Legacy Notes UI - Hidden in doctor mode */}
+            {!finalIsDoctorMode && (
+              <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  Notes
+                </h2>
+
+                {/* Add Note */}
+                <div className="mb-6">
+                  <textarea
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    placeholder="Add a note..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none break-words"
+                    disabled={isSavingNote}
+                  />
+                  <button
+                    type="button"
+                    onClick={createNote}
+                    disabled={isSavingNote || !newNoteContent.trim()}
+                    className="mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingNote ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Add Note'
+                    )}
+                  </button>
                 </div>
-              ) : notes.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  No notes yet. Add your first note above.
-                </div>
-              ) : (
-                <div className="space-y-3 max-w-full">
-                  {notes.map((note) => (
-                    <div key={note.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 max-w-full">
-                      <p className="text-sm text-gray-900 break-words whitespace-normal mb-2">
-                        {note.note || note.content || ''}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(note.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                {/* Notes List */}
+                {isLoadingNotes ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Loading notes...</p>
+                  </div>
+                ) : notes.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    No notes yet. Add your first note above.
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-w-full">
+                    {notes.map((note) => (
+                      <div key={note.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 max-w-full">
+                        <p className="text-sm text-gray-900 break-words whitespace-normal mb-2">
+                          {note.note || note.content || ''}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(note.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right Column - Sidebar */}
@@ -1826,6 +1975,68 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                 </div>
                 )}
 
+                {/* F2) Doctor Preferences (Admin/Employee only, read-only) */}
+                {!finalIsDoctorMode && lead?.doctor_id && (
+                  <div className="mb-4 pb-4 border-b border-gray-100">
+                    <h4 className="text-xs font-semibold text-gray-700 mb-3">Doctor Preferences</h4>
+                    {isLoadingDoctorPrefs ? (
+                      <p className="text-xs text-gray-500">Loading preferences...</p>
+                    ) : doctorPreferences ? (
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Language:</span>
+                          <span className="font-medium text-gray-900">
+                            {doctorPreferences.locale === 'en' ? 'English' : 'Türkçe'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Brief Style:</span>
+                          <span className="font-medium text-gray-900 capitalize">
+                            {doctorPreferences.brief_style || 'bullets'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Tone:</span>
+                          <span className="font-medium text-gray-900">
+                            {doctorPreferences.tone === 'warm_expert' ? 'Warm & Expert' : 'Formal & Clinical'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Risk Tolerance:</span>
+                          <span className="font-medium text-gray-900 capitalize">
+                            {doctorPreferences.risk_tolerance || 'balanced'}
+                          </span>
+                        </div>
+                        {doctorPreferences.specialties && doctorPreferences.specialties.length > 0 && (
+                          <div>
+                            <span className="text-gray-600">Specialties:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {doctorPreferences.specialties.map((spec: string, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className="inline-block px-2 py-0.5 bg-teal-50 text-teal-800 rounded text-xs"
+                                >
+                                  {spec}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {doctorPreferences.clinic_protocol_notes && (
+                          <div>
+                            <span className="text-gray-600">Protocol Notes:</span>
+                            <p className="mt-1 text-gray-700 italic text-xs">
+                              {doctorPreferences.clinic_protocol_notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500">No preferences configured</p>
+                    )}
+                  </div>
+                )}
+
                 {/* G) Doctor Review (Doctor mode only) */}
                 {finalIsDoctorMode && (
                   <div className="mb-4 pb-4 border-b border-gray-100">
@@ -1836,9 +2047,11 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                         <select
                           value={doctorReviewStatus}
                           onChange={(e) => setDoctorReviewStatus(e.target.value)}
+                          disabled={isDoctorPath}
+                          className={isDoctorPath ? "opacity-60 cursor-not-allowed" : ""}
                           onBlur={async () => {
-                            // ✅ Doctor mode: status updates only via Submit Review
-                            if (finalIsDoctorMode) {
+                            // ✅ Doctor mode: status updates only via Submit Review (disabled)
+                            if (finalIsDoctorMode || isDoctorPath) {
                               // Revert to original if changed (doctor must use Submit button)
                               setDoctorReviewStatus((lead as any)?.doctor_review_status || '');
                               return;
@@ -2206,53 +2419,55 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                     </p>
                   )}
                   
-                  {/* Add Event Controls */}
-                  <div className="border-t border-gray-200 pt-3 space-y-2">
-                    <select
-                      value={newTimelineStage}
-                      onChange={(e) => setNewTimelineStage(e.target.value)}
-                      disabled={isAddingTimelineEvent}
-                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    >
-                      <option value="">Select stage...</option>
-                      {TIMELINE_STAGES.map((s) => (
-                        <option key={s} value={s}>
-                          {TIMELINE_STAGE_LABEL[s]}
-                        </option>
-                      ))}
-                    </select>
-                    <textarea
-                      value={newTimelineNote}
-                      onChange={(e) => setNewTimelineNote(e.target.value)}
-                      disabled={isAddingTimelineEvent}
-                      placeholder="Optional note..."
-                      rows={2}
-                      className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none break-words"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddTimelineEvent}
-                      disabled={isAddingTimelineEvent || !newTimelineStage.trim()}
-                      className={[
-                        "w-full inline-flex items-center justify-center gap-2 h-8",
-                        "px-3 rounded-lg text-xs font-semibold",
-                        "border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2",
-                        "disabled:cursor-not-allowed",
-                        isAddingTimelineEvent || !newTimelineStage.trim()
-                          ? "bg-gray-100 text-gray-400 border-gray-200"
-                          : "bg-teal-600 text-white border-teal-600 hover:bg-teal-700",
-                      ].join(" ")}
-                    >
-                      {isAddingTimelineEvent ? (
-                        <>
-                          <RefreshCw className="w-3 h-3 animate-spin" />
-                          <span>Adding...</span>
-                        </>
-                      ) : (
-                        <span>Add Event</span>
-                      )}
-                    </button>
-                  </div>
+                  {/* Add Event Controls - Hidden in doctor mode (READ-ONLY) */}
+                  {!isDoctorPath && (
+                    <div className="border-t border-gray-200 pt-3 space-y-2">
+                      <select
+                        value={newTimelineStage}
+                        onChange={(e) => setNewTimelineStage(e.target.value)}
+                        disabled={isAddingTimelineEvent}
+                        className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      >
+                        <option value="">Select stage...</option>
+                        {TIMELINE_STAGES.map((s) => (
+                          <option key={s} value={s}>
+                            {TIMELINE_STAGE_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                      <textarea
+                        value={newTimelineNote}
+                        onChange={(e) => setNewTimelineNote(e.target.value)}
+                        disabled={isAddingTimelineEvent}
+                        placeholder="Optional note..."
+                        rows={2}
+                        className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed resize-none break-words"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddTimelineEvent}
+                        disabled={isAddingTimelineEvent || !newTimelineStage.trim()}
+                        className={[
+                          "w-full inline-flex items-center justify-center gap-2 h-8",
+                          "px-3 rounded-lg text-xs font-semibold",
+                          "border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2",
+                          "disabled:cursor-not-allowed",
+                          isAddingTimelineEvent || !newTimelineStage.trim()
+                            ? "bg-gray-100 text-gray-400 border-gray-200"
+                            : "bg-teal-600 text-white border-teal-600 hover:bg-teal-700",
+                        ].join(" ")}
+                      >
+                        {isAddingTimelineEvent ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <span>Adding...</span>
+                          </>
+                        ) : (
+                          <span>Add Event</span>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2328,6 +2543,19 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         leadEmail={lead?.email || undefined}
         leadPhone={lead?.phone || undefined}
       />
+      
+      {/* Debug HUD - Always visible in doctor path */}
+      {isDoctorPath && (
+        <DebugHud
+          leadRef={leadRef}
+          isDoctorPath={isDoctorPath}
+          finalIsDoctorMode={finalIsDoctorMode}
+          isLoadingDoctorBrief={isLoadingDoctorBrief}
+          pathname={currentPath}
+          search={typeof window !== 'undefined' ? window.location.search : ''}
+          params={params}
+        />
+      )}
     </div>
   );
 }
