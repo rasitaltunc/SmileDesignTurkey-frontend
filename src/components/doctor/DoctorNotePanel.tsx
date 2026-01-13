@@ -665,14 +665,16 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
             <div className="flex gap-2">
               <button
                 onClick={() => setShowAddItemModal(true)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors"
+                disabled={!effectiveRef}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add from Catalog
               </button>
               <button
                 onClick={handleAddManualItem}
-                className="inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold bg-gray-900 text-white shadow-sm hover:bg-gray-800 transition-colors"
+                disabled={!effectiveRef}
+                className="inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold bg-gray-900 text-white shadow-sm hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add Manual
