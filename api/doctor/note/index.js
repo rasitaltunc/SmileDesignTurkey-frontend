@@ -215,8 +215,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Verify assignment (already checked in fetchLeadByRef, but double-check)
+    // ✅ Verify assignment (only if doctor_id is set)
+    // If doctor_id is null, allow access (lead not yet assigned)
     if (lead.doctor_id && lead.doctor_id !== user.id) {
+      console.warn("[doctor/note] Assignment mismatch:", { leadDoctorId: lead.doctor_id, userId: user.id, requestId });
       return res.status(403).json({
         ok: false,
         error: "Lead not assigned to you",
@@ -229,17 +231,33 @@ module.exports = async function handler(req, res) {
     const leadId = lead.id; // Use resolved lead.id for note queries
 
     // ✅ Fetch latest doctor_note
-    const { data: note, error: noteErr } = await dbClient
-      .from("doctor_notes")
-      .select("*")
-      .eq("lead_id", leadId)
-      .eq("doctor_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    let note;
+    let noteErr;
+    try {
+      const result = await dbClient
+        .from("doctor_notes")
+        .select("*")
+        .eq("lead_id", leadId)
+        .eq("doctor_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      note = result.data;
+      noteErr = result.error;
+    } catch (queryErr) {
+      console.error("[doctor/note] Note query exception:", queryErr, { requestId, leadId, doctorId: user.id });
+      return res.status(500).json({
+        ok: false,
+        error: queryErr instanceof Error ? queryErr.message : "Note query failed",
+        step: "fetch_note",
+        requestId,
+        buildSha,
+      });
+    }
 
     if (noteErr) {
-      console.error("[doctor/note] Note query error:", noteErr, { requestId });
+      console.error("[doctor/note] Note query error:", noteErr, { requestId, leadId, doctorId: user.id });
       return res.status(500).json({
         ok: false,
         error: noteErr.message || "Note query failed",
@@ -261,32 +279,59 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Fetch note items
-    const { data: items, error: itemsErr } = await dbClient
-      .from("doctor_note_items")
-      .select("*")
-      .eq("doctor_note_id", note.id)
-      .order("created_at", { ascending: true });
-
-    // ✅ Fetch signature info
-    let signature = null;
-    if (note.approved_at) {
-      const { data: sigData } = await dbClient
-        .from("doctor_signatures")
-        .select("signature_image_url, signed_at")
-        .eq("doctor_id", user.id)
-        .maybeSingle();
-      signature = sigData;
+    // ✅ Fetch note items (only if note exists)
+    let items = [];
+    if (note) {
+      try {
+        const itemsResult = await dbClient
+          .from("doctor_note_items")
+          .select("*")
+          .eq("doctor_note_id", note.id)
+          .order("created_at", { ascending: true });
+        items = itemsResult.data || [];
+        if (itemsResult.error) {
+          console.error("[doctor/note] Items query error (non-fatal):", itemsResult.error, { requestId, noteId: note.id });
+        }
+      } catch (itemsErr) {
+        console.error("[doctor/note] Items query exception (non-fatal):", itemsErr, { requestId, noteId: note.id });
+        items = [];
+      }
     }
 
-    // ✅ Build PDF URL if exists
+    // ✅ Fetch signature info (only if note is approved)
+    let signature = null;
+    if (note && note.approved_at) {
+      try {
+        const sigResult = await dbClient
+          .from("doctor_signatures")
+          .select("signature_image_url, signed_at")
+          .eq("doctor_id", user.id)
+          .maybeSingle();
+        signature = sigResult.data || null;
+        if (sigResult.error) {
+          console.debug("[doctor/note] Signature fetch error (non-fatal):", sigResult.error, { requestId });
+        }
+      } catch (sigErr) {
+        console.debug("[doctor/note] Signature fetch exception (non-fatal):", sigErr, { requestId });
+        signature = null;
+      }
+    }
+
+    // ✅ Build PDF URL if exists (only if note has pdf_storage_path)
     let pdfUrl = null;
-    if (note.pdf_storage_path) {
-      // Generate signed URL from Supabase Storage
-      const { data: urlData } = await dbClient.storage
-        .from("doctor-notes")
-        .createSignedUrl(note.pdf_storage_path, 3600); // 1 hour expiry
-      pdfUrl = urlData?.signedUrl || null;
+    if (note && note.pdf_storage_path) {
+      try {
+        const urlResult = await dbClient.storage
+          .from("doctor-notes")
+          .createSignedUrl(note.pdf_storage_path, 3600); // 1 hour expiry
+        pdfUrl = urlResult.data?.signedUrl || null;
+        if (urlResult.error) {
+          console.debug("[doctor/note] PDF URL generation error (non-fatal):", urlResult.error, { requestId });
+        }
+      } catch (pdfErr) {
+        console.debug("[doctor/note] PDF URL generation exception (non-fatal):", pdfErr, { requestId });
+        pdfUrl = null;
+      }
     }
 
     return res.status(200).json({

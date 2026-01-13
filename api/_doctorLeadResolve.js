@@ -45,7 +45,8 @@ async function fetchLeadByRef(supabase, leadRef, doctorUserId) {
         .maybeSingle();
 
       if (!error && data) {
-        // Check assignment
+        // Check assignment (only if doctor_id is set AND doctorUserId provided)
+        // If doctor_id is null, allow access (lead not yet assigned)
         if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
           return { lead: null, ref, error: "Lead not assigned to doctor" };
         }
@@ -61,7 +62,8 @@ async function fetchLeadByRef(supabase, leadRef, doctorUserId) {
         .maybeSingle());
 
       if (!error && data) {
-        // Check assignment
+        // Check assignment (only if doctor_id is set AND doctorUserId provided)
+        // If doctor_id is null, allow access (lead not yet assigned)
         if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
           return { lead: null, ref, error: "Lead not assigned to doctor" };
         }
@@ -85,7 +87,8 @@ async function fetchLeadByRef(supabase, leadRef, doctorUserId) {
         .maybeSingle();
 
       if (!error && data) {
-        // Check assignment
+        // Check assignment (only if doctor_id is set AND doctorUserId provided)
+        // If doctor_id is null, allow access (lead not yet assigned)
         if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
           return { lead: null, ref, error: "Lead not assigned to doctor" };
         }
@@ -101,7 +104,8 @@ async function fetchLeadByRef(supabase, leadRef, doctorUserId) {
         .maybeSingle());
 
       if (!error && data) {
-        // Check assignment
+        // Check assignment (only if doctor_id is set AND doctorUserId provided)
+        // If doctor_id is null, allow access (lead not yet assigned)
         if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
           return { lead: null, ref, error: "Lead not assigned to doctor" };
         }
@@ -117,7 +121,8 @@ async function fetchLeadByRef(supabase, leadRef, doctorUserId) {
         .maybeSingle());
 
       if (!error && data) {
-        // Check assignment
+        // Check assignment (only if doctor_id is set AND doctorUserId provided)
+        // If doctor_id is null, allow access (lead not yet assigned)
         if (data?.doctor_id && doctorUserId && data.doctor_id !== doctorUserId) {
           return { lead: null, ref, error: "Lead not assigned to doctor" };
         }
