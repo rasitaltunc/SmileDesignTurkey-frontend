@@ -8,6 +8,69 @@ import { toast } from 'sonner';
 import { ArrowLeft, Brain, RefreshCw, FileText } from 'lucide-react';
 import DoctorNotePanel from '@/components/doctor/DoctorNotePanel';
 
+// Parse AI Brief response (handles JSON string or plain text)
+function parseAIBrief(raw: string): React.ReactNode {
+  if (!raw) return null;
+  
+  const cleaned = raw
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    // If it's structured JSON, render nicely
+    if (typeof parsed === 'object' && parsed !== null) {
+      return (
+        <div className="space-y-4">
+          {parsed.one_line_case && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-xs font-semibold text-blue-900 uppercase mb-1">Summary</div>
+              <div className="text-sm text-blue-800">{parsed.one_line_case}</div>
+            </div>
+          )}
+          {parsed.top_3_findings && Array.isArray(parsed.top_3_findings) && parsed.top_3_findings.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-gray-900 uppercase mb-2">Top Findings</div>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                {parsed.top_3_findings.map((finding: string, idx: number) => (
+                  <li key={idx}>{finding}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {parsed.top_3_questions && Array.isArray(parsed.top_3_questions) && parsed.top_3_questions.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-gray-900 uppercase mb-2">Questions</div>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                {parsed.top_3_questions.map((question: string, idx: number) => (
+                  <li key={idx}>{question}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {parsed.suggested_direction && (
+            <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+              <div className="text-xs font-semibold text-teal-900 uppercase mb-1">Suggested Direction</div>
+              <div className="text-sm text-teal-800">{parsed.suggested_direction}</div>
+            </div>
+          )}
+          {/* Fallback: show full JSON if other fields exist */}
+          {!parsed.one_line_case && !parsed.top_3_findings && !parsed.top_3_questions && !parsed.suggested_direction && (
+            <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(parsed, null, 2)}</pre>
+          )}
+        </div>
+      );
+    }
+    return <pre className="whitespace-pre-wrap">{JSON.stringify(parsed, null, 2)}</pre>;
+  } catch {
+    // Not JSON, render as plain text
+    return <pre className="whitespace-pre-wrap">{raw}</pre>;
+  }
+}
+
 type Lead = any;
 
 export default function DoctorLeadView() {
@@ -193,7 +256,7 @@ export default function DoctorLeadView() {
             {doctorBrief ? (
               <div className="prose prose-sm max-w-none">
                 <div className="text-sm text-gray-700 whitespace-pre-wrap break-words border-t border-gray-100 pt-4">
-                  {doctorBrief}
+                  {parseAIBrief(doctorBrief)}
                 </div>
               </div>
             ) : (

@@ -233,14 +233,20 @@ export default function App() {
           
           {/* Doctor routes - NESTED with DoctorLayout */}
           <Route path="/doctor" element={<DoctorLayout />}>
+            {/* Inbox = index */}
             <Route 
               index 
               element={
                 <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
-            <DoctorPortal />
-          </RequireRole>
+                  <DoctorPortal />
+                </RequireRole>
               } 
             />
+            
+            {/* ✅ Alias'lar (eski linkler/yer imleri için) */}
+            <Route path="portal" element={<Navigate to=".." replace />} />
+            <Route path="inbox" element={<Navigate to=".." replace />} />
+            
             <Route 
               path="settings" 
               element={
@@ -249,23 +255,27 @@ export default function App() {
                 </RequireRole>
               } 
             />
+            
+            {/* Lead */}
             <Route 
               path="lead/:ref" 
               element={
                 <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
                   <DoctorLeadView />
-          </RequireRole>
+                </RequireRole>
               } 
             />
+            
+            {/* Eski path'ler */}
+            <Route path="leads/:ref" element={<DoctorLeadsRedirect />} />
+            
+            {/* Catch-all for doctor routes */}
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
           
-          {/* Backward compatible redirects */}
+          {/* Global alias (backward compatible) */}
           <Route path="/doctor/portal" element={<Navigate to="/doctor" replace />} />
           <Route path="/doctor/inbox" element={<Navigate to="/doctor" replace />} />
-          <Route 
-            path="/doctor/leads/:ref" 
-            element={<DoctorLeadsRedirect />} 
-          />
           
           {/* Admin routes */}
           <Route path="/admin" element={<Navigate to="/admin/leads" replace />} />

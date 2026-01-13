@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, Outlet, useLocation, Navigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, Navigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 
 export default function DoctorLayout() {
@@ -7,8 +7,10 @@ export default function DoctorLayout() {
   const { pathname } = useLocation();
   const { user, role, isLoading } = useAuthStore();
 
-  const tabClass = (active: boolean) =>
-    `px-3 py-1 rounded border ${active ? "bg-gray-100" : "bg-white hover:bg-gray-50"}`;
+  const tabClass = (isActive: boolean) =>
+    `px-3 py-1 rounded border transition-colors ${
+      isActive ? "bg-gray-100 border-gray-300" : "bg-white border-gray-200 hover:bg-gray-50"
+    }`;
 
   // ✅ Auth checks AFTER all hooks
   if (isLoading) {
@@ -39,15 +41,19 @@ export default function DoctorLayout() {
           </Link>
 
           <nav className="flex items-center gap-2">
-            <Link to="/doctor" className={tabClass(pathname === "/doctor")}>
+            <NavLink
+              to="/doctor"
+              end
+              className={({ isActive }) => tabClass(isActive)}
+            >
               Inbox
-            </Link>
-            <Link
+            </NavLink>
+            <NavLink
               to="/doctor/settings"
-              className={tabClass(pathname.startsWith("/doctor/settings"))}
+              className={({ isActive }) => tabClass(isActive)}
             >
               Settings
-            </Link>
+            </NavLink>
           </nav>
         </div>
       </header>

@@ -638,7 +638,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
           <button
             onClick={handleSave}
             disabled={isSaving || !effectiveRef}
-            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-700 disabled:cursor-not-allowed transition-colors"
           >
             {isSaving ? (
               <>
@@ -672,7 +672,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               </button>
               <button
                 onClick={handleAddManualItem}
-                className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold bg-gray-900 text-white shadow-sm hover:bg-gray-800 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add Manual
@@ -904,9 +904,10 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
 
       {/* Add Item Modal */}
       {showAddItemModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-lg flex flex-col overflow-hidden min-h-0">
+            {/* Header */}
+            <div className="p-6 border-b flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Add Item from Catalog</h3>
               <button
                 onClick={() => {
@@ -919,7 +920,8 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               </button>
             </div>
 
-            <div className="mb-4 flex gap-2">
+            {/* Filters */}
+            <div className="p-6 border-b flex gap-2">
               <select
                 value={catalogKind}
                 onChange={(e) => setCatalogKind(e.target.value as typeof catalogKind)}
@@ -938,7 +940,11 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               />
             </div>
 
-            <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg">
+            {/* ✅ Scroll area with Safari fix */}
+            <div
+              className="flex-1 min-h-0 overflow-y-auto p-6"
+              style={{ WebkitOverflowScrolling: "touch" as any }}
+            >
               {filteredCatalog.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   {catalogItems.length === 0
@@ -962,6 +968,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
                 </div>
               )}
             </div>
+            {/* Footer (if needed) */}
           </div>
         </div>
       )}
