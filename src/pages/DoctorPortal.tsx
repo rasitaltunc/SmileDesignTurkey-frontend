@@ -334,18 +334,14 @@ export default function DoctorPortal() {
                         className="text-sm text-teal-600 hover:text-teal-700 font-medium"
                           onClick={(e) => {
                             e.stopPropagation();
-                            // ✅ Build ref from all possible sources
-                            const ref = (lead as any)?.ref || lead?.lead_uuid || lead?.id || (lead as any)?.case_code;
+                            const ref = pickRef(lead);
+                            console.log("[DoctorPortal] Review button click", { ref, lead });
                             if (!ref) {
-                              toast.error("Missing lead ref");
-                              console.error("[DoctorPortal] Missing lead ref", lead);
+                              toast.error("Lead ref missing on row. Check lead fields.");
                               return;
                             }
-                            
-                            // ✅ Normalize: strip CASE- prefix
-                            const safeRef = String(ref).replace(/^CASE-/, "").trim();
                             // ✅ Navigate to clean DoctorLeadView route (not AdminPatientProfile)
-                            navigate(`/doctor/lead/${encodeURIComponent(safeRef)}`);
+                            navigate(`/doctor/lead/${encodeURIComponent(ref)}`);
                           }}
                       >
                         Review →
