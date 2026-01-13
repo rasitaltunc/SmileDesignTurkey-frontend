@@ -23,6 +23,7 @@ import DoctorSettings from './pages/DoctorSettings';
 import Login from './pages/auth/Login';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
+import BuildStamp from './components/BuildStamp';
 
 // RequireRole component for role-based access control
 function RequireRole({ 
@@ -356,6 +357,7 @@ export default function App() {
       <PageTransition currentPath={currentPath}>
         {renderPage()}
       </PageTransition>
+      <BuildStamp />
     </NavigationContext.Provider>
   );
 }

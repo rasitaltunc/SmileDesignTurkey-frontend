@@ -1486,7 +1486,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
             {/* ✅ Doctor Mode: Debug marker + DoctorNotePanel */}
             {finalIsDoctorMode && (
               <div className="mb-4 p-2 rounded bg-yellow-50 text-yellow-900 text-xs">
-                DoctorMode ✅ leadRef: <b>{leadRef || "MISSING"}</b>
+                DoctorMode ✅ leadRef: <b>{leadRef || "MISSING"}</b> | build: <b>{typeof __BUILD_SHA__ !== "undefined" ? __BUILD_SHA__.slice(0, 7) : "dev"}</b>
               </div>
             )}
 

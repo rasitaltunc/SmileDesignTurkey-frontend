@@ -5,6 +5,11 @@
 
   export default defineConfig({
     plugins: [react()],
+    define: {
+      __BUILD_SHA__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || ""),
+      __VERCEL_ENV__: JSON.stringify(process.env.VERCEL_ENV || ""),
+      __VERCEL_URL__: JSON.stringify(process.env.VERCEL_URL || ""),
+    },
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {
