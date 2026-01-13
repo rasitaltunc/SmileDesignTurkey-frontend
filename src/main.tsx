@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
@@ -12,11 +13,13 @@ initPosthog();
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
-    <HelmetProvider>
-      <LanguageProvider>
-        <App />
-        <Toaster richColors position="top-right" />
-      </LanguageProvider>
-    </HelmetProvider>
+    <BrowserRouter>
+      <HelmetProvider>
+        <LanguageProvider>
+          <App />
+          <Toaster richColors position="top-right" />
+        </LanguageProvider>
+      </HelmetProvider>
+    </BrowserRouter>
   </ErrorBoundary>
 );

@@ -1,5 +1,5 @@
 import { useState, createContext, useEffect, ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
@@ -23,6 +23,7 @@ import DoctorPortal from './pages/DoctorPortal';
 import DoctorSettings from './pages/DoctorSettings';
 import DoctorLeadView from './pages/DoctorLeadView';
 import Login from './pages/auth/Login';
+import DoctorLayout from './layouts/DoctorLayout';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
 import BuildStamp from './components/BuildStamp';
@@ -394,11 +395,124 @@ export default function App() {
     }
   };
 
+  const location = useLocation();
+  const reactRouterNavigate = useNavigate();
+  
+  // Sync custom navigate with React Router
+  const syncNavigate = (path: string, options?: { replace?: boolean }) => {
+    setCurrentPath(path);
+    if (options?.replace) {
+      reactRouterNavigate(path, { replace: true });
+    } else {
+      reactRouterNavigate(path);
+    }
+  };
+
+  // Update currentPath when React Router location changes
+  useEffect(() => {
+    setCurrentPath(location.pathname);
+  }, [location.pathname]);
+
   return (
-    <NavigationContext.Provider value={{ navigate, currentPath, params }}>
+    <NavigationContext.Provider value={{ navigate: syncNavigate, currentPath, params }}>
       <Navbar variant={navbarVariant} minimal={false} />
       <PageTransition currentPath={currentPath}>
-        {renderPage()}
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Home />} />
+          <Route path="/treatments" element={<Treatments />} />
+          <Route path="/treatment-detail" element={<TreatmentDetail />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/process" element={<Process />} />
+          <Route path="/reviews" element={<Reviews />} />
+          <Route path="/faq" element={<FAQ />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/upload-center" element={<UploadCenter />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/intake" element={<Intake />} />
+          <Route path="/plan-dashboard" element={<PlanDashboard />} />
+          
+          {/* Login routes */}
+          <Route path="/login" element={<Login />} />
+          {ENABLE_DEMO_LOGIN && <Route path="/demo-login" element={<Login />} />}
+          
+          {/* Patient portal */}
+          <Route 
+            path="/patient/portal" 
+            element={
+              <RequireRole roles={['patient']} navigate={syncNavigate}>
+                <PatientPortal />
+              </RequireRole>
+            } 
+          />
+          
+          {/* Doctor routes - NESTED with DoctorLayout */}
+          <Route path="/doctor" element={<DoctorLayout />}>
+            <Route 
+              index 
+              element={
+                <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
+                  <DoctorPortal />
+                </RequireRole>
+              } 
+            />
+            <Route 
+              path="settings" 
+              element={
+                <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
+                  <DoctorSettings />
+                </RequireRole>
+              } 
+            />
+            <Route 
+              path="lead/:ref" 
+              element={
+                <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
+                  <DoctorLeadView />
+                </RequireRole>
+              } 
+            />
+          </Route>
+          
+          {/* Backward compatible: /doctor/leads/:ref -> redirect to /doctor/lead/:ref */}
+          <Route 
+            path="/doctor/leads/:ref" 
+            element={<Navigate to="/doctor/lead/:ref" replace />} 
+          />
+          
+          {/* Admin routes */}
+          <Route path="/admin" element={<Navigate to="/admin/leads" replace />} />
+          <Route 
+            path="/admin/leads" 
+            element={
+              <RequireRole roles={['admin']} navigate={syncNavigate} isLoading={isLoading}>
+                <AdminLeads />
+              </RequireRole>
+            } 
+          />
+          <Route 
+            path="/admin/lead/:id" 
+            element={
+              <RequireRole roles={['admin', 'employee']} navigate={syncNavigate} isLoading={isLoading}>
+                <AdminPatientProfile />
+              </RequireRole>
+            } 
+          />
+          
+          {/* Employee routes */}
+          <Route path="/employee" element={<Navigate to="/employee/leads" replace />} />
+          <Route 
+            path="/employee/leads" 
+            element={
+              <RequireRole roles={['employee', 'admin']} navigate={syncNavigate} isLoading={isLoading}>
+                <AdminLeads />
+              </RequireRole>
+            } 
+          />
+          
+          {/* Catch-all: 404 Not Found */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
       </PageTransition>
       <BuildStamp />
     </NavigationContext.Provider>

@@ -1,148 +1,82 @@
 // src/pages/DoctorLeadView.tsx
-// Clean doctor lead view - separate from AdminPatientProfile to avoid #301 errors
+// Hook-safe DoctorLeadView - prevents React #301 errors
 
-import { useState, useEffect, useContext } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
-import { NavigationContext } from '@/App';
-import { useAuthStore } from '@/store/authStore';
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { apiJsonAuth } from '@/lib/api';
-import { getSupabaseClient } from '@/lib/supabaseClient';
-import { isUuid } from '@/lib/isUuid';
 import { toast } from 'sonner';
 import { ArrowLeft, Brain, RefreshCw, FileText } from 'lucide-react';
 import DoctorNotePanel from '@/components/doctor/DoctorNotePanel';
-import DebugHud from '@/components/DebugHud';
 
-interface Lead {
-  id: string;
-  lead_uuid?: string | null;
-  case_code?: string | null;
-  created_at?: string;
-  patient_name?: string | null;
-  original_message?: string | null;
-  initial_message?: string | null;
-  message?: string | null;
-  stage?: string | null;
-}
+type Lead = any;
 
 export default function DoctorLeadView() {
-  const { ref } = useParams<{ ref?: string }>();
+  const params = useParams();
   const location = useLocation();
-  const { navigate, params: contextParams } = useContext(NavigationContext);
-  const { role, user } = useAuthStore();
+  const navigate = useNavigate();
 
-  // Compute leadRef robustly (from params, query, context, or pathname)
-  const qs = new URLSearchParams(location.search);
-  const leadRef = (() => {
-    const raw =
-      ref ||
-      contextParams?.ref ||
-      contextParams?.leadRef ||
-      contextParams?.leadId ||
-      contextParams?.id ||
-      qs.get('ref') ||
-      qs.get('lead_id') ||
-      qs.get('id') ||
-      location.pathname.split('/').filter(Boolean).pop() ||
-      '';
-    return decodeURIComponent(String(raw)).replace(/^CASE-/, '').trim() || null;
-  })();
+  // ✅ Hook-safe: useMemo for leadRef (no conditional hooks)
+  const leadRef = useMemo(() => {
+    const p = params.ref ? decodeURIComponent(params.ref) : null;
+    if (p) return p.replace(/^CASE-/, '').trim() || null;
+
+    const qs = new URLSearchParams(location.search);
+    const q = qs.get("ref") || qs.get("leadRef");
+    return q ? q.replace(/^CASE-/, '').trim() : null;
+  }, [params.ref, location.search]);
 
   const [lead, setLead] = useState<Lead | null>(null);
-  const [isLoadingLead, setIsLoadingLead] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [doctorBrief, setDoctorBrief] = useState<string | null>(null);
   const [isLoadingDoctorBrief, setIsLoadingDoctorBrief] = useState(false);
 
-  // Redirect if not doctor
+  // ✅ Fetch lead - only in useEffect, never in render
   useEffect(() => {
-    if (role && role !== 'doctor') {
-      navigate('/');
-    }
-  }, [role, navigate]);
+    let cancelled = false;
 
-  // Fetch lead minimal info via Supabase (doctor RLS will restrict)
-  useEffect(() => {
-    if (!leadRef) {
-      setIsLoadingLead(false);
-      return;
-    }
-
-    const fetchLead = async () => {
-      setIsLoadingLead(true);
-      try {
-        const supabase = getSupabaseClient();
-        if (!supabase) {
-          // Fallback to API endpoint if Supabase not configured
-          const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
-            `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
-          );
-          if (result.ok && result.lead) {
-            setLead(result.lead);
-          } else {
-            toast.error('Lead not found or not assigned to you');
-          }
-          return;
-        }
-
-        // Build query based on leadRef type
-        let query = supabase
-          .from('leads')
-          .select('id, lead_uuid, case_code, created_at, name, message, initial_message, status')
-          .eq('doctor_id', user?.id || ''); // Doctor RLS: only see assigned leads
-
-        // Resolve ref: UUID or TEXT id
-        if (isUuid(leadRef)) {
-          query = query.eq('lead_uuid', leadRef);
-        } else {
-          // Try multiple matches: id, case_code, CASE-{case_code}
-          query = query.or(`id.eq.${leadRef},case_code.eq.${leadRef},case_code.eq.CASE-${leadRef}`);
-        }
-
-        const { data, error } = await query.maybeSingle();
-
-        if (error) {
-          console.error('[DoctorLeadView] Supabase error:', error);
-          // Fallback to API endpoint
-          const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
-            `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
-          );
-          if (result.ok && result.lead) {
-            setLead(result.lead);
-          } else {
-            toast.error('Lead not found or not assigned to you');
-          }
-          return;
-        }
-
-        if (data) {
-          // Map Supabase response to Lead interface
-          setLead({
-            id: data.id,
-            lead_uuid: data.lead_uuid || null,
-            case_code: data.case_code || null,
-            created_at: data.created_at || null,
-            patient_name: data.name || null,
-            original_message: data.message || data.initial_message || null,
-            initial_message: data.initial_message || null,
-            message: data.message || null,
-            stage: data.status || null,
-          });
-        } else {
-          toast.error('Lead not found or not assigned to you');
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load lead';
-        toast.error(errorMessage);
-        console.error('[DoctorLeadView] Fetch error:', err);
-      } finally {
-        setIsLoadingLead(false);
+    async function run() {
+      if (!leadRef) {
+        setLead(null);
+        setError("Missing lead ref");
+        setLoading(false);
+        return;
       }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
+          `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
+        );
+
+        if (!cancelled) {
+          if (result.ok && result.lead) {
+            setLead(result.lead);
+          } else {
+            setError("Lead not found or not assigned to you");
+          }
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e?.message ?? String(e));
+          toast.error(e?.message ?? "Failed to load lead");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
     };
+  }, [leadRef]);
 
-    fetchLead();
-  }, [leadRef, user?.id]);
-
-  // Generate Doctor AI Brief
+  // ✅ Generate Doctor AI Brief - only in event handler, never in render
   const handleGenerateBrief = async () => {
     if (!leadRef) {
       toast.error('LeadRef missing in URL.');
@@ -174,130 +108,107 @@ export default function DoctorLeadView() {
     }
   };
 
-  const isDoctorPath = location.pathname.startsWith('/doctor/');
-
-  if (isLoadingLead) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
-            <span className="ml-3 text-gray-600">Loading lead...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!leadRef) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">
-            Lead reference missing in URL. Please open from Doctor Inbox again.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const messageText =
-    lead?.original_message || lead?.initial_message || lead?.message || 'No message available';
-
+  // ✅ Render - no setState, no navigate, no conditional hooks
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Debug HUD (optional) */}
-        {isDoctorPath && (
-          <DebugHud
-            leadRef={leadRef}
-            isDoctorPath={isDoctorPath}
-            finalIsDoctorMode={true}
-            isLoadingDoctorBrief={isLoadingDoctorBrief}
-          />
+    <div className="space-y-6">
+      {/* Debug info */}
+      <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+        <div><b>pathname:</b> {location.pathname}</div>
+        <div><b>ref:</b> {leadRef ?? "null"}</div>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate('/doctor')}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Inbox
+        </button>
+        <h1 className="text-2xl font-bold text-gray-900">Doctor Lead</h1>
+        {lead?.case_code && (
+          <span className="text-sm text-gray-500 font-mono">{lead.case_code}</span>
         )}
+      </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/doctor')}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Inbox
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">Doctor Lead</h1>
-            {lead?.case_code && (
-              <span className="text-sm text-gray-500 font-mono">{lead.case_code}</span>
-            )}
-          </div>
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+          <span className="ml-3 text-gray-600">Loading lead...</span>
         </div>
+      )}
 
-        {/* Original Message Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-teal-600" />
-            Original Message
-          </h2>
-          <div className="prose prose-sm max-w-none">
-            <div className="text-sm text-gray-700 whitespace-pre-wrap break-words border border-gray-200 rounded-lg p-4 bg-gray-50">
-              {messageText}
-            </div>
-          </div>
+      {/* Error state */}
+      {error && !loading && (
+        <div className="p-4 rounded-lg bg-red-50 text-red-700 text-sm">
+          {error}
         </div>
+      )}
 
-        {/* Doctor AI Brief Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Brain className="w-5 h-5 text-teal-600" />
-              <span>Doctor AI Brief</span>
+      {/* Lead content */}
+      {lead && !loading && (
+        <>
+          {/* Original Message Card */}
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-teal-600" />
+              Original Message
             </h2>
-            <button
-              type="button"
-              onClick={handleGenerateBrief}
-              disabled={isLoadingDoctorBrief || !leadRef}
-              title={
-                isLoadingDoctorBrief || !leadRef
-                  ? `disabled: loading=${isLoadingDoctorBrief} leadRef=${leadRef}`
-                  : 'ready'
-              }
-              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {isLoadingDoctorBrief ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Brain className="w-4 h-4" />
-                  <span>Generate Doctor AI Brief</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {doctorBrief ? (
             <div className="prose prose-sm max-w-none">
-              <div className="text-sm text-gray-700 whitespace-pre-wrap break-words border-t border-gray-100 pt-4">
-                {doctorBrief}
+              <div className="text-sm text-gray-700 whitespace-pre-wrap break-words border border-gray-200 rounded-lg p-4 bg-gray-50">
+                {lead.original_message || lead.initial_message || lead.message || 'No message available'}
               </div>
             </div>
-          ) : (
-            <p className="text-xs text-gray-500">
-              Click "Generate Doctor AI Brief" to create a PII-safe clinical review brief.
-            </p>
-          )}
-        </div>
+          </div>
 
-        {/* Doctor Note Panel - ALWAYS render when leadRef exists */}
-        {leadRef && (
-          <DoctorNotePanel lead={lead} leadRef={leadRef} />
-        )}
-      </div>
+          {/* Doctor AI Brief Card */}
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Brain className="w-5 h-5 text-teal-600" />
+                <span>Doctor AI Brief</span>
+              </h2>
+              <button
+                type="button"
+                onClick={handleGenerateBrief}
+                disabled={isLoadingDoctorBrief || !leadRef}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {isLoadingDoctorBrief ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Brain className="w-4 h-4" />
+                    <span>Generate Doctor AI Brief</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {doctorBrief ? (
+              <div className="prose prose-sm max-w-none">
+                <div className="text-sm text-gray-700 whitespace-pre-wrap break-words border-t border-gray-100 pt-4">
+                  {doctorBrief}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">
+                Click "Generate Doctor AI Brief" to create a PII-safe clinical review brief.
+              </p>
+            )}
+          </div>
+
+          {/* Doctor Note Panel - ALWAYS render when leadRef exists */}
+          {leadRef && (
+            <DoctorNotePanel lead={lead} leadRef={leadRef} />
+          )}
+        </>
+      )}
     </div>
   );
 }
-
