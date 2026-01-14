@@ -202,12 +202,13 @@ module.exports = async function handler(req, res) {
 
       // Validate enum values
       const briefStyle = normalized.brief_style || "bullets";
-      const tone = normalized.tone || "warm_expert";
+      // ✅ tone is schema-constrained in prod (doctor_preferences_tone_check)
+      // Don't force a default. Only persist if client explicitly sends it.
+      const toneRaw = normalized.tone ?? null;
       const riskToleranceRaw = normalized.risk_tolerance ?? "balanced";
 
       const validLanguages = ["en", "tr"];
       const validBriefStyles = ["bullets", "detailed"];
-      const validTones = ["warm_expert", "formal_clinical"];
       const validRiskTolerances = ["conservative", "balanced", "aggressive"];
 
       if (!validLanguages.includes(language)) {
@@ -230,15 +231,9 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      if (!validTones.includes(tone)) {
-        return res.status(400).json({
-          ok: false,
-          error: `Invalid tone. Must be one of: ${validTones.join(", ")}`,
-          step: "validation",
-          requestId,
-          buildSha,
-        });
-      }
+      // NOTE: We intentionally do NOT validate `tone` here.
+      // The DB check constraint is the source of truth (and differs across envs).
+      const tone = typeof toneRaw === "string" ? toneRaw.trim() : toneRaw;
 
       // ✅ risk_tolerance column is INTEGER in this project (per prod error),
       // but UI sends strings ("balanced"). We accept both and store integer.
@@ -278,7 +273,7 @@ module.exports = async function handler(req, res) {
         doctor_id: targetDoctorId,
         language,
         brief_style: briefStyle,
-        tone,
+        tone: tone || undefined,
         risk_tolerance: riskToleranceInt,
         material_preferences: materialPrefs,
         implant_preferences: implantPrefs,
@@ -330,6 +325,34 @@ module.exports = async function handler(req, res) {
           });
           delete preferencesData[missingCol];
           continue;
+        }
+
+        // ✅ Check constraint retry (e.g. doctor_preferences_tone_check)
+        // If we can infer the field name from the constraint, drop it and retry.
+        const cm = msg.match(/doctor_preferences_([a-z_]+?)_check/i);
+        const constraintKey = cm?.[1] || null;
+        if (constraintKey) {
+          const constraintToField = {
+            tone: "tone",
+            language: "language",
+            brief_style: "brief_style",
+            risk_tolerance: "risk_tolerance",
+            material_preferences: "material_preferences",
+            implant_preferences: "implant_preferences",
+            exclusions: "exclusions",
+            patient_message_templates: "patient_message_templates",
+          };
+          const field = constraintToField[constraintKey];
+          if (field && Object.prototype.hasOwnProperty.call(preferencesData, field)) {
+            console.warn("[doctor/preferences] Check constraint hit, dropping field and retrying:", {
+              constraintKey,
+              field,
+              attempt,
+              requestId,
+            });
+            delete preferencesData[field];
+            continue;
+          }
         }
         break;
       }

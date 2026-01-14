@@ -100,7 +100,6 @@ export default function DoctorSettings() {
       // API expects these enums
       language: defaultLanguage,
       brief_style: briefTone === "detailed" ? "detailed" : "bullets",
-      tone: "warm_expert",
       risk_tolerance: "balanced",
       material_preferences: {
         default_material: defaultMaterial,
