@@ -1078,7 +1078,7 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4 min-w-0 flex-1">
-              {/* ✅ "Back to Leads" butonu doktor modunda gizli (doktor /doctor/portal kullanır) */}
+              {/* ✅ "Back to Leads" butonu doktor modunda gizli (doktor /doctor kullanır) */}
               {!finalIsDoctorMode && (
               <button
                 type="button"

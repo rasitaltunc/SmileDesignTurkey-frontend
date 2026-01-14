@@ -231,7 +231,11 @@ export default function App() {
             } 
           />
           
-          {/* Doctor routes - NESTED with DoctorLayout */}
+          {/* ✅ Doctor route aliases (MUST be before nested routes) */}
+          <Route path="/doctor/portal" element={<Navigate to="/doctor" replace />} />
+          <Route path="/doctor/inbox" element={<Navigate to="/doctor" replace />} />
+          
+          {/* ✅ Doctor routes - NESTED with DoctorLayout */}
           <Route path="/doctor" element={<DoctorLayout />}>
             {/* Inbox = index */}
             <Route 
@@ -243,10 +247,6 @@ export default function App() {
               } 
             />
             
-            {/* ✅ Alias'lar (eski linkler/yer imleri için) */}
-            <Route path="portal" element={<Navigate to=".." replace />} />
-            <Route path="inbox" element={<Navigate to=".." replace />} />
-            
             <Route 
               path="settings" 
               element={
@@ -256,7 +256,7 @@ export default function App() {
               } 
             />
             
-            {/* Lead */}
+            {/* Lead view */}
             <Route 
               path="lead/:ref" 
               element={
@@ -266,16 +266,9 @@ export default function App() {
               } 
             />
             
-            {/* Eski path'ler */}
+            {/* Legacy: /doctor/leads/:ref → /doctor/lead/:ref */}
             <Route path="leads/:ref" element={<DoctorLeadsRedirect />} />
-            
-            {/* Catch-all for doctor routes */}
-            <Route path="*" element={<NotFoundPage />} />
           </Route>
-          
-          {/* Global alias (backward compatible) */}
-          <Route path="/doctor/portal" element={<Navigate to="/doctor" replace />} />
-          <Route path="/doctor/inbox" element={<Navigate to="/doctor" replace />} />
           
           {/* Admin routes */}
           <Route path="/admin" element={<Navigate to="/admin/leads" replace />} />
