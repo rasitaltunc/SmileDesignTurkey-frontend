@@ -108,11 +108,35 @@ module.exports = async function handler(req, res) {
     try {
       const { data: profData, error: profErr } = await dbClient
         .from("profiles")
-        .select("id, role, full_name, title")
+        .select("id, role")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (profErr || !profData || profData.role !== "doctor") {
+      if (profErr) {
+        console.error("[doctor/signature/upload] Profile query error:", profErr, { requestId, userId: user.id });
+        return res.status(500).json({
+          ok: false,
+          error: "Profile query failed",
+          step: "role_check",
+          requestId,
+          buildSha,
+        });
+      }
+
+      if (!profData) {
+        console.error("[doctor/signature/upload] Profile not found:", { requestId, userId: user.id });
+        return res.status(403).json({
+          ok: false,
+          error: "Profile not found",
+          step: "role_check",
+          requestId,
+          buildSha,
+        });
+      }
+
+      const role = String(profData.role || "").trim().toLowerCase();
+      if (role !== "doctor") {
+        console.warn("[doctor/signature/upload] Invalid role:", { requestId, userId: user.id, role: profData.role, normalizedRole: role });
         return res.status(403).json({
           ok: false,
           error: "Forbidden: doctor access only",
@@ -121,7 +145,24 @@ module.exports = async function handler(req, res) {
           buildSha,
         });
       }
-      profile = profData;
+
+      // ✅ Fetch full_name and title separately (optional fields)
+      let profileWithDetails = { ...profData, full_name: null, title: null };
+      try {
+        const { data: profDetails } = await dbClient
+          .from("profiles")
+          .select("full_name, title")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profDetails) {
+          profileWithDetails.full_name = profDetails.full_name || null;
+          profileWithDetails.title = profDetails.title || null;
+        }
+      } catch (detailErr) {
+        // Non-fatal: use defaults
+        console.debug("[doctor/signature/upload] Profile details fetch skipped:", detailErr?.message);
+      }
+      profile = profileWithDetails;
     } catch (roleErr) {
       return res.status(500).json({
         ok: false,
@@ -134,7 +175,7 @@ module.exports = async function handler(req, res) {
 
     // ✅ Parse body
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const signatureData = body.signature_data || body.signatureData;
+    const signatureData = body.signature_data || body.signatureData || body.base64Image || body.base64;
     const displayName = body.display_name || body.displayName || profile.full_name || null;
     const title = body.title || profile.title || null;
 

@@ -112,7 +112,31 @@ module.exports = async function handler(req, res) {
         .eq("id", user.id)
         .maybeSingle();
 
-      if (profErr || !profData || (profData.role !== "doctor" && profData.role !== "admin")) {
+      if (profErr) {
+        console.error("[doctor/signature] Profile query error:", profErr, { requestId, userId: user.id });
+        return res.status(500).json({
+          ok: false,
+          error: "Profile query failed",
+          step: "role_check",
+          requestId,
+          buildSha,
+        });
+      }
+
+      if (!profData) {
+        console.error("[doctor/signature] Profile not found:", { requestId, userId: user.id });
+        return res.status(403).json({
+          ok: false,
+          error: "Profile not found",
+          step: "role_check",
+          requestId,
+          buildSha,
+        });
+      }
+
+      const role = String(profData.role || "").trim().toLowerCase();
+      if (role !== "doctor" && role !== "admin") {
+        console.warn("[doctor/signature] Invalid role:", { requestId, userId: user.id, role: profData.role, normalizedRole: role });
         return res.status(403).json({
           ok: false,
           error: "Forbidden: doctor or admin access only",
