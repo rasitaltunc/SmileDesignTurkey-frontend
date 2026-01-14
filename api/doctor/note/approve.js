@@ -109,7 +109,7 @@ module.exports = async function handler(req, res) {
     try {
       const { data: profData, error: profErr } = await dbClient
         .from("profiles")
-        .select("id, role, full_name, title")
+        .select("id, role")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -146,7 +146,24 @@ module.exports = async function handler(req, res) {
           buildSha,
         });
       }
-      profile = profData;
+
+      // ✅ Fetch full_name and title separately (optional fields)
+      let profileWithDetails = { ...profData, full_name: null, title: null };
+      try {
+        const { data: profDetails } = await dbClient
+          .from("profiles")
+          .select("full_name, title")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (profDetails) {
+          profileWithDetails.full_name = profDetails.full_name || null;
+          profileWithDetails.title = profDetails.title || null;
+        }
+      } catch (detailErr) {
+        // Non-fatal: use defaults
+        console.debug("[doctor/note/approve] Profile details fetch skipped:", detailErr?.message);
+      }
+      profile = profileWithDetails;
     } catch (roleErr) {
       return res.status(500).json({
         ok: false,
