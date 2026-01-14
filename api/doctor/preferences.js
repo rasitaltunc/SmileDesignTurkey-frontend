@@ -156,12 +156,16 @@ module.exports = async function handler(req, res) {
           ok: true,
           preferences: {
             doctor_id: targetDoctorId,
-            locale: "en",
+            // ✅ Schema-safe defaults: use `language` (NOT `locale`)
+            language: "en",
             brief_style: "bullets",
             tone: "warm_expert",
             risk_tolerance: "balanced",
-            specialties: [],
-            preferred_materials: {},
+            // ✅ Schema-safe JSON: `material_preferences` (NOT `preferred_materials`)
+            material_preferences: {},
+            implant_preferences: {},
+            exclusions: {},
+            patient_message_templates: {},
           },
           requestId,
           buildSha,
@@ -181,37 +185,35 @@ module.exports = async function handler(req, res) {
     // ============================================================================
     if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-      
-      // ✅ Allowlist: ONLY write columns that exist in DB (prevents schema mismatch 500s)
-      // NOTE: doctor_preferences in this repo does NOT have clinic_protocol_notes
-      const ALLOWED = new Set([
-        "doctor_id",
-        "locale",
-        "brief_style",
-        "tone",
-        "risk_tolerance",
-        "specialties",
-        "preferred_materials",
-      ]);
-      const filteredBody = Object.fromEntries(
-        Object.entries(body || {}).filter(([k]) => ALLOWED.has(k))
-      );
+      const normalized = body || {};
+
+      // ✅ Back-compat mapping:
+      // - frontend may send `locale` but DB column is `language`
+      // - old code may send `preferred_materials` but DB column is `material_preferences`
+      const language = normalized.language || normalized.locale || "en";
+      const materialPrefs =
+        normalized.material_preferences ||
+        normalized.preferred_materials ||
+        {};
+
+      const implantPrefs = normalized.implant_preferences || {};
+      const exclusions = normalized.exclusions || {};
+      const patientMessageTemplates = normalized.patient_message_templates || {};
 
       // Validate enum values
-      const locale = filteredBody.locale || "en";
-      const briefStyle = filteredBody.brief_style || "bullets";
-      const tone = filteredBody.tone || "warm_expert";
-      const riskTolerance = filteredBody.risk_tolerance || "balanced";
+      const briefStyle = normalized.brief_style || "bullets";
+      const tone = normalized.tone || "warm_expert";
+      const riskTolerance = normalized.risk_tolerance || "balanced";
 
-      const validLocales = ["en", "tr"];
+      const validLanguages = ["en", "tr"];
       const validBriefStyles = ["bullets", "detailed"];
       const validTones = ["warm_expert", "formal_clinical"];
       const validRiskTolerances = ["conservative", "balanced", "aggressive"];
 
-      if (!validLocales.includes(locale)) {
+      if (!validLanguages.includes(language)) {
         return res.status(400).json({
           ok: false,
-          error: `Invalid locale. Must be one of: ${validLocales.join(", ")}`,
+          error: `Invalid language. Must be one of: ${validLanguages.join(", ")}`,
           step: "validation",
           requestId,
           buildSha,
@@ -249,7 +251,7 @@ module.exports = async function handler(req, res) {
       }
 
       // Doctors can only update their own preferences
-      if (profile.role !== "admin" && filteredBody.doctor_id && filteredBody.doctor_id !== user.id) {
+      if (profile.role !== "admin" && normalized.doctor_id && normalized.doctor_id !== user.id) {
         return res.status(403).json({
           ok: false,
           error: "Cannot update other doctor's preferences",
@@ -259,25 +261,68 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const targetDoctorId = filteredBody.doctor_id || user.id;
+      const targetDoctorId = normalized.doctor_id || user.id;
 
-      const preferencesData = {
+      // ✅ Candidate payload (we will retry-remove unknown columns if schema cache differs)
+      let preferencesData = {
         doctor_id: targetDoctorId,
-        locale,
+        language,
         brief_style: briefStyle,
         tone,
         risk_tolerance: riskTolerance,
-        specialties: Array.isArray(filteredBody.specialties) ? filteredBody.specialties : [],
-        preferred_materials: filteredBody.preferred_materials || {},
+        material_preferences: materialPrefs,
+        implant_preferences: implantPrefs,
+        exclusions,
+        patient_message_templates: patientMessageTemplates,
         updated_at: new Date().toISOString(),
       };
 
-      // Upsert (insert or update)
-      const { data: prefs, error: upsertErr } = await dbClient
-        .from("doctor_preferences")
-        .upsert(preferencesData, { onConflict: "doctor_id" })
-        .select()
-        .single();
+      // ✅ Allowlist (real schema candidates)
+      const ALLOWED_CANDIDATES = new Set([
+        "doctor_id",
+        "language",
+        "brief_style",
+        "tone",
+        "risk_tolerance",
+        "material_preferences",
+        "implant_preferences",
+        "exclusions",
+        "patient_message_templates",
+        "updated_at",
+      ]);
+      preferencesData = Object.fromEntries(
+        Object.entries(preferencesData).filter(([k, v]) => ALLOWED_CANDIDATES.has(k) && v !== undefined)
+      );
+
+      // ✅ Upsert with schema-mismatch retry (removes unknown column names based on error message)
+      let prefs = null;
+      let upsertErr = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await dbClient
+          .from("doctor_preferences")
+          .upsert(preferencesData, { onConflict: "doctor_id" })
+          .select()
+          .single();
+        prefs = r.data || null;
+        upsertErr = r.error || null;
+
+        if (!upsertErr) break;
+
+        const msg = String(upsertErr.message || "");
+        const m = msg.match(/Could not find the '([^']+)' column/i);
+        const missingCol = m?.[1];
+        if (missingCol && Object.prototype.hasOwnProperty.call(preferencesData, missingCol)) {
+          console.warn("[doctor/preferences] Schema mismatch, dropping column and retrying:", {
+            missingCol,
+            attempt,
+            requestId,
+          });
+          delete preferencesData[missingCol];
+          continue;
+        }
+        break;
+      }
 
       if (upsertErr) {
         console.error("[doctor/preferences] Upsert error:", upsertErr, { requestId });

@@ -5,12 +5,14 @@ import { apiJsonAuth } from "@/lib/api";
 
 type DoctorPreferences = {
   doctor_id?: string;
+  // ✅ DB uses `language` (keep `locale` only for backward-compatible reads)
+  language?: "en" | "tr";
   locale?: "en" | "tr";
   brief_style?: "bullets" | "detailed";
   tone?: "warm_expert" | "formal_clinical";
   risk_tolerance?: "conservative" | "balanced" | "aggressive";
-  specialties?: string[];
-  preferred_materials?: Record<string, any>;
+  material_preferences?: Record<string, any>;
+  preferred_materials?: Record<string, any>; // backward-compat read only
 };
 
 type PreferencesResponse = {
@@ -60,22 +62,24 @@ export default function DoctorSettings() {
         const resp = await apiJsonAuth<PreferencesResponse>("/api/doctor/preferences");
         const prefs = resp?.preferences || {};
 
-        const locale = prefs.locale === "tr" ? "tr" : "en";
+        const language =
+          (prefs.language === "tr" ? "tr" : prefs.language === "en" ? "en" : null) ||
+          (prefs.locale === "tr" ? "tr" : "en");
         const briefStyle = prefs.brief_style === "detailed" ? "detailed" : "bullets";
-        const preferred = prefs.preferred_materials || {};
+        const materialPrefs = prefs.material_preferences || prefs.preferred_materials || {};
 
         if (!cancelled) {
-          setDefaultLanguage(locale);
+          setDefaultLanguage(language);
           setBriefTone(briefStyle === "detailed" ? "detailed" : "short");
           setDefaultMaterial(
-            preferred?.default_material === "emax"
+            materialPrefs?.default_material === "emax"
               ? "emax"
-              : preferred?.default_material === "composite"
+              : materialPrefs?.default_material === "composite"
                 ? "composite"
                 : "zirconia"
           );
           setShowPriceBreakdown(
-            typeof preferred?.show_price_breakdown === "boolean" ? preferred.show_price_breakdown : true
+            typeof materialPrefs?.show_price_breakdown === "boolean" ? materialPrefs.show_price_breakdown : true
           );
         }
       } catch (err: any) {
@@ -94,12 +98,11 @@ export default function DoctorSettings() {
   const payload = useMemo(() => {
     return {
       // API expects these enums
-      locale: defaultLanguage,
+      language: defaultLanguage,
       brief_style: briefTone === "detailed" ? "detailed" : "bullets",
       tone: "warm_expert",
       risk_tolerance: "balanced",
-      specialties: [],
-      preferred_materials: {
+      material_preferences: {
         default_material: defaultMaterial,
         show_price_breakdown: showPriceBreakdown,
       },
