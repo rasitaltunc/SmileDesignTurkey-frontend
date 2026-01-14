@@ -203,7 +203,7 @@ module.exports = async function handler(req, res) {
       // Validate enum values
       const briefStyle = normalized.brief_style || "bullets";
       const tone = normalized.tone || "warm_expert";
-      const riskTolerance = normalized.risk_tolerance || "balanced";
+      const riskToleranceRaw = normalized.risk_tolerance ?? "balanced";
 
       const validLanguages = ["en", "tr"];
       const validBriefStyles = ["bullets", "detailed"];
@@ -240,14 +240,24 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      if (!validRiskTolerances.includes(riskTolerance)) {
-        return res.status(400).json({
-          ok: false,
-          error: `Invalid risk_tolerance. Must be one of: ${validRiskTolerances.join(", ")}`,
-          step: "validation",
-          requestId,
-          buildSha,
-        });
+      // ✅ risk_tolerance column is INTEGER in this project (per prod error),
+      // but UI sends strings ("balanced"). We accept both and store integer.
+      // Mapping: conservative=0, balanced=1, aggressive=2
+      let riskToleranceInt = 1;
+      if (typeof riskToleranceRaw === "number" && Number.isFinite(riskToleranceRaw)) {
+        riskToleranceInt = Math.max(0, Math.min(2, Math.trunc(riskToleranceRaw)));
+      } else {
+        const rt = String(riskToleranceRaw || "").toLowerCase().trim();
+        if (!validRiskTolerances.includes(rt)) {
+          return res.status(400).json({
+            ok: false,
+            error: `Invalid risk_tolerance. Must be one of: ${validRiskTolerances.join(", ")}`,
+            step: "validation",
+            requestId,
+            buildSha,
+          });
+        }
+        riskToleranceInt = rt === "conservative" ? 0 : rt === "aggressive" ? 2 : 1;
       }
 
       // Doctors can only update their own preferences
@@ -269,7 +279,7 @@ module.exports = async function handler(req, res) {
         language,
         brief_style: briefStyle,
         tone,
-        risk_tolerance: riskTolerance,
+        risk_tolerance: riskToleranceInt,
         material_preferences: materialPrefs,
         implant_preferences: implantPrefs,
         exclusions,
