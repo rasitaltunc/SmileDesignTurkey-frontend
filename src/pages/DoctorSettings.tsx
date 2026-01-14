@@ -11,7 +11,6 @@ type DoctorPreferences = {
   risk_tolerance?: "conservative" | "balanced" | "aggressive";
   specialties?: string[];
   preferred_materials?: Record<string, any>;
-  clinic_protocol_notes?: string | null;
 };
 
 type PreferencesResponse = {
@@ -104,7 +103,6 @@ export default function DoctorSettings() {
         default_material: defaultMaterial,
         show_price_breakdown: showPriceBreakdown,
       },
-      clinic_protocol_notes: null,
     } satisfies DoctorPreferences;
   }, [defaultLanguage, briefTone, defaultMaterial, showPriceBreakdown]);
 

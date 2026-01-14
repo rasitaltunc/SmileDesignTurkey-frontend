@@ -162,7 +162,6 @@ module.exports = async function handler(req, res) {
             risk_tolerance: "balanced",
             specialties: [],
             preferred_materials: {},
-            clinic_protocol_notes: null,
           },
           requestId,
           buildSha,
@@ -182,12 +181,27 @@ module.exports = async function handler(req, res) {
     // ============================================================================
     if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+      
+      // ✅ Allowlist: ONLY write columns that exist in DB (prevents schema mismatch 500s)
+      // NOTE: doctor_preferences in this repo does NOT have clinic_protocol_notes
+      const ALLOWED = new Set([
+        "doctor_id",
+        "locale",
+        "brief_style",
+        "tone",
+        "risk_tolerance",
+        "specialties",
+        "preferred_materials",
+      ]);
+      const filteredBody = Object.fromEntries(
+        Object.entries(body || {}).filter(([k]) => ALLOWED.has(k))
+      );
 
       // Validate enum values
-      const locale = body.locale || "en";
-      const briefStyle = body.brief_style || "bullets";
-      const tone = body.tone || "warm_expert";
-      const riskTolerance = body.risk_tolerance || "balanced";
+      const locale = filteredBody.locale || "en";
+      const briefStyle = filteredBody.brief_style || "bullets";
+      const tone = filteredBody.tone || "warm_expert";
+      const riskTolerance = filteredBody.risk_tolerance || "balanced";
 
       const validLocales = ["en", "tr"];
       const validBriefStyles = ["bullets", "detailed"];
@@ -235,7 +249,7 @@ module.exports = async function handler(req, res) {
       }
 
       // Doctors can only update their own preferences
-      if (profile.role !== "admin" && body.doctor_id && body.doctor_id !== user.id) {
+      if (profile.role !== "admin" && filteredBody.doctor_id && filteredBody.doctor_id !== user.id) {
         return res.status(403).json({
           ok: false,
           error: "Cannot update other doctor's preferences",
@@ -245,7 +259,7 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const targetDoctorId = body.doctor_id || user.id;
+      const targetDoctorId = filteredBody.doctor_id || user.id;
 
       const preferencesData = {
         doctor_id: targetDoctorId,
@@ -253,9 +267,8 @@ module.exports = async function handler(req, res) {
         brief_style: briefStyle,
         tone,
         risk_tolerance: riskTolerance,
-        specialties: Array.isArray(body.specialties) ? body.specialties : [],
-        preferred_materials: body.preferred_materials || {},
-        clinic_protocol_notes: body.clinic_protocol_notes || null,
+        specialties: Array.isArray(filteredBody.specialties) ? filteredBody.specialties : [],
+        preferred_materials: filteredBody.preferred_materials || {},
         updated_at: new Date().toISOString(),
       };
 
@@ -268,7 +281,7 @@ module.exports = async function handler(req, res) {
 
       if (upsertErr) {
         console.error("[doctor/preferences] Upsert error:", upsertErr, { requestId });
-        return res.status(500).json({
+        return res.status(400).json({
           ok: false,
           error: upsertErr.message || "Failed to save preferences",
           step: "upsert_preferences",
