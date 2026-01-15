@@ -15,7 +15,10 @@ export async function apiFetchAuth(input: RequestInfo | URL, init: RequestInit =
 
   const headers = new Headers(init.headers || {});
   headers.set("Authorization", `Bearer ${token}`);
-  if (!headers.has("Content-Type") && init.body) {
+  
+  // ✅ Don't set Content-Type for FormData (browser sets it with boundary)
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (!headers.has("Content-Type") && init.body && !isFormData) {
     headers.set("Content-Type", "application/json");
   }
 
