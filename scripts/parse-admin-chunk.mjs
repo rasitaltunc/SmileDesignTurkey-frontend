@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
@@ -158,15 +159,52 @@ modules.slice(0, 15).forEach((m, i) => {
 });
 
 // --- Regression thresholds (CI guard) ---
+// Use REAL asset file gzip size, not visualizer's module total (more accurate)
 const MAX_ADMIN_GZIP_KB = Number(process.env.MAX_ADMIN_GZIP_KB || 35);
 
-if (totalGzip > MAX_ADMIN_GZIP_KB) {
+// Find admin chunk asset file in dist/assets
+const adminChunkName = adminNode.name; // e.g., "admin-DfJOe3qr"
+const assetsDir = path.join(rootDir, 'dist', 'assets');
+let adminAssetPath = null;
+let realGzipKb = null;
+
+if (fs.existsSync(assetsDir)) {
+  try {
+    const files = fs.readdirSync(assetsDir);
+    // Find file matching admin chunk name (e.g., admin-DfJOe3qr.js)
+    const adminFile = files.find((f) => f.startsWith(adminChunkName) && f.endsWith('.js'));
+    if (adminFile) {
+      adminAssetPath = path.join(assetsDir, adminFile);
+      const fileContent = fs.readFileSync(adminAssetPath);
+      const gzipped = gzipSync(fileContent);
+      realGzipKb = gzipped.length / 1024;
+      console.log(`\n📦 Real admin asset file: ${adminFile}`);
+      console.log(`   Real gzip size: ${realGzipKb.toFixed(2)} KB`);
+    } else {
+      console.warn(`\n⚠️  Admin asset file not found in dist/assets (chunk: ${adminChunkName})`);
+      console.warn(`   Falling back to visualizer module total: ${totalGzip.toFixed(2)} KB`);
+      realGzipKb = totalGzip; // fallback
+    }
+  } catch (e) {
+    console.warn(`\n⚠️  Could not read dist/assets: ${e.message}`);
+    console.warn(`   Falling back to visualizer module total: ${totalGzip.toFixed(2)} KB`);
+    realGzipKb = totalGzip; // fallback
+  }
+} else {
+  console.warn(`\n⚠️  dist/assets directory not found`);
+  console.warn(`   Falling back to visualizer module total: ${totalGzip.toFixed(2)} KB`);
+  realGzipKb = totalGzip; // fallback
+}
+
+// Apply threshold check to REAL asset gzip size
+if (realGzipKb > MAX_ADMIN_GZIP_KB) {
   console.error('');
-  console.error(`❌ Regression detected: Admin chunk gzip too large (${totalGzip.toFixed(2)} KB > ${MAX_ADMIN_GZIP_KB} KB)`);
+  console.error(`❌ Regression detected: Admin chunk gzip too large (${realGzipKb.toFixed(2)} KB > ${MAX_ADMIN_GZIP_KB} KB)`);
   console.error(`   Threshold: ${MAX_ADMIN_GZIP_KB} KB gzip (override with MAX_ADMIN_GZIP_KB env var)`);
+  console.error(`   Asset file: ${adminAssetPath || 'N/A'}`);
   process.exit(1); // CI-friendly: fail on size regression
 }
 
-console.log(`\n✅ Size check passed (${totalGzip.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
+console.log(`\n✅ Size check passed (${realGzipKb.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
 console.log('\n✅ Analysis complete.\n');
 
