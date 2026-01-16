@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { NavigationContext } from '../App';
+import { NavigationContext } from '../lib/navigationContext';
 
 interface LinkProps {
   to: string;

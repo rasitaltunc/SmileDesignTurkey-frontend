@@ -1,19 +1,31 @@
-import { useState, useEffect, useRef, useContext } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect, useRef, useContext, useMemo, lazy, Suspense } from 'react';
 import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy, HelpCircle, FileText, User, ChevronRight } from 'lucide-react';
-import { NavigationContext } from '@/App';
+import { toast } from 'sonner';
+import { NavigationContext } from '@/lib/navigationContext';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
-import { toast } from 'sonner';
-import { normalizeLeadNote, type CanonicalNote, transformV10ToV11 } from '@/lib/ai/normalizeLeadNote';
-import { findLatestCanonical, type CanonicalAny } from '@/lib/ai/canonicalNote';
-import { diffCanonical, safeMergeCanonical } from '@/lib/ai/canonicalDiff';
+
+// Lazy load LeadNotesModal (heavy modal with editor/upload functionality)
+const LeadNotesModal = lazy(() => import('@/components/LeadNotesModal'));
+import LeadsFilters from '@/components/admin-leads/LeadsFilters';
+import LeadsTable, { type LeadRowVM } from '@/components/admin-leads/LeadsTable';
+import { useLeadTableRows } from '@/hooks/admin-leads/useLeadTableRows';
+import { handleNextAction as handleNextActionImpl } from '@/lib/admin-leads/leadActions';
+import { useAiHealth } from '@/hooks/admin-leads/useAiHealth';
+import { useCanonicalCache } from '@/hooks/admin-leads/useCanonicalCache';
+import { useLeadKeyboardNav } from '@/hooks/admin-leads/useLeadKeyboardNav';
+import { runLeadAIAnalysis, normalizeLeadIfNeeded } from '@/lib/admin-leads/aiActions';
+import type { CanonicalAny } from '@/lib/ai/canonicalNote';
 import type { CanonicalV11 } from '@/lib/ai/canonicalTypes';
-import { emitAIAudit } from '@/lib/ai/aiAudit';
-import { buildMemoryFromCanonical, toMemorySystemNote, findLatestMemory, buildContextPack, type MemoryV1, type MemoryScope } from '@/lib/ai/memoryVault';
-import { emitAIMemorySync } from '@/lib/ai/aiMemoryAudit';
-import { getRoleScope, type AIRole } from '@/lib/ai/aiRoles';
-import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
+import type { MemoryV1, MemoryScope } from '@/lib/ai/memoryVault';
+// briefLead: dynamic import on button click (reduces admin chunk size)
+// import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
+type BriefResponse = {
+  ok: boolean;
+  error?: string;
+  brief?: string;
+  [key: string]: any;
+};
 
 // Copy to clipboard helper
 const copyText = async (text: string) => {
@@ -239,203 +251,7 @@ const addTimelineEventForStatus = async (
   }
 };
 
-// Priority Score Helper (0-100)
-function computePriority(
-  lead: Lead,
-  aiRiskScore: number | null,
-  lastContactedAt: string | null,
-  timeline: any[],
-  notes: LeadNote[],
-  contactEvents: any[]
-): number {
-  let score = 0;
 
-  // Booking varsa +40
-  const hasBooking = timeline.some(e => e.eventType?.includes('booking'));
-  if (hasBooking) score += 40;
-
-  // Never contacted ise +25
-  if (!lastContactedAt && contactEvents.length === 0) {
-    score += 25;
-  }
-
-  // Son aktivite çok yeni ise (24-48h) +20
-  if (lastContactedAt) {
-    const lastContact = new Date(lastContactedAt);
-    const now = new Date();
-    const hoursSince = (now.getTime() - lastContact.getTime()) / (1000 * 60 * 60);
-    if (hoursSince >= 24 && hoursSince <= 48) {
-      score += 20;
-    }
-  }
-
-  // Not yoksa +10
-  if (!notes || notes.length === 0) {
-    score += 10;
-  }
-
-  // Telefon yoksa -10
-  if (!lead.phone) {
-    score -= 10;
-  }
-
-  // AI risk score varsa ekle (0-100 scale)
-  if (aiRiskScore !== null) {
-    score += aiRiskScore * 0.3; // 30% weight
-  }
-
-  // Clamp to 0-100
-  return Math.max(0, Math.min(100, Math.round(score)));
-}
-
-// Next Best Action Helper
-function computeNextAction(
-  lead: Lead,
-  hasBrief: boolean,
-  hasNotes: boolean,
-  hasPhone: boolean,
-  hasEmail: boolean,
-  lastContactedAt: string | null
-): { icon: string; label: string; action: string } {
-  // Phone varsa → Call/WhatsApp öncelik
-  if (hasPhone) {
-    if (!lastContactedAt) {
-      return { icon: '📞', label: 'Call now', action: 'call' };
-    }
-    return { icon: '💬', label: 'WhatsApp first', action: 'whatsapp' };
-  }
-
-  // Phone yok email varsa → Email
-  if (hasEmail && !hasPhone) {
-    return { icon: '✉️', label: 'Email', action: 'email' };
-  }
-
-  // AI brief yoksa ve lead yeni ise → Generate brief öner
-  if (!hasBrief && !lastContactedAt) {
-    return { icon: '🧠', label: 'Generate brief', action: 'brief' };
-  }
-
-  // Not yoksa → Add note öner
-  if (!hasNotes) {
-    return { icon: '📝', label: 'Add note', action: 'note' };
-  }
-
-  // Default: follow up
-  return { icon: '📞', label: 'Follow up', action: 'call' };
-}
-
-// Get days since last activity
-function getDaysSinceActivity(lastContactedAt: string | null, createdAt: string): number {
-  const date = lastContactedAt ? new Date(lastContactedAt) : new Date(createdAt);
-  const now = new Date();
-  const diffTime = Math.abs(now.getTime() - date.getTime());
-  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-}
-
-// Timeline Intelligence Summary
-function getTimelineSummary(
-  lastContactedAt: string | null,
-  contactEvents: any[],
-  hasPhone: boolean,
-  priorityScore: number,
-  daysSinceActivity: number
-): string {
-  if (!lastContactedAt && contactEvents.length === 0) {
-    return "This lead has never been contacted";
-  }
-  
-  if (daysSinceActivity >= 3) {
-    return `Last activity was ${daysSinceActivity} day${daysSinceActivity > 1 ? 's' : ''} ago`;
-  }
-  
-  if (priorityScore >= 70 && !hasPhone) {
-    return "High priority lead with no phone number";
-  }
-  
-  if (priorityScore >= 70) {
-    return "High priority lead - consider contacting within 24h";
-  }
-  
-  return "Lead journey summary";
-}
-
-// Action Reasoning Helper
-function getActionReasoning(
-  action: string,
-  hasPhone: boolean,
-  hasEmail: boolean,
-  hasBrief: boolean,
-  hasNotes: boolean,
-  lastContactedAt: string | null,
-  priorityScore: number
-): string {
-  if (action === 'call') {
-    if (!lastContactedAt) {
-      return "Recommended because the lead is new and has no contact attempts yet.";
-    }
-    return "Recommended because phone contact is the fastest way to connect.";
-  }
-  
-  if (action === 'whatsapp') {
-    return "Recommended because WhatsApp is preferred for international leads.";
-  }
-  
-  if (action === 'email') {
-    if (!hasPhone) {
-      return "Recommended because phone number is not available.";
-    }
-    return "Recommended for detailed communication and documentation.";
-  }
-  
-  if (action === 'brief') {
-    if (priorityScore >= 70) {
-      return "Recommended because this is a high-priority lead and needs preparation.";
-    }
-    return "Recommended to generate AI-powered insights before contacting.";
-  }
-  
-  if (action === 'note') {
-    return "Recommended to document initial observations about this lead.";
-  }
-  
-  return "Recommended based on lead status and priority.";
-}
-
-// WhatsApp helper functions
-function normalizePhoneToWhatsApp(phone?: string) {
-  if (!phone) return null;
-  let p = String(phone).trim().replace(/[^\d+]/g, "");
-
-  // if starts with 0 and looks TR, convert to +90
-  if (p.startsWith("0")) p = "+90" + p.slice(1);
-
-  // if starts without + and length seems like TR mobile, assume +90
-  if (!p.startsWith("+") && p.length === 10) p = "+90" + p;
-
-  // if still no +, add +
-  if (!p.startsWith("+")) p = "+" + p;
-
-  const digits = p.replace(/\+/g, ""); // wa.me wants digits only (remove all + signs)
-
-  // ✅ minimum uzunluk kontrolü (wa.me digits only)
-  if (p.replace(/\D/g, "").length < 11) return null;
-
-  return digits;
-}
-
-function waMessageEN(lead: any) {
-  return (
-    `Hi ${lead?.name || ""}! 👋\n` +
-    `This is Smile Design Turkey.\n\n` +
-    `I'm reaching out about your request:\n` +
-    `• Treatment: ${lead?.treatment || "-"}\n` +
-    `• Timeline: ${lead?.timeline || "-"}\n\n` +
-    `To prepare your plan, could you send:\n` +
-    `1) A clear smile photo\n` +
-    `2) A short video (front + side)\n` +
-    `3) Any x-ray if available 😊`
-  );
-}
 
 interface Lead {
   id: string;
@@ -483,66 +299,6 @@ export default function AdminLeads() {
   const [tab, setTab] = useState<LeadTab>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  function isDueTodayISO(dt?: string | null) {
-    if (!dt) return false;
-    const d = new Date(dt);
-    if (Number.isNaN(d.getTime())) return false;
-
-    const now = new Date();
-    return (
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate()
-    );
-  }
-
-  function applyTabFilter(allLeads: Lead[]) {
-    // Apply search filter first
-    let filtered = allLeads;
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = allLeads.filter(lead => 
-        lead.name?.toLowerCase().includes(query) ||
-        lead.email?.toLowerCase().includes(query) ||
-        lead.phone?.toLowerCase().includes(query)
-      );
-    }
-    
-    // Then apply tab filter
-    if (isAdmin) {
-      // Admin filters apply to all leads
-      switch (tab) {
-        case 'unassigned':
-          return filtered.filter(l => !l.assigned_to);
-        case 'due_today':
-          return filtered.filter(l => isDueTodayISO(l.follow_up_at));
-        case 'appointment_set':
-          // Appointment filter: appointment_set only (DB canonical value)
-          return filtered.filter(l => l.status === 'appointment_set');
-        case 'deposit_paid':
-          return filtered.filter(l => l.status === 'deposit_paid');
-        case 'all':
-        default:
-          return filtered;
-      }
-    } else {
-      // Employee filters apply only to assigned leads
-      const myLeads = filtered.filter(l => l.assigned_to === user?.id);
-      switch (tab) {
-        case 'due_today':
-          return myLeads.filter(l => isDueTodayISO(l.follow_up_at));
-        case 'appointment_set':
-          // Appointment filter: appointment_set only (DB canonical value)
-          return myLeads.filter(l => l.status === 'appointment_set');
-        case 'deposit_paid':
-          return myLeads.filter(l => l.status === 'deposit_paid');
-        case 'all':
-        case 'unassigned': // Employee doesn't see unassigned, treat as 'all'
-        default:
-          return myLeads;
-      }
-    }
-  }
   
   // Edit state
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -552,10 +308,6 @@ export default function AdminLeads() {
 
   // Notes modal state
   const [notesLeadId, setNotesLeadId] = useState<string | null>(null);
-  const [notes, setNotes] = useState<LeadNote[]>([]);
-  const [newNoteContent, setNewNoteContent] = useState<string>('');
-  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
-  const [isSavingNote, setIsSavingNote] = useState(false);
   const [isNormalizing, setIsNormalizing] = useState(false);
   const [isSyncingMemory, setIsSyncingMemory] = useState(false);
   const [canonicalNote, setCanonicalNote] = useState<CanonicalAny | null>(null);
@@ -568,11 +320,7 @@ export default function AdminLeads() {
     doctor: null,
     internal: null,
   });
-  const modalScrollRef = useRef<HTMLDivElement | null>(null);
-  const [notesScroll, setNotesScroll] = useState({ atTop: true, atBottom: false });
   const lastActiveElRef = useRef<HTMLElement | null>(null);
-  const [isClosing, setIsClosing] = useState(false);
-  const [isComposing, setIsComposing] = useState(false);
   const firstFocusableRef = useRef<HTMLElement | null>(null);
 
   // Keyboard navigation state
@@ -581,199 +329,20 @@ export default function AdminLeads() {
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
 
-  // Canonical note cache (for active/visible leads)
-  const canonicalCacheRef = useRef<Map<string, CanonicalAny>>(new Map());
+  // Canonical note cache (via hook)
+  const { canonicalCacheRef, setCanonical } = useCanonicalCache<CanonicalAny>();
   
-  // AI health cache (needs_normalize from lead_ai_health view)
-  const [aiHealthMap, setAiHealthMap] = useState<Record<string, { needs_normalize: boolean; last_normalized_at: string | null; review_required: boolean }>>({});
+  // AI health (via hook)
+  const supabase = getSupabaseClient();
+  const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+  const { aiHealthMap, refreshAiHealth } = useAiHealth({
+    supabase,
+    apiUrl,
+    leadIds: leads.map(l => l.id),
+    enabled: isAuthenticated,
+  });
 
-  // Lock body scroll when modal is open (position: fixed + overflow hidden - Safari-proof)
-  useEffect(() => {
-    if (!notesLeadId) return;
-
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const html = document.documentElement;
-
-    // position: fixed yöntemi (Safari-proof, modal scroll'a dokunmaz)
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-
-    // Overflow hidden (Safari fix - arka plan scroll'unu tam kilitle)
-    const prevHtmlOverflow = html.style.overflow;
-    const prevBodyOverflow = body.style.overflow;
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-
-    return () => {
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.width = "";
-      html.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
-      window.scrollTo(0, scrollY);
-    };
-  }, [notesLeadId]);
-
-  // Inert background + pointer blocking when modal is open
-  useEffect(() => {
-    if (!notesLeadId) return;
-
-    const root = document.getElementById("root");
-    if (!root) return;
-
-    // Set inert (if supported)
-    try {
-      (root as any).inert = true;
-    } catch (e) {
-      // Fallback if inert not supported
-    }
-
-    // Set aria-hidden and pointer-events-none
-    root.setAttribute("aria-hidden", "true");
-    root.classList.add("pointer-events-none");
-
-    return () => {
-      try {
-        (root as any).inert = false;
-      } catch (e) {
-        // Fallback
-      }
-      root.removeAttribute("aria-hidden");
-      root.classList.remove("pointer-events-none");
-    };
-  }, [notesLeadId]);
-
-  // Modal açılınca focus trap + restore focus on close (hardened)
-  useEffect(() => {
-    if (!notesLeadId) return;
-
-    // Modal açılmadan önce active element'i sakla
-    lastActiveElRef.current = document.activeElement as HTMLElement;
-
-    // Find first focusable element in modal header (Mark Contacted button or fallback to scroll container)
-    const getFirstFocusable = (): HTMLElement | null => {
-      const modal = document.querySelector('[data-modal-root="true"]');
-      if (!modal) return null;
-      
-      const focusableElements = modal.querySelectorAll(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      return (focusableElements[0] as HTMLElement) || modalScrollRef.current;
-    };
-
-    // Focus first focusable element
-    requestAnimationFrame(() => {
-      const firstFocusable = getFirstFocusable();
-      firstFocusableRef.current = firstFocusable;
-      firstFocusable?.focus();
-      handleNotesScroll();
-    });
-
-    // Focus trap: Tab dışarı kaçmasın
-    const handleTab = (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
-      const modal = document.querySelector('[data-modal-root="true"]');
-      if (!modal) return;
-      
-      const focusableElements = Array.from(modal.querySelectorAll(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )) as HTMLElement[];
-      
-      if (focusableElements.length === 0) return;
-      
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-
-      if (e.shiftKey && document.activeElement === firstElement) {
-        e.preventDefault();
-        lastElement?.focus();
-      } else if (!e.shiftKey && document.activeElement === lastElement) {
-        e.preventDefault();
-        firstElement?.focus();
-      }
-    };
-
-    // Document-level focusin listener: prevent focus leaving modal
-    const handleFocusIn = (e: FocusEvent) => {
-      const modal = document.querySelector('[data-modal-root="true"]');
-      if (!modal) return;
-      
-      const target = e.target as HTMLElement;
-      if (!modal.contains(target)) {
-        e.preventDefault();
-        e.stopPropagation();
-        const firstFocusable = getFirstFocusable();
-        firstFocusable?.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleTab);
-    document.addEventListener("focusin", handleFocusIn, true);
-    
-    return () => {
-      document.removeEventListener("keydown", handleTab);
-      document.removeEventListener("focusin", handleFocusIn, true);
-      
-      // Modal kapanınca eski elemana geri focus ver (guard if element removed)
-      requestAnimationFrame(() => {
-        if (lastActiveElRef.current && document.body.contains(lastActiveElRef.current)) {
-          lastActiveElRef.current.focus?.();
-        }
-      });
-    };
-  }, [notesLeadId]);
-
-  // ESC safety: prevent closing while typing/composing
-  useEffect(() => {
-    if (!notesLeadId) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      
-      const target = e.target as HTMLElement;
-      const isTyping = target?.tagName === "TEXTAREA" || 
-                       target?.tagName === "INPUT" || 
-                       target?.isContentEditable;
-      
-      if (isTyping || isComposing) return;
-      
-      handleCloseNotes();
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [notesLeadId, isComposing]);
-
-  // Scroll handler for shadow/fade effects
-  const handleNotesScroll = () => {
-    const el = modalScrollRef.current;
-    if (!el) return;
-    const atTop = el.scrollTop <= 1;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-    setNotesScroll({ atTop, atBottom });
-  };
-
-  // Modal açılınca ilk ölçüm
-  useEffect(() => {
-    if (!notesLeadId) return;
-    requestAnimationFrame(() => handleNotesScroll());
-  }, [notesLeadId]);
-
-  // ESC ile kapat
-  useEffect(() => {
-    if (!notesLeadId) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleCloseNotes();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [notesLeadId]);
+  // Notes modal scroll/focus management is now handled by LeadNotesModal component
 
 
   // Timeline state
@@ -912,10 +481,7 @@ export default function AdminLeads() {
       }
       setSelectedEmployeeByLead(prev => ({ ...prev, ...initialSelections }));
       
-      // Fetch AI health for all leads (bulk)
-      if (loadedLeads.length > 0) {
-        await loadAIHealth(loadedLeads.map(l => l.id));
-      }
+      // AI health is automatically fetched by useAiHealth hook
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load leads';
       setError(errorMessage);
@@ -925,42 +491,6 @@ export default function AdminLeads() {
     }
   };
   
-  // Load AI health for leads (bulk fetch)
-  const loadAIHealth = async (leadIds?: string[]) => {
-    if (!isAuthenticated || !user) return;
-    
-    const idsToFetch = leadIds || leads.map(l => l.id);
-    if (idsToFetch.length === 0) return;
-    
-    try {
-      const supabase = getSupabaseClient();
-      if (!supabase) return;
-      
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) return;
-      
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const response = await fetch(`${apiUrl}/api/admin/ai-health/${encodeURIComponent(idsToFetch[0])}?leadIds=${idsToFetch.join(',')}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (!response.ok) {
-        console.warn('[AdminLeads] Failed to load AI health:', response.status);
-        return;
-      }
-      
-      const result = await response.json();
-      if (result.ok && result.data) {
-        setAiHealthMap(result.data);
-      }
-    } catch (err) {
-      console.warn('[AdminLeads] Error loading AI health:', err);
-      // Silent fail - don't break the UI
-    }
-  };
 
   // Load employees (admin only)
   const loadEmployees = async () => {
@@ -1167,106 +697,7 @@ export default function AdminLeads() {
     }
   };
 
-  // Load notes for a lead
-  const loadNotes = async (leadId: string) => {
-    if (!isAuthenticated || !user) return;
-
-    setIsLoadingNotes(true);
-    try {
-      // Get JWT token from Supabase session
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured.');
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        setError('Session expired. Please login again.');
-        toast.error('Session expired. Please login again.');
-        setIsLoadingNotes(false);
-        return;
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-
-      const response = await fetch(`${apiUrl}/api/lead-notes?lead_id=${encodeURIComponent(leadId)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to load notes' }));
-        throw new Error(errorData.error || 'Failed to load notes');
-      }
-
-      const result = await response.json();
-      setNotes(result.notes || []);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load notes';
-      setError(errorMessage);
-      console.error('[AdminLeads] Error loading notes:', err);
-    } finally {
-      setIsLoadingNotes(false);
-    }
-  };
-
-  // Create new note
-  const createNote = async (leadId: string, content: string) => {
-    if (!isAuthenticated || !user || !content.trim()) return;
-
-    setIsSavingNote(true);
-    try {
-      // Get JWT token from Supabase session
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        throw new Error('Supabase client not configured.');
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        setError('Session expired. Please login again.');
-        toast.error('Session expired. Please login again.');
-        setIsSavingNote(false);
-        return;
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-
-      const response = await fetch(`${apiUrl}/api/lead-notes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          lead_id: leadId,
-          note: content.trim(),
-          content: content.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to create note' }));
-        throw new Error(errorData.error || 'Failed to create note');
-      }
-
-      // Reload notes
-      await loadNotes(leadId);
-      setNewNoteContent('');
-      toast.success('Note saved');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save note';
-      setError(errorMessage);
-      toast.error('Failed to save note', { description: errorMessage });
-    } finally {
-      setIsSavingNote(false);
-    }
-  };
+  // Notes are now handled by LeadNotesModal component
 
   // Load timeline events
   const loadTimeline = async (leadId: string) => {
@@ -1497,6 +928,8 @@ export default function AdminLeads() {
     const toastId = toast.loading('Generating snapshot...');
 
     try {
+      // Dynamic import: briefLead only loaded when button is clicked (reduces admin chunk size)
+      const { briefLead } = await import('@/lib/ai/briefLead');
       const result = await briefLead(leadId);
       
       if (!result.ok) {
@@ -1532,278 +965,142 @@ export default function AdminLeads() {
     }
   };
 
-  // Run AI analysis
+  // Run AI analysis (delegates to action)
   const runAIAnalysis = async (leadId: string) => {
-    if (!leadId) return;
+    if (!leadId || !supabase) return;
 
     setIsLoadingAI(true);
     setError(null);
-
     const toastId = toast.loading('Generating AI brief…');
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
+      await runLeadAIAnalysis({
+        supabase,
+        apiUrl,
+        leadId,
+        onSuccess: (result) => {
+          // Update local state
+          setAiRiskScore(result.ai_risk_score ?? null);
+          setAiSummary(result.ai_summary ?? null);
 
-      const response = await fetch(`${apiUrl}/api/leads-ai-analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-token': adminToken,
+          // Update lead in leads array
+          setLeads((prevLeads) =>
+            prevLeads.map((lead) =>
+              lead.id === leadId
+                ? {
+                    ...lead,
+                    ai_risk_score: result.ai_risk_score ?? null,
+                    ai_summary: result.ai_summary ?? null,
+                    ai_last_analyzed_at: new Date().toISOString(),
+                  }
+                : lead
+            )
+          );
+
+          toast.success('AI brief generated', { id: toastId });
         },
-        body: JSON.stringify({ lead_id: leadId }),
+        onError: (err) => {
+          const errorMessage = err instanceof Error ? err.message : 'Failed to generate AI brief';
+          setError(errorMessage);
+          toast.error('Failed to generate AI brief', { id: toastId, description: errorMessage });
+        },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to analyze lead' }));
-        throw new Error(errorData.error || 'Failed to analyze lead');
-      }
-
-      const result = await response.json();
-      
-      // Update local state (with null safety)
-      setAiRiskScore(result.ai_risk_score ?? null);
-      setAiSummary(result.ai_summary ?? null);
-
-      // Update lead in leads array
-      setLeads((prevLeads) =>
-        prevLeads.map((lead) =>
-          lead.id === leadId
-            ? {
-                ...lead,
-                ai_risk_score: result.ai_risk_score ?? null,
-                ai_summary: result.ai_summary ?? null,
-                ai_last_analyzed_at: new Date().toISOString(),
-              }
-            : lead
-        )
-      );
-
-      toast.success('AI brief generated', { id: toastId });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate AI brief';
-      setError(errorMessage);
-      toast.error('Failed to generate AI brief', { id: toastId, description: errorMessage });
     } finally {
       setIsLoadingAI(false);
     }
   };
 
-  // Parse existing canonical note from notes array
-  const parseCanonicalNote = (notesList: LeadNote[]): CanonicalNote | null => {
-    // Find latest note that starts with [AI_CANONICAL_NOTE v1.0]
-    const canonicalNoteEntry = notesList
-      .slice()
-      .reverse()
-      .find(n => {
-        const content = n.note || '';
-        return content.startsWith('[AI_CANONICAL_NOTE v1.0]');
-      });
 
-    if (!canonicalNoteEntry) return null;
-
-    try {
-      const content = canonicalNoteEntry.note || '';
-      // Extract JSON after header line
-      const lines = content.split('\n');
-      const jsonStart = lines.findIndex(l => l.trim().startsWith('{'));
-      if (jsonStart === -1) return null;
-      
-      const jsonText = lines.slice(jsonStart).join('\n');
-      const parsed = JSON.parse(jsonText);
-      return parsed as CanonicalNote;
-    } catch (err) {
-      console.error('[AdminLeads] Failed to parse canonical note:', err);
-      return null;
-    }
-  };
-
-  // Normalize notes via AI
+  // Normalize notes via AI (delegates to action)
   const handleNormalizeNotes = async (leadId: string) => {
-    if (!leadId) return;
+    if (!leadId || !supabase) return;
 
     setIsNormalizing(true);
     setError(null);
-
     const toastId = toast.loading('Normalizing notes…');
 
     try {
-      const lead = leads.find(l => l.id === leadId);
+      const lead = leads.find((l) => l.id === leadId);
       if (!lead) throw new Error('Lead not found');
 
-      // Filter out existing canonical notes
-      const humanNotes = notes.filter(n => {
-        const content = n.note || '';
-        return !content.startsWith('[AI_CANONICAL_NOTE');
+      // Fetch notes for normalization
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Session expired');
+
+      const notesResponse = await fetch(`${apiUrl}/api/lead-notes?lead_id=${encodeURIComponent(leadId)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      const adminToken = import.meta.env.VITE_ADMIN_TOKEN || '';
-
-      // Get previous canonical from cache
-      const prevCanonical = canonicalCacheRef.current.get(leadId) || null;
-
-      // Calculate incremental notes/events since last canonical
-      const lastNoteAt = prevCanonical?.sources?.last_note_at;
-      const newNotesSincePrev = lastNoteAt
-        ? humanNotes.filter(n => new Date(n.created_at) > new Date(lastNoteAt))
-        : humanNotes;
-      
-      const newTimelineSincePrev = lastNoteAt
-        ? timeline.filter(t => new Date(t.receivedAt) > new Date(lastNoteAt))
-        : timeline;
-
-      // Call normalize function with memory prompting (returns with firewallReport and runHash)
-      const normalizeResult = await normalizeLeadNote(
-        {
-          lead: {
-            id: lead.id,
-            name: lead.name,
-            email: lead.email,
-            phone: lead.phone,
-            source: lead.source,
-            created_at: lead.created_at,
-            treatment: lead.treatment,
-            status: lead.status,
-          },
-          lastContactedAt: lastContactedAt,
-          contactEvents: contactEvents,
-          timeline: timeline,
-          notes: humanNotes.slice(0, 10), // Last 10, excluding canonical
-          prevCanonical: prevCanonical as CanonicalV11 | null,
-          newNotesSincePrev: newNotesSincePrev.slice(0, 10),
-          newTimelineSincePrev: newTimelineSincePrev,
-        },
-        apiUrl,
-        adminToken
-      );
-
-      const firewallReport = normalizeResult.firewallReport;
-      const runHash = normalizeResult.runHash;
-
-      // Transform to v1.1 if needed
-      let canonicalV11: CanonicalV11;
-      if (normalizeResult.version === '1.1') {
-        canonicalV11 = normalizeResult as CanonicalV11;
-      } else {
-        // Transform v1.0 to v1.1
-        canonicalV11 = transformV10ToV11(normalizeResult as CanonicalNote, lead.id);
+      if (!notesResponse.ok) {
+        throw new Error('Failed to load notes for normalization');
       }
 
-      // Apply safe merge (lead ground truth > AI)
-      canonicalV11 = safeMergeCanonical(canonicalV11, {
-        phone: lead.phone,
-        email: lead.email,
-        source: lead.source,
-        status: lead.status,
-      });
+      const notesResult = await notesResponse.json();
+      const allNotes = notesResult.notes || [];
 
-      // Compute changelog via diff
-      const changelog = diffCanonical(prevCanonical, canonicalV11, {
-        phone: lead.phone,
-        email: lead.email,
-        source: lead.source,
-        status: lead.status,
-      });
+      // Helper to create note (used by normalize action)
+      const createNoteHelper = async (noteLeadId: string, content: string) => {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error('Session expired');
 
-      // Add changelog and sources to canonical
-      canonicalV11.changelog = changelog;
-      canonicalV11.updated_at = new Date().toISOString();
-      canonicalV11.sources = {
-        notes_used_count: humanNotes.length,
-        timeline_used_count: timeline.length,
-        last_note_at: humanNotes.length > 0 ? humanNotes[0].created_at : undefined,
+        const response = await fetch(`${apiUrl}/api/lead-notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            lead_id: noteLeadId,
+            note: content.trim(),
+            content: content.trim(),
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to create note' }));
+          throw new Error(errorData.error || 'Failed to create note');
+        }
       };
 
-      // Inject firewall security meta into canonical
-      if (firewallReport && runHash) {
-        canonicalV11.security = canonicalV11.security || {};
-        canonicalV11.security.firewall = {
-          redaction_counts: firewallReport.redaction.counts,
-          redaction_samples_masked: firewallReport.redaction.samples_masked,
-          injection_detected: firewallReport.injection.detected,
-          injection_signals: firewallReport.injection.signals.map(s => ({ pattern: s.pattern, match: s.match })),
-          detected_contacts_masked: {
-            emails: firewallReport.detected_contacts.emails_masked,
-            phones: firewallReport.detected_contacts.phones_masked,
-          },
-          applied_at: new Date().toISOString(),
-          run_hash: runHash,
-        };
-      }
-
-      // Review gating logic (strengthened with firewall)
-      const reviewReasons: string[] = [];
-      if (canonicalV11.confidence !== null && canonicalV11.confidence < 55) {
-        reviewReasons.push('Low confidence');
-      }
-      if (changelog.conflicts.length > 0) {
-        reviewReasons.push('Conflicts detected');
-      }
-      if (canonicalV11.missing_fields.length >= 3 && (!canonicalV11.next_best_action.script || canonicalV11.next_best_action.script.length === 0)) {
-        reviewReasons.push('Insufficient info for script');
-      }
-      
-      // Firewall-based review gating
-      if (firewallReport) {
-        if (firewallReport.injection.detected) {
-          reviewReasons.push('Prompt-injection signals detected');
-        }
-        if (firewallReport.detected_contacts.emails_masked.length > 0 && !lead.email) {
-          reviewReasons.push('Potential contact data detected in notes');
-        }
-        if (firewallReport.detected_contacts.phones_masked.length > 0 && !lead.phone) {
-          reviewReasons.push('Potential contact data detected in notes');
-        }
-      }
-      
-      canonicalV11.review_required = reviewReasons.length > 0;
-      // De-dupe review reasons
-      canonicalV11.review_reasons = [...new Set(reviewReasons)];
-
-      // Emit audit event (privacy-safe, no raw content)
-      if (firewallReport && runHash) {
-        emitAIAudit({
-          type: "normalize_run",
-          leadId: lead.id,
-          runHashShort: runHash,
-          firewall: {
-            injectionDetected: firewallReport.injection.detected,
-            redactionCounts: firewallReport.redaction.counts,
-          },
-          gating: {
-            reviewRequired: canonicalV11.review_required,
-            reasons: canonicalV11.review_reasons,
-          },
-          scores: {
-            risk: canonicalV11.risk_score ?? undefined,
-            confidence: canonicalV11.confidence ?? undefined,
-            priorityLabel: (canonicalV11 as any).priority || undefined,
-          },
-          sourceMeta: {
-            notesUsed: canonicalV11.sources.notes_used_count,
-            timelineUsed: canonicalV11.sources.timeline_used_count,
-          },
-          at: canonicalV11.updated_at,
-        });
-      }
-
-      // Save as system note (v1.1)
-      const canonicalNoteContent = `[AI_CANONICAL_NOTE v1.1]\n${JSON.stringify(canonicalV11, null, 2)}`;
-      
-      // Use existing createNote function
-      await createNote(leadId, canonicalNoteContent);
-
-      // Update local state
-      setCanonicalNote(canonicalV11);
-      
-      // Update cache immediately
-      canonicalCacheRef.current.set(leadId, canonicalV11);
-      
-      // Reload notes to get the new canonical note
-      await loadNotes(leadId);
-
-      toast.success('AI snapshot updated', { id: toastId });
+      await normalizeLeadIfNeeded({
+        supabase,
+        apiUrl,
+        leadId,
+        lead: {
+          id: lead.id,
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          source: lead.source,
+          created_at: lead.created_at,
+          treatment: lead.treatment,
+          status: lead.status,
+        },
+        notes: allNotes,
+        timeline,
+        contactEvents,
+        lastContactedAt,
+        prevCanonical: canonicalCacheRef.current.get(leadId) || null,
+        createNote: createNoteHelper,
+        onSuccess: (canonicalV11) => {
+          // Update local state
+          setCanonicalNote(canonicalV11);
+          setCanonical(leadId, canonicalV11);
+          refreshAiHealth(leadId);
+          toast.success('AI snapshot updated', { id: toastId });
+        },
+        onError: (err) => {
+          const errorMessage = err instanceof Error ? err.message : 'Failed to normalize notes';
+          setError(errorMessage);
+          toast.error('Failed to normalize notes', { id: toastId, description: errorMessage });
+        },
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to normalize notes';
       setError(errorMessage);
@@ -1816,8 +1113,6 @@ export default function AdminLeads() {
   // Open notes modal
   const handleOpenNotes = async (leadId: string) => {
     setNotesLeadId(leadId);
-    setNotes([]);
-    setNewNoteContent('');
     setTimeline([]);
     setContactEvents([]);
     setCanonicalNote(null);
@@ -1838,64 +1133,18 @@ export default function AdminLeads() {
     
     setNewContactNote('');
     loadAIAnalysis(leadId);
-    await Promise.all([loadNotes(leadId), loadTimeline(leadId), loadContactEvents(leadId)]);
+    await Promise.all([loadTimeline(leadId), loadContactEvents(leadId)]);
   };
 
-  // Parse canonical note when notes load
-  useEffect(() => {
-    if (notes.length > 0 && notesLeadId) {
-      const canonical = findLatestCanonical(notes);
-      if (canonical) {
-        setCanonicalNote(canonical);
-        // Update cache
-        canonicalCacheRef.current.set(notesLeadId, canonical);
-      } else {
-        setCanonicalNote(null);
-        // Remove from cache if no canonical found
-        canonicalCacheRef.current.delete(notesLeadId);
-      }
-    } else {
-      setCanonicalNote(null);
-    }
-  }, [notes, notesLeadId]);
-
-  // Update cache when activeLeadId changes (if we have notes for that lead)
-  useEffect(() => {
-    if (activeLeadId && notesLeadId === activeLeadId && notes.length > 0) {
-      const canonical = findLatestCanonical(notes);
-      if (canonical) {
-        canonicalCacheRef.current.set(activeLeadId, canonical);
-      } else {
-        canonicalCacheRef.current.delete(activeLeadId);
-      }
-    }
-  }, [activeLeadId, notesLeadId, notes]);
-
-  // Close notes modal with animation
+  // Close notes modal
   const handleCloseNotes = () => {
-    if (isClosing) return;
-    setIsClosing(true);
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        setIsClosing(false);
-        setNotesLeadId(null);
-        setNotes([]);
-        setNewNoteContent('');
-        setAiRiskScore(null);
-        setAiSummary(null);
-        setLastContactedAt(null);
-        setContactEvents([]);
-        setNewContactChannel('phone');
-        setNewContactNote('');
-      }, 180);
-    });
-  };
-
-  // Handle add note form submission
-  const handleAddNote = (e: any) => {
-    e.preventDefault();
-    if (isSavingNote || !newNoteContent.trim() || !notesLeadId) return;
-    createNote(notesLeadId, newNoteContent);
+    setNotesLeadId(null);
+    setAiRiskScore(null);
+    setAiSummary(null);
+    setLastContactedAt(null);
+    setContactEvents([]);
+    setNewContactChannel('phone');
+    setNewContactNote('');
   };
 
   // Handle logout
@@ -2003,128 +1252,82 @@ export default function AdminLeads() {
       loadIntakes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isAuthenticated]);
+  }, [isAdmin, isAuthenticated, tableRows]);
 
   // Set activeLeadId to first lead when leads load or tab changes
   useEffect(() => {
-    const filtered = applyTabFilter(leads);
-    if (filtered.length > 0) {
-      const currentActiveExists = filtered.some(l => l.id === activeLeadId);
+    if (tableRows.length > 0) {
+      const currentActiveExists = tableRows.some(row => row.id === activeLeadId);
       if (!currentActiveExists) {
-        setActiveLeadId(filtered[0].id);
+        setActiveLeadId(tableRows[0].id);
       }
     } else {
       setActiveLeadId(null);
     }
   }, [leads, tab]);
 
-  // Keyboard navigation handler (only when modal closed and not typing)
-  useEffect(() => {
-    const isModalOpen = notesLeadId !== null || isClosing;
-    if (isModalOpen) return;
+  // Compute rows for LeadsTable (using hook)
+  const tableRows = useLeadTableRows({
+    leads,
+    tab,
+    searchQuery,
+    timeline,
+    contactEvents,
+    aiHealthMap,
+    canonicalCacheRef,
+    isAdmin,
+    userId: user?.id ?? null,
+  });
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle if user is typing in input/textarea/contentEditable
-      const target = e.target as HTMLElement;
-      const isTyping = target?.tagName === "INPUT" || 
-                       target?.tagName === "TEXTAREA" || 
-                       target?.isContentEditable ||
-                       isComposing;
-      
-      if (isTyping) {
-        // Handle / for search focus even when typing
-        if (e.key === "/" && target?.tagName !== "INPUT") {
-          e.preventDefault();
-          searchRef.current?.focus();
-        }
-        // Handle ESC to blur search if empty
-        if (e.key === "Escape" && target?.tagName === "INPUT" && (target as HTMLInputElement).value === "") {
-          target.blur();
-        }
-        return;
-      }
-
-      const filteredLeads = applyTabFilter(leads);
-      if (filteredLeads.length === 0) return;
-
-      const currentIndex = filteredLeads.findIndex(l => l.id === activeLeadId);
-      
-      // J = next lead
-      if (e.key === "j" || e.key === "J") {
-        e.preventDefault();
-        const nextIndex = currentIndex < filteredLeads.length - 1 ? currentIndex + 1 : 0;
-        const nextLead = filteredLeads[nextIndex];
-        setActiveLeadId(nextLead.id);
-        leadRowRefs.current[nextLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      }
-      
-      // K = previous lead
-      if (e.key === "k" || e.key === "K") {
-        e.preventDefault();
-        const prevIndex = currentIndex > 0 ? currentIndex - 1 : filteredLeads.length - 1;
-        const prevLead = filteredLeads[prevIndex];
-        setActiveLeadId(prevLead.id);
-        leadRowRefs.current[prevLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      }
-      
-      // G = first lead
-      if (e.key === "g" || e.key === "G") {
-        if (!e.shiftKey) {
-          e.preventDefault();
-          const firstLead = filteredLeads[0];
-          setActiveLeadId(firstLead.id);
-          leadRowRefs.current[firstLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  // Keyboard navigation (via hook)
+  const [isComposing, setIsComposing] = useState(false); // For IME composition detection
+  
+  useLeadKeyboardNav({
+    enabled: true,
+    isComposing,
+    notesLeadId,
+    activeLeadId,
+    rows: tableRows,
+    onSetActiveLeadId: setActiveLeadId,
+    onFocusRow: (id) => {
+      leadRowRefs.current[id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    },
+    onOpenNotes: handleOpenNotes,
+    onMarkContacted: markContacted,
+    onRunAIAnalysis: runAIAnalysis,
+    onCopyContact: (leadId) => {
+      const row = tableRows.find((r) => r.id === leadId);
+      if (row) {
+        const contact = row.phone || row.email;
+        if (contact) {
+          copyText(contact);
+          toast.success(`Copied ${row.phone ? 'phone' : 'email'}`);
+        } else {
+          toast.error('No contact info available');
         }
       }
-      
-      // Shift+G = last lead
-      if (e.key === "G" && e.shiftKey) {
-        e.preventDefault();
-        const lastLead = filteredLeads[filteredLeads.length - 1];
-        setActiveLeadId(lastLead.id);
-        leadRowRefs.current[lastLead.id]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      }
-      
-      // Enter = open Notes modal
-      if (e.key === "Enter" && activeLeadId) {
-        e.preventDefault();
-        handleOpenNotes(activeLeadId);
-      }
-      
-      // / = focus search
-      if (e.key === "/") {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-      
-      // Quick actions 1-4
-      if (activeLeadId && ["1", "2", "3", "4"].includes(e.key)) {
-        e.preventDefault();
-        const lead = filteredLeads.find(l => l.id === activeLeadId);
-        if (!lead) return;
-        
-        if (e.key === "1") {
-          markContacted(activeLeadId);
-        } else if (e.key === "2") {
-          runAIAnalysis(activeLeadId);
-        } else if (e.key === "3") {
-          handleOpenNotes(activeLeadId);
-        } else if (e.key === "4") {
-          // Copy best contact (prefer phone, else email)
-          const contact = lead.phone || lead.email;
-          if (contact) {
-            copyText(contact);
-            toast.success(`Copied ${lead.phone ? 'phone' : 'email'}`);
-          } else {
-            toast.error('No contact info available');
-          }
-        }
-      }
-    };
+    },
+    searchRef,
+  });
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [notesLeadId, isClosing, activeLeadId, leads, isComposing]);
+  // Handler for Next Action button (delegates to actions layer)
+  const handleNextAction = async (row: LeadRowVM, action: string) => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+
+    const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
+
+    await handleNextActionImpl({
+      row,
+      action,
+      supabase,
+      apiUrl,
+      openNotes: handleOpenNotes,
+      runAIAnalysis,
+      copyText,
+      toast,
+    });
+  };
 
   // Show nothing while checking auth or redirecting
   if (!isAuthenticated) {
@@ -2135,77 +1338,20 @@ export default function AdminLeads() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Leads Management</h1>
-              <p className="text-gray-600 mt-1">
-                <span className="font-medium">{applyTabFilter(leads).length} leads</span>
-                <span className="ml-3 text-xs text-gray-500">Press <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">/</kbd> to search</span>
-                {!isAdmin && user?.id && (
-                  <span className="ml-2 text-blue-600">• Assigned to: {user.id}</span>
-                )}
-                {isAdmin && <span className="ml-2 text-green-600">• Admin Mode</span>}
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={loadLeads}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-            </div>
-          </div>
-
-          {/* Search Input */}
-          <div className="mb-4">
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search leads... (Press / to focus)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Quick Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            {(isAdmin ? [
-              ['all', 'All'],
-              ['unassigned', 'Unassigned'],
-              ['due_today', 'Due Today'],
-              ['appointment_set', 'Appointment'],
-              ['deposit_paid', 'Deposit Paid'],
-            ] : [
-              ['all', 'All'],
-              ['due_today', 'Due Today'],
-              ['appointment_set', 'Appointment'],
-              ['deposit_paid', 'Deposit Paid'],
-            ]).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key as LeadTab)}
-                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                  tab === key ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Header + Filters */}
+        <LeadsFilters
+          tab={tab}
+          onTabChange={(newTab) => setTab(newTab)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          leadsCount={tableRows.length}
+          isAdmin={isAdmin}
+          userId={user?.id}
+          isLoading={isLoading}
+          onRefresh={loadLeads}
+          onLogout={handleLogout}
+          searchRef={searchRef}
+        />
 
         {/* Patient Intakes Section (Admin Only) */}
         {isAdmin && (
@@ -2307,2016 +1453,72 @@ export default function AdminLeads() {
         )}
 
         {/* Leads Table */}
+        <LeadsTable
+          rows={tableRows}
+          isLoading={isLoading}
+          searchQuery={searchQuery}
+          activeLeadId={activeLeadId}
+          editingLeadId={editingLead?.id ?? null}
+          editStatus={editStatus}
+          editFollowUpAt={editFollowUpAt}
+          editNotes={editNotes}
+          role={role}
+          employees={employees}
+          selectedEmployeeByLead={selectedEmployeeByLead}
+          assigningLeadId={assigningLeadId}
+          leadRowRefs={leadRowRefs}
+          leadStatusOptions={LEAD_STATUSES}
+          leadStatusLabels={LEAD_STATUS_LABEL}
+          onRowClick={(leadId) => navigate(`/admin/lead/${leadId}`)}
+          onOpenNotes={handleOpenNotes}
+          onEditStart={(leadId) => {
+            const lead = leads.find(l => l.id === leadId);
+            if (lead) handleEditStart(lead);
+          }}
+          onEditSave={handleEditSave}
+          onEditCancel={() => setEditingLead(null)}
+          onStatusChange={setEditStatus}
+          onFollowUpChange={setEditFollowUpAt}
+          onNotesChange={setEditNotes}
+          onMarkContacted={markContacted}
+          onAssignChange={handleAssignChange}
+          onNextAction={handleNextAction}
+          onCopyScript={(script) => {
+            const scriptText = script.join('\n');
+            copyText(scriptText);
+            toast.success('Script copied to clipboard');
+          }}
+          onCopyContact={(phone, email) => {
+            const contact = phone || email;
+            if (contact) {
+              copyText(contact);
+              toast.success(`Copied ${phone ? 'phone' : 'email'}`);
+            } else {
+              toast.error('No contact info available');
+            }
+          }}
+        />
+
+        {/* Notes Modal - Lazy loaded */}
         {(() => {
-          const filteredLeads = applyTabFilter(leads);
-          
-          return filteredLeads.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-              <p className="text-gray-500 text-lg">
-                {searchQuery.trim() ? 'No leads match your search.' : 'No leads found.'}
-              </p>
-              <p className="text-gray-400 text-sm mt-2">
-                {isLoading ? 'Loading...' : searchQuery.trim() ? 'Try a different search term.' : 'Try adjusting your filters or check back later.'}
-              </p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-[1100px] w-full" style={{ tableLayout: 'fixed', width: '100%' }}>
-                  <colgroup>
-                    <col style={{ width: '140px' }} /> {/* Created */}
-                    <col style={{ width: '150px' }} /> {/* Name */}
-                    <col style={{ width: '180px' }} /> {/* Email */}
-                    <col style={{ width: '150px' }} /> {/* Phone */}
-                    <col style={{ width: '160px' }} /> {/* Source */}
-                    <col style={{ width: '176px' }} /> {/* Treatment */}
-                    <col style={{ width: '120px' }} /> {/* Status */}
-                    <col style={{ width: '140px' }} /> {/* Follow-up */}
-                    <col style={{ width: '140px' }} /> {/* Assigned To */}
-                    <col style={{ width: '220px' }} /> {/* Notes */}
-                    <col style={{ width: '200px' }} /> {/* Actions */}
-                  </colgroup>
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Source</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-44">Treatment</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Follow-up</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned To</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredLeads.map((lead) => {
-                      // Get canonical note from cache (if available)
-                      const canonical = canonicalCacheRef.current.get(lead.id);
-                      
-                      // Compute priority and next action for this lead
-                      const leadNotes = notes.filter(n => n.lead_id === lead.id);
-                      const leadTimeline = timeline.filter(t => t.leadId === lead.id);
-                      const leadContactEvents = contactEvents.filter(e => e.lead_id === lead.id);
-                      const priorityScore = computePriority(
-                        lead,
-                        lead.ai_risk_score ?? null,
-                        lead.last_contacted_at ?? null,
-                        leadTimeline,
-                        leadNotes,
-                        leadContactEvents
-                      );
-                      const hasBrief = !!(lead.ai_summary);
-                      const hasNotes = leadNotes.length > 0;
-                      const hasPhone = !!lead.phone;
-                      const hasEmail = !!lead.email;
-                      const nextAction = computeNextAction(
-                        lead,
-                        hasBrief,
-                        hasNotes,
-                        hasPhone,
-                        hasEmail,
-                        lead.last_contacted_at ?? null
-                      );
-                      const daysSinceActivity = getDaysSinceActivity(
-                        lead.last_contacted_at ?? null,
-                        lead.created_at
-                      );
-                      const isStale = daysSinceActivity >= 3;
-                      
-                      // Priority badge (prefer canonical, fallback to computed)
-                      // Defensive guards: ensure canonical exists before accessing properties
-                      const canonicalRisk = canonical?.risk_score ?? null;
-                      const canonicalNBA = canonical?.next_best_action ?? null;
-                      const canonicalMissing = Array.isArray(canonical?.missing_fields) ? canonical.missing_fields : [];
-                      
-                      // Extract priority from canonical (v1.0 has priority field, v1.1 uses risk_score)
-                      // Safe fallback: if canonical is null/undefined, use computed priorityScore
-                      const canonicalPriority = canonical
-                        ? ((canonical as any)?.priority || 
-                           (canonicalRisk !== null && canonicalRisk !== undefined
-                             ? (canonicalRisk >= 70 ? 'hot' : canonicalRisk >= 40 ? 'warm' : 'cool')
-                             : null))
-                        : null;
-                      
-                      const priorityBadge = canonicalPriority === 'hot' ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
-                                           canonicalPriority === 'warm' ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
-                                           canonicalPriority === 'cool' ? { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' } :
-                                           priorityScore >= 70 ? { emoji: '🔴', label: 'Hot', color: 'bg-red-100 text-red-800' } :
-                                           priorityScore >= 40 ? { emoji: '🟠', label: 'Warm', color: 'bg-orange-100 text-orange-800' } :
-                                           { emoji: '🟢', label: 'Cool', color: 'bg-green-100 text-green-800' };
-                      
-                      // Determine if normalization is needed (prefer API health data, fallback to canonical check)
-                      const healthData = aiHealthMap[lead.id];
-                      const needsNormalize = healthData?.needs_normalize ?? (!canonical || (canonical as CanonicalV11).review_required === true);
+          const supabase = getSupabaseClient();
+          if (!supabase || !notesLeadId) return null;
 
-                      // Helper: Normalize phone for WhatsApp
-                      const normalizePhoneForWa = (raw?: string | null) => {
-                        if (!raw) return null;
-                        let digits = String(raw).replace(/[^\d]/g, "");
-                        if (!digits) return null;
-                        if (digits.length === 11 && digits.startsWith("0")) digits = "90" + digits.slice(1);
-                        return digits;
-                      };
-
-                      // Helper: Get WhatsApp URL
-                      const getWhatsAppUrl = (phone?: string | null) => {
-                        const p = normalizePhoneForWa(phone);
-                        if (!p) return null;
-                        return `https://wa.me/${p}`;
-                      };
-
-                      // Helper: Check if lead is WhatsApp source
-                      const isWhatsAppLead = (lead: any) => {
-                        const s = `${lead?.source ?? ""} ${lead?.source_label ?? ""}`.toLowerCase();
-                        return s.includes("whatsapp");
-                      };
-
-                      // Helper: Check if lead is Onboarding source
-                      const isOnboardingLead = (lead: any) => {
-                        const s = `${lead?.source ?? ""} ${lead?.source_label ?? ""}`.toLowerCase();
-                        return s.includes("onboarding");
-                      };
-
-                      return (
-                        <>
-                          <tr 
-                            key={lead.id} 
-                            ref={(el) => { leadRowRefs.current[lead.id] = el; }}
-                            onClick={() => navigate(`/admin/lead/${lead.id}`)}
-                            className={`hover:bg-gray-50 group cursor-pointer transition-colors ${
-                              activeLeadId === lead.id 
-                                ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" 
-                                : ""
-                            }`}
-                          >
-                          <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
-                            <div className="flex flex-col gap-1.5 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs text-gray-500">{new Date(lead.created_at).toLocaleString()}</span>
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${priorityBadge.color}`}>
-                                  {priorityBadge.emoji} {priorityBadge.label}
-                                </span>
-                                {canonicalRisk !== null && canonicalRisk !== undefined && (
-                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-100">
-                                    Risk {canonicalRisk}
-                                  </span>
-                                )}
-                                {isStale && (
-                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-100">
-                                    ⏳ {daysSinceActivity}d no activity
-                                  </span>
-                                )}
-                                {needsNormalize && (
-                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-orange-50 text-orange-700 ring-1 ring-orange-100">
-                                    AI outdated
-                                  </span>
-                                )}
-                                {lead.next_action && (() => {
-                                  const actionLabels: Record<string, string> = {
-                                    send_whatsapp: "Send WhatsApp",
-                                    request_photos: "Request photos",
-                                    doctor_review: "Doctor review",
-                                    offer_sent: "Offer sent",
-                                    book_call: "Book call",
-                                  };
-                                  const label = actionLabels[lead.next_action] || lead.next_action;
-                                  return (
-                                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-teal-50 text-teal-700 ring-1 ring-teal-100">
-                                      📋 {label}
-                                    </span>
-                                  );
-                                })()}
-                                {lead.follow_up_at && (() => {
-                                  const followUpDate = new Date(lead.follow_up_at);
-                                  const now = new Date();
-                                  const diffHours = (followUpDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-                                  const isOverdue = diffHours < 0;
-                                  const isDueSoon = diffHours >= 0 && diffHours <= 24;
-                                  
-                                  if (isOverdue) {
-                                    return (
-                                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-100">
-                                        ⚠️ Overdue
-                                      </span>
-                                    );
-                                  }
-                                  if (isDueSoon) {
-                                    return (
-                                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100">
-                                        ⏰ Due soon
-                                      </span>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                              {canonicalNBA && canonicalNBA.label && (
-                                <div className="text-xs text-gray-700 font-medium truncate max-w-[300px]" title={canonicalNBA.label}>
-                                  Next: {canonicalNBA.label}
-                                </div>
-                              )}
-                              {canonicalMissing.length > 0 && (
-                                <div className="flex flex-wrap gap-1 max-w-[300px]">
-                                  {canonicalMissing.slice(0, 3).map((field, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100">
-                                      {field}
-                                    </span>
-                                  ))}
-                                  {canonicalMissing.length > 3 && (
-                                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-100">
-                                      +{canonicalMissing.length - 3}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              {!canonical && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenNotes(lead.id);
-                                  }}
-                                  className="text-xs text-purple-600 hover:text-purple-700 underline"
-                                >
-                                  Open Notes to generate snapshot
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.location.href = `/admin/lead/${lead.id}`;
-                              }}
-                              className="text-teal-600 hover:text-teal-700 hover:underline font-medium truncate block max-w-full"
-                              title="Open Profile"
-                            >
-                              {lead.name || '-'}
-                            </button>
-                          </td>
-                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 whitespace-nowrap truncate max-w-[200px]">
-                        {lead.email || '-'}
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-gray-700">
-                        {(() => {
-                          const phoneText = lead.phone ?? "-";
-                          const waUrl = isWhatsAppLead(lead) ? getWhatsAppUrl(lead.phone) : null;
-
-                          if (!waUrl || phoneText === "-") {
-                            return <span className="text-sm text-gray-700">{phoneText}</span>;
-                          }
-
-                          return (
-                            <a
-                              href={waUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-sm text-gray-900 hover:text-teal-700 underline decoration-teal-300 underline-offset-2"
-                              title="Open WhatsApp"
-                            >
-                              {phoneText}
-                            </a>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-gray-700">
-                        {isOnboardingLead(lead) ? (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-900 ring-1 ring-inset ring-blue-200">
-                            Onboarding
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 align-top w-44">
-                        <div className="text-sm text-gray-900 truncate">{lead.treatment ?? "-"}</div>
-                        {lead.treatment_type && (
-                          <div className="mt-1 text-xs text-gray-500 truncate">{lead.treatment_type}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
-                        {editingLead?.id === lead.id ? (
-                          <div className="flex flex-col gap-2">
-                            <select
-                              value={editStatus}
-                              onChange={(e) => setEditStatus(e.target.value)}
-                              className="text-sm border border-gray-300 rounded px-2 py-1"
-                            >
-                              {LEAD_STATUSES.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={handleEditSave}
-                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
-                              >
-                                <Save className="w-3 h-3" />
-                                Save
-                              </button>
-                              <button
-                                onClick={() => setEditingLead(null)}
-                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
-                              >
-                                <X className="w-3 h-3" />
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                            (lead.status?.toLowerCase() || 'new') === 'new' ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100' :
-                            lead.status?.toLowerCase() === 'contacted' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
-                            lead.status?.toLowerCase() === 'deposit_paid' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
-                            lead.status?.toLowerCase() === 'appointment_set' ? 'bg-purple-50 text-purple-700 ring-1 ring-purple-100' :
-                            lead.status?.toLowerCase() === 'arrived' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100' :
-                            lead.status?.toLowerCase() === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
-                            lead.status?.toLowerCase() === 'lost' ? 'bg-gray-50 text-gray-700 ring-1 ring-gray-100' :
-                            'bg-gray-50 text-gray-700 ring-1 ring-gray-100'
-                          }`}>
-                            {LEAD_STATUS_LABEL[lead.status?.toLowerCase() || 'new'] || 
-                             (lead.status ? lead.status.charAt(0).toUpperCase() + lead.status.slice(1).replace(/_/g, ' ') : 'New Lead')}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 truncate max-w-[180px]">
-                        {editingLead?.id === lead.id ? (
-                          <div className="flex flex-col gap-2">
-                            <input
-                              type="datetime-local"
-                              value={editFollowUpAt}
-                              onChange={(e) => setEditFollowUpAt(e.target.value)}
-                              className="text-sm border border-gray-300 rounded px-2 py-1"
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={handleEditSave}
-                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
-                              >
-                                <Save className="w-3 h-3" />
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingLead(null)}
-                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
-                              >
-                                <X className="w-3 h-3" />
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-700 truncate block">
-                            {lead.follow_up_at 
-                              ? new Date(lead.follow_up_at).toLocaleString()
-                              : '-'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 truncate max-w-[150px]">
-                        {role === 'admin' && (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <select
-                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm bg-white"
-                              value={selectedEmployeeByLead[lead.id] ?? lead.assigned_to ?? ""}
-                              onChange={(e) => handleAssignChange(lead.id, e.target.value)}
-                            >
-                              <option value="">Unassigned</option>
-                              {employees.map((emp: any) => (
-                                <option key={emp.id} value={emp.id}>
-                                  {emp.full_name || emp.email || emp.id}
-                                </option>
-                              ))}
-                            </select>
-
-                            {assigningLeadId === lead.id && (
-                              <span className="text-xs text-gray-500 whitespace-nowrap">Saving…</span>
-                            )}
-                          </div>
-                        )}
-                        {role !== 'admin' && (
-                          <span className="text-sm text-gray-600">
-                            {lead.assigned_to ? lead.assigned_to : 'Unassigned'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 overflow-hidden" style={{ width: '220px', maxWidth: '220px' }}>
-                        {editingLead?.id === lead.id ? (
-                          <div className="flex flex-col gap-2">
-                            <input
-                              type="text"
-                              value={editNotes}
-                              onChange={(e) => setEditNotes(e.target.value)}
-                              placeholder="Add notes..."
-                              className="w-full text-sm border border-gray-300 rounded px-2 py-1"
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                onClick={handleEditSave}
-                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
-                              >
-                                <Save className="w-3 h-3" />
-                                Save
-                              </button>
-                              <button
-                                onClick={() => setEditingLead(null)}
-                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1"
-                              >
-                                <X className="w-3 h-3" />
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="block truncate" title={lead.notes || undefined}>
-                            {lead.notes || '-'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
-                        {editingLead?.id === lead.id ? (
-                          <div className="flex gap-2 flex-wrap">
-                            <button
-                              type="button"
-                              onClick={handleEditSave}
-                              className="text-green-600 hover:text-green-700 shrink-0"
-                              title="Save"
-                            >
-                              <Save className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingLead(null)}
-                              className="text-gray-600 hover:text-gray-700 shrink-0"
-                              title="Cancel"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            {/* Notes button - dedicated button for Notes modal */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenNotes(lead.id);
-                              }}
-                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors shrink-0"
-                              title="Open Notes"
-                            >
-                              <MessageSquare className="w-4 h-4" />
-                            </button>
-                            {activeLeadId === lead.id && (
-                              <div className="flex items-center gap-1 flex-wrap shrink-0">
-                                {/* Copy NBA script (if canonical exists) */}
-                                {canonicalNBA?.script && canonicalNBA.script.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const scriptText = canonicalNBA.script.join('\n');
-                                      copyText(scriptText);
-                                      toast.success('Script copied to clipboard');
-                                    }}
-                                    className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                                    title="Copy NBA script"
-                                  >
-                                    <Copy className="w-4 h-4" />
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    markContacted(lead.id);
-                                  }}
-                                  className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                                  title="Mark as contacted"
-                                >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                </button>
-                                {hasPhone && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (lead.phone) {
-                                          window.location.href = `tel:${lead.phone}`;
-                                        }
-                                      }}
-                                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                      title="Call"
-                                    >
-                                      <Phone className="w-4 h-4" />
-                                    </button>
-                                    {normalizePhoneToWhatsApp(lead.phone) && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const wa = normalizePhoneToWhatsApp(lead.phone);
-                                          if (wa) {
-                                            const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                            window.open(url, "_blank", "noopener,noreferrer");
-                                          }
-                                        }}
-                                        className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                                        title="WhatsApp"
-                                      >
-                                        <MessageCircle className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                  </>
-                                )}
-                                {hasEmail && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (lead.email) {
-                                        window.location.href = `mailto:${lead.email}`;
-                                      }
-                                    }}
-                                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors"
-                                    title="Email"
-                                  >
-                                    <Mail className="w-4 h-4" />
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const contact = lead.phone || lead.email;
-                                    if (contact) {
-                                      copyText(contact);
-                                      toast.success(`Copied ${lead.phone ? 'phone' : 'email'}`);
-                                    } else {
-                                      toast.error('No contact info available');
-                                    }
-                                  }}
-                                  className="p-1.5 text-gray-600 hover:bg-gray-50 rounded transition-colors"
-                                  title="Copy contact"
-                                >
-                                  <Copy className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditStart(lead);
-                              }}
-                              className="text-blue-600 hover:text-blue-700 text-xs shrink-0"
-                            >
-                              Edit
-                            </button>
-                            {/* Chevron icon hint for row navigation */}
-                            <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                    {/* Next Best Action Row */}
-                    <tr 
-                      key={`${lead.id}-action`}
-                      className={`${activeLeadId === lead.id ? "bg-blue-50/20" : "bg-gray-50/50"} border-t border-gray-100`}
-                    >
-                      <td colSpan={11} className="px-6 py-2">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2 text-xs text-gray-600">
-                            <span className="font-medium">Next:</span>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  const supabase = getSupabaseClient();
-                                  if (supabase) {
-                                    const { data: sessionData } = await supabase.auth.getSession();
-                                    const token = sessionData?.session?.access_token;
-                                    if (token) {
-                                      const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-                                      
-                                      if (nextAction.action === 'call' && lead.phone) {
-                                        await fetch(`${apiUrl}/api/leads-contact-events`, {
-                                          method: 'POST',
-                                          headers: {
-                                            'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${token}`,
-                                          },
-                                          body: JSON.stringify({
-                                            lead_id: lead.id,
-                                            channel: 'phone',
-                                            note: 'Phone call initiated',
-                                            update_status: true,
-                                          }),
-                                        }).catch(() => {}); // Silent fail
-                                        window.location.href = `tel:${lead.phone}`;
-                                      } else if (nextAction.action === 'whatsapp' && lead.phone) {
-                                        const wa = normalizePhoneToWhatsApp(lead.phone);
-                                        if (wa) {
-                                          await fetch(`${apiUrl}/api/leads-contact-events`, {
-                                            method: 'POST',
-                                            headers: {
-                                              'Content-Type': 'application/json',
-                                              'Authorization': `Bearer ${token}`,
-                                            },
-                                            body: JSON.stringify({
-                                              lead_id: lead.id,
-                                              channel: 'whatsapp',
-                                              note: 'WhatsApp message sent',
-                                              update_status: true,
-                                            }),
-                                          }).catch(() => {}); // Silent fail
-                                          const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                          window.open(url, "_blank", "noopener,noreferrer");
-                                        }
-                                      } else if (nextAction.action === 'email' && lead.email) {
-                                        await fetch(`${apiUrl}/api/leads-contact-events`, {
-                                          method: 'POST',
-                                          headers: {
-                                            'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${token}`,
-                                          },
-                                          body: JSON.stringify({
-                                            lead_id: lead.id,
-                                            channel: 'email',
-                                            note: 'Email opened',
-                                            update_status: true,
-                                          }),
-                                        }).catch(() => {}); // Silent fail
-                                        window.location.href = `mailto:${lead.email}`;
-                                      } else if (nextAction.action === 'brief') {
-                                        handleOpenNotes(lead.id);
-                                        setTimeout(() => {
-                                          if (lead.id) runAIAnalysis(lead.id);
-                                        }, 500);
-                                      } else if (nextAction.action === 'note') {
-                                        handleOpenNotes(lead.id);
-                                      }
-                                    }
-                                  }
-                                } catch (err) {
-                                  console.warn('[AdminLeads] Error logging contact event:', err);
-                                  // Continue with action even if logging fails
-                                  if (nextAction.action === 'call' && lead.phone) {
-                                    window.location.href = `tel:${lead.phone}`;
-                                  } else if (nextAction.action === 'whatsapp' && lead.phone) {
-                                    const wa = normalizePhoneToWhatsApp(lead.phone);
-                                    if (wa) {
-                                      const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                      window.open(url, "_blank", "noopener,noreferrer");
-                                    }
-                                  } else if (nextAction.action === 'email' && lead.email) {
-                                    window.location.href = `mailto:${lead.email}`;
-                                  }
-                                }
-                              }}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-                            >
-                              <span>{nextAction.icon}</span>
-                              <span>{nextAction.label}</span>
-                            </button>
-                          </div>
-                          <p className="text-xs text-gray-500 italic ml-12">
-                            {getActionReasoning(
-                              nextAction.action,
-                              hasPhone,
-                              hasEmail,
-                              hasBrief,
-                              hasNotes,
-                              lead.last_contacted_at ?? null,
-                              priorityScore
-                            )}
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                        </>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          return (
+            <Suspense fallback={null}>
+              <LeadNotesModal
+                isOpen={!!notesLeadId}
+                leadId={notesLeadId}
+                onClose={handleCloseNotes}
+                supabase={supabase}
+                onNoteCreated={() => {
+                  // Reload leads to refresh any note counts or metadata
+                  loadLeads();
+                }}
+              />
+            </Suspense>
           );
         })()}
-
-        {/* Notes Modal (PORTAL - single-scroll architecture) */}
-        {(notesLeadId || isClosing) && createPortal(
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="notes-modal-title"
-            aria-describedby="notes-modal-desc"
-            className={`fixed inset-0 bg-black/40 flex items-center justify-center p-4 transition-opacity duration-200 motion-reduce:transition-none ${
-              isClosing ? "opacity-0" : "opacity-100"
-            }`}
-            style={{ zIndex: 2147483647 }}
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) handleCloseNotes();
-            }}
-          >
-            <div
-              data-modal-root="true"
-              className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 ring-1 ring-black/5 overflow-hidden transition-all duration-200 will-change-transform motion-reduce:transition-none motion-reduce:transform-none ${
-                isClosing ? "opacity-0 scale-[0.98]" : "opacity-100 scale-100"
-              }`}
-              style={{
-                width: "min(92vw, 720px)",
-                height: "min(80vh, 720px)",
-                display: "grid",
-                gridTemplateRows: "auto minmax(0, 1fr) auto",
-                transform: "translateZ(0)",
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-                {/* HEADER */}
-                <div className={`shrink-0 border-b border-gray-200 px-5 py-3 bg-white ${notesScroll.atTop ? "" : "shadow-sm"}`} style={{ pointerEvents: "auto", maxWidth: "100%", overflow: "hidden" }}>
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <h3 id="notes-modal-title" className="text-base font-semibold text-gray-900 break-words">Notes</h3>
-                    <p className="text-xs text-gray-500 mt-0.5 break-words">Lead actions & call prep</p>
-                    {notesLeadId && (() => {
-                      const currentLead = leads.find(l => l.id === notesLeadId);
-                      const leadPriority = currentLead ? computePriority(
-                        currentLead,
-                        currentLead.ai_risk_score ?? null,
-                        currentLead.last_contacted_at ?? null,
-                        timeline,
-                        notes,
-                        contactEvents
-                      ) : 0;
-                      if (leadPriority >= 70) {
-                        return (
-                          <p className="text-xs text-orange-600 mt-1 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            High-priority lead – consider contacting within 24h
-                          </p>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap" style={{ pointerEvents: "auto" }}>
-                        <button
-                          type="button"
-                          onClick={() => notesLeadId && markContacted(notesLeadId)}
-                          disabled={isMarkingContacted || !notesLeadId}
-                          className={[
-                            "relative z-10 inline-flex items-center justify-center gap-2 h-10",
-                            "px-3 rounded-md text-sm font-semibold",
-                            "border transition-all duration-200 min-w-[140px]",
-                            "active:scale-[0.99] motion-reduce:active:scale-100",
-                            isMarkingContacted || !notesLeadId
-                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-green-600 !text-white border-green-600 hover:bg-green-700 hover:border-green-700 shadow-sm hover:shadow"
-                          ].join(" ")}
-                          title={!notesLeadId ? "Select a lead first" : "Mark as contacted (Call/WhatsApp/Email)"}
-                        >
-                          {isMarkingContacted ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Marking...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Phone className="w-4 h-4" />
-                              <span>Mark Contacted</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log("AI Snapshot clicked", notesLeadId);
-                            if (notesLeadId) {
-                              handleGenerateBrief(notesLeadId);
-                            }
-                          }}
-                          disabled={isLoadingBrief || !notesLeadId}
-                          className={[
-                            "relative z-10 inline-flex items-center justify-center gap-2 h-10",
-                            "px-4 rounded-lg text-sm font-semibold",
-                            "border transition-all duration-200 min-w-[150px]",
-                            "focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2",
-                            "active:scale-[0.99] motion-reduce:active:scale-100",
-                            isLoadingBrief || !notesLeadId
-                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-gradient-to-r from-teal-600 to-cyan-600 !text-white border-transparent hover:from-teal-700 hover:to-cyan-700 shadow-sm hover:shadow-md"
-                          ].join(" ")}
-                          title={!notesLeadId ? "Select a lead first" : "Generate AI snapshot and call brief"}
-                        >
-                          {isLoadingBrief ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Generating snapshot...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Brain className="w-4 h-4" />
-                              <span>AI Snapshot</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => notesLeadId && runAIAnalysis(notesLeadId)}
-                          disabled={isLoadingAI || !notesLeadId}
-                          className={[
-                            "relative z-10 inline-flex items-center justify-center gap-2 h-10",
-                            "px-4 rounded-lg text-sm font-semibold",
-                            "border transition-all duration-200 min-w-[180px]",
-                            "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2",
-                            "active:scale-[0.99] motion-reduce:active:scale-100",
-                            isLoadingAI || !notesLeadId
-                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-gradient-to-r from-blue-600 to-purple-600 !text-white border-transparent hover:from-blue-700 hover:to-purple-700 shadow-sm hover:shadow-md"
-                          ].join(" ")}
-                          title={!notesLeadId ? "Select a lead first" : aiSummary ? "Update AI-powered call briefing" : "Generate AI-powered call briefing"}
-                        >
-                          {isLoadingAI ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Generating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <span>✨</span>
-                              <span>{aiSummary ? "Update Brief" : "Generate AI Brief"}</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => notesLeadId && handleNormalizeNotes(notesLeadId)}
-                          disabled={isNormalizing || !notesLeadId}
-                          className={[
-                            "inline-flex items-center justify-center gap-2 h-10",
-                            "px-4 rounded-lg text-sm font-semibold",
-                            "border transition-colors min-w-[160px] shadow-sm",
-                            "focus:outline-none focus:ring-2 focus:ring-offset-2",
-                            "active:scale-[0.99] motion-reduce:active:scale-100",
-                            "disabled:cursor-not-allowed",
-                            isNormalizing || !notesLeadId
-                              ? "bg-slate-200 text-slate-400 border-slate-200"
-                              : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800 focus:ring-slate-400"
-                          ].join(" ")}
-                          title={!notesLeadId ? "Select a lead first" : "Normalize notes into canonical JSON snapshot"}
-                        >
-                          {isNormalizing ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span className="text-gray-700">Normalizing...</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileText className="w-4 h-4" />
-                              <span className="text-gray-700">Normalize Notes</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => notesLeadId && handleSyncMemory(notesLeadId)}
-                          disabled={
-                            isSyncingMemory || 
-                            isNormalizing || 
-                            isClosing || 
-                            !notesLeadId || 
-                            !canonicalNote || 
-                            (canonicalNote as any).version !== '1.1' ||
-                            ((canonicalNote as CanonicalV11).review_required === true)
-                          }
-                          className={[
-                            "inline-flex items-center justify-center gap-2 h-10",
-                            "px-4 rounded-lg text-sm font-semibold",
-                            "border transition-all duration-200 min-w-[140px]",
-                            "focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2",
-                            "active:scale-[0.99] motion-reduce:active:scale-100",
-                            (isSyncingMemory || isNormalizing || isClosing || !notesLeadId || !canonicalNote || (canonicalNote as any).version !== '1.1' || ((canonicalNote as CanonicalV11).review_required === true))
-                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-gradient-to-r from-indigo-600 to-blue-600 !text-white border-transparent hover:from-indigo-700 hover:to-blue-700 shadow-sm hover:shadow-md"
-                          ].join(" ")}
-                          title={
-                            !notesLeadId ? "Select a lead first" :
-                            !canonicalNote ? "Normalize notes first" :
-                            (canonicalNote as CanonicalV11).review_required ? "Review required before syncing" :
-                            "Sync memory vault for all scopes"
-                          }
-                        >
-                          {isSyncingMemory ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Syncing...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Brain className="w-4 h-4" />
-                              <span>Sync Memory</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCloseNotes}
-                          className="ml-2 h-10 w-10 text-gray-500 hover:text-gray-700 text-xl leading-none rounded hover:bg-gray-100 transition-colors active:scale-[0.99] motion-reduce:active:scale-100 flex items-center justify-center"
-                          aria-label="Close"
-                        >
-                          ×
-                        </button>
-                  </div>
-                </div>
-              </div>
-
-                {/* BODY - TEK SCROLL ALANI */}
-                <div
-                  ref={modalScrollRef}
-                  tabIndex={0}
-                  role="region"
-                  id="notes-modal-desc"
-                  aria-label="Notes content"
-                  className="relative px-5 py-4 pr-3 focus:outline-none overscroll-contain touch-pan-y break-words"
-                  style={{
-                    overflowX: "hidden",
-                    overflowY: "auto",
-                    minHeight: 0,
-                    maxWidth: "100%",
-                    wordBreak: "break-word",
-                    whiteSpace: "normal",
-                    WebkitOverflowScrolling: "touch",
-                    scrollbarGutter: "stable",
-                  }}
-                  onScroll={handleNotesScroll}
-                  onKeyDown={(e) => {
-                    const el = modalScrollRef.current;
-                    if (!el) return;
-
-                    const line = 48; // key scroll step
-                    const page = Math.max(200, el.clientHeight * 0.9);
-
-                    if (e.key === "ArrowDown") { el.scrollTop += line; e.preventDefault(); }
-                    if (e.key === "ArrowUp")   { el.scrollTop -= line; e.preventDefault(); }
-                    if (e.key === "PageDown")  { el.scrollTop += page; e.preventDefault(); }
-                    if (e.key === "PageUp")    { el.scrollTop -= page; e.preventDefault(); }
-                    if (e.key === "Home")      { el.scrollTop = 0; e.preventDefault(); }
-                    if (e.key === "End")       { el.scrollTop = el.scrollHeight; e.preventDefault(); }
-                    if (e.key === " ")         { // space
-                      el.scrollTop += (e.shiftKey ? -page : page);
-                      e.preventDefault();
-                    }
-                  }}
-                >
-                  {/* FADE TOP */}
-                  <div
-                    className={`pointer-events-none sticky top-0 h-6 -mt-4 bg-gradient-to-b from-white to-transparent z-10 transition-opacity ${
-                      notesScroll.atTop ? "opacity-0" : "opacity-100"
-                    }`}
-                  />
-                  <div className="space-y-6 max-w-full">
-                    {/* B2: AI Snapshot Section */}
-                    {briefData ? (
-                      <div 
-                        data-snapshot-section
-                        className="border border-gray-200 rounded-lg bg-gradient-to-br from-white to-teal-50/20 transition-all max-w-full overflow-hidden"
-                      >
-                        {/* Header */}
-                        <div className="px-4 pt-4 pb-3 border-b border-gray-100 max-w-full">
-                          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                            <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 break-words min-w-0">
-                              <Brain className="w-4 h-4 text-teal-600 shrink-0" />
-                              <span className="break-words">AI Snapshot</span>
-                            </h4>
-                            {!briefData.hasOpenAI && (
-                              <span 
-                                className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded shrink-0 whitespace-nowrap"
-                                title="This is a preview. Real AI activates when OPENAI_API_KEY is enabled."
-                              >
-                                Preview Mode
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500 break-words">Instant lead insight and call preparation.</p>
-                        </div>
-
-                        <div className="p-4 space-y-4 max-w-full">
-                          {/* 1) Overview */}
-                          {briefData.brief.snapshot && (
-                            <div className="space-y-3 max-w-full">
-                              <div className="border-b border-gray-100 pb-3 max-w-full">
-                                <p className="text-sm font-medium text-gray-900 mb-1.5 break-words whitespace-normal">
-                                  {briefData.brief.snapshot.oneLiner}
-                                </p>
-                                <p className="text-xs text-gray-600 break-words whitespace-normal">
-                                  {briefData.brief.snapshot.goal}
-                                </p>
-                              </div>
-
-                              {/* 2) Key Facts */}
-                              {briefData.brief.snapshot.keyFacts && briefData.brief.snapshot.keyFacts.length > 0 && (
-                                <div className="border-b border-gray-100 pb-3 max-w-full">
-                                  <h5 className="text-xs font-semibold text-gray-700 mb-2">Key Facts</h5>
-                                  <ul className="text-xs text-gray-600 space-y-1.5 max-w-full">
-                                    {briefData.brief.snapshot.keyFacts.map((fact, idx) => (
-                                      <li key={idx} className="flex items-start gap-2 max-w-full">
-                                        <span className="text-teal-600 mt-0.5 shrink-0">•</span>
-                                        <span className="break-words whitespace-normal min-w-0 flex-1">{fact}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {/* 3) Recommended Next Step */}
-                              {briefData.brief.snapshot.nextBestAction && (
-                                <div className="p-3 bg-teal-50 rounded-lg border border-teal-100 max-w-full">
-                                  <p className="text-xs font-semibold text-teal-900 mb-1.5 break-words">Recommended Next Step</p>
-                                  <p className="text-xs text-teal-800 leading-relaxed break-words whitespace-normal">{briefData.brief.snapshot.nextBestAction}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* 4) Call Preparation */}
-                          {briefData.brief.callBrief && (
-                            <div className="border-t border-gray-200 pt-4 space-y-3 max-w-full">
-                              <h5 className="text-xs font-semibold text-gray-700 mb-2 break-words">Call Preparation</h5>
-                              
-                              {briefData.brief.callBrief.openingLine && (
-                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 max-w-full">
-                                  <p className="text-xs font-semibold text-blue-900 mb-1.5 break-words">Suggested Opening</p>
-                                  <p className="text-xs text-blue-800 leading-relaxed break-words whitespace-normal">{briefData.brief.callBrief.openingLine}</p>
-                                </div>
-                              )}
-
-                              <div className="grid grid-cols-1 gap-3 max-w-full">
-                                {briefData.brief.callBrief.mustAsk && briefData.brief.callBrief.mustAsk.length > 0 && (
-                                  <div className="max-w-full">
-                                    <p className="text-xs font-semibold text-gray-700 mb-1.5 break-words">Key Questions</p>
-                                    <ul className="text-xs text-gray-600 space-y-1.5 max-w-full">
-                                      {briefData.brief.callBrief.mustAsk.map((q, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 max-w-full">
-                                          <span className="text-blue-600 mt-0.5 shrink-0">✓</span>
-                                          <span className="break-words whitespace-normal min-w-0 flex-1">{q}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-
-                                {briefData.brief.callBrief.avoid && briefData.brief.callBrief.avoid.length > 0 && (
-                                  <div className="max-w-full">
-                                    <p className="text-xs font-semibold text-gray-700 mb-1.5 break-words">Avoid Mentioning</p>
-                                    <ul className="text-xs text-gray-600 space-y-1.5 max-w-full">
-                                      {briefData.brief.callBrief.avoid.map((a, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 max-w-full">
-                                          <span className="text-red-600 mt-0.5 shrink-0">✗</span>
-                                          <span className="break-words whitespace-normal min-w-0 flex-1">{a}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-
-                              {briefData.brief.callBrief.tone && (
-                                <div className="text-xs text-gray-600 pt-2 border-t border-gray-100 break-words whitespace-normal max-w-full">
-                                  <span className="font-medium">Tone:</span> {briefData.brief.callBrief.tone}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* 5) Lead Risk & Priority */}
-                          {briefData.brief.risk && (
-                            <div className="border-t border-gray-200 pt-4 max-w-full">
-                              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                                <h5 className="text-xs font-semibold text-gray-700 break-words min-w-0">Lead Risk & Priority</h5>
-                                <span className={`text-xs px-2 py-0.5 rounded font-medium shrink-0 whitespace-nowrap ${
-                                  briefData.brief.risk.priority === 'hot' ? 'bg-red-100 text-red-800' :
-                                  briefData.brief.risk.priority === 'warm' ? 'bg-orange-100 text-orange-800' :
-                                  'bg-green-100 text-green-800'
-                                }`}>
-                                  {briefData.brief.risk.priority === 'hot' ? '🔴 Hot' :
-                                   briefData.brief.risk.priority === 'warm' ? '🟠 Warm' :
-                                   '🟢 Cool'}
-                                </span>
-                              </div>
-                              {briefData.brief.risk.reasons && briefData.brief.risk.reasons.length > 0 && (
-                                <ul className="text-xs text-gray-600 space-y-1.5 mb-2 max-w-full">
-                                  {briefData.brief.risk.reasons.map((reason, idx) => (
-                                    <li key={idx} className="flex items-start gap-2 max-w-full">
-                                      <span className="text-gray-400 mt-0.5 shrink-0">•</span>
-                                      <span className="break-words whitespace-normal min-w-0 flex-1">{reason}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              {briefData.brief.risk.confidence !== null && (
-                                <p className="text-xs text-gray-500 break-words">
-                                  Confidence: {briefData.brief.risk.confidence}%
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Empty State */
-                      <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-gray-50 to-white text-center max-w-full">
-                        <Brain className="w-8 h-8 text-gray-400 mx-auto mb-3 shrink-0" />
-                        <h4 className="text-sm font-semibold text-gray-800 mb-1.5 break-words">No snapshot yet</h4>
-                        <p className="text-xs text-gray-600 mb-3 break-words whitespace-normal">
-                          Generate a quick AI-powered preview to prepare your conversation.
-                        </p>
-                        <p className="text-xs text-gray-500 italic break-words">
-                          Click 'AI Snapshot' above
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Memory Vault Section */}
-                    {(memoryVault.patient || memoryVault.doctor || memoryVault.internal) ? (
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-blue-50/20">
-                        <div className="mb-3">
-                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                            <Brain className="w-4 h-4 text-blue-600" />
-                            Memory Vault
-                          </h4>
-                          <p className="text-xs text-gray-500">Role-scoped memory for AI context</p>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          {/* Status */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs text-gray-600">
-                              Synced • {(() => {
-                                const latest = memoryVault.internal || memoryVault.doctor || memoryVault.patient;
-                                return latest ? new Date(latest.updated_at).toLocaleString() : '';
-                              })()}
-                            </span>
-                          </div>
-
-                          {/* Scope chips */}
-                          <div className="flex flex-wrap gap-1.5">
-                            {memoryVault.patient && (
-                              <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded">
-                                Patient
-                              </span>
-                            )}
-                            {memoryVault.doctor && (
-                              <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
-                                Doctor
-                              </span>
-                            )}
-                            {memoryVault.internal && (
-                              <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded">
-                                Internal
-                              </span>
-                            )}
-                          </div>
-
-                          {/* PII safety */}
-                          {memoryVault.patient && (
-                            <p className="text-xs text-green-700 font-medium">
-                              ✓ PII safe: patient scope
-                            </p>
-                          )}
-
-                          {/* Copy context button */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Get current user role (default to admin for now)
-                              const currentRole: AIRole = 'admin'; // TODO: get from auth
-                              const contextPack = buildContextPack(
-                                currentRole,
-                                canonicalNote as CanonicalV11 | null,
-                                memoryVault.patient,
-                                memoryVault.doctor,
-                                memoryVault.internal
-                              );
-                              copyText(contextPack);
-                              toast.success('Context pack copied to clipboard');
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 rounded transition-colors"
-                          >
-                            <Copy className="w-3 h-3" />
-                            Copy context
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <div className="mb-2">
-                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                            <Brain className="w-4 h-4 text-blue-600" />
-                            Memory Vault
-                          </h4>
-                        </div>
-                        <p className="text-xs text-gray-500">Not synced yet. Click "Sync Memory" after normalizing notes.</p>
-                      </div>
-                    )}
-
-                    {/* AI Snapshot Section */}
-                    {canonicalNote ? (
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-purple-50/20">
-                        <div className="mb-3">
-                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                            <FileText className="w-4 h-4 text-purple-600" />
-                            AI Snapshot
-                          </h4>
-                          <p className="text-xs text-gray-500">Canonical structured view of lead data</p>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          {/* Summary (v1.0 only) */}
-                          {(canonicalNote as any).summary_1line && (
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 mb-1">{(canonicalNote as any).summary_1line}</p>
-                              {((canonicalNote as any).summary_bullets || []).length > 0 && (
-                                <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
-                                  {((canonicalNote as any).summary_bullets || []).map((bullet: string, idx: number) => (
-                                    <li key={idx}>{bullet}</li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Priority & Risk */}
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              (canonicalNote as any).priority === 'hot' ? 'bg-red-100 text-red-800' :
-                              (canonicalNote as any).priority === 'warm' ? 'bg-orange-100 text-orange-800' :
-                              'bg-green-100 text-green-800'
-                            }`}>
-                              {(canonicalNote as any).priority === 'hot' ? '🔴' : (canonicalNote as any).priority === 'warm' ? '🟠' : '🟢'} {((canonicalNote as any).priority || 'cool').toUpperCase()}
-                            </span>
-                            {(canonicalNote as any).risk_score !== null && (canonicalNote as any).risk_score !== undefined && (
-                              <span className="text-xs text-gray-600">
-                                Risk: <span className="font-semibold">{(canonicalNote as any).risk_score}/100</span>
-                              </span>
-                            )}
-                            {(canonicalNote as any).confidence !== null && (canonicalNote as any).confidence !== undefined && (
-                              <span className="text-xs text-gray-600">
-                                Confidence: <span className="font-semibold">{(canonicalNote as any).confidence}/100</span>
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Next Best Action */}
-                          {canonicalNote.next_best_action && (
-                            <div className="border-t border-gray-200 pt-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold text-gray-700">Next Best Action:</span>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const scriptText = canonicalNote.next_best_action.script.join('\n');
-                                      copyText(scriptText);
-                                      toast.success('Script copied to clipboard');
-                                    }}
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 rounded transition-colors"
-                                  >
-                                    <Copy className="w-3 h-3" />
-                                    Copy script
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (!notesLeadId) return;
-                                      const lead = leads.find(l => l.id === notesLeadId);
-                                      if (!lead) return;
-
-                                      const nba = canonicalNote.next_best_action;
-                                      const channel = (nba as any).channel || 'unknown';
-                                      const label = nba.label.toLowerCase();
-
-                                      // Apply NBA action
-                                      if (channel === 'whatsapp' && lead.phone) {
-                                        const wa = normalizePhoneToWhatsApp(lead.phone);
-                                        if (wa) {
-                                          const url = `https://wa.me/${wa}?text=${encodeURIComponent(waMessageEN(lead))}`;
-                                          window.open(url, "_blank", "noopener,noreferrer");
-                                          toast.success('WhatsApp opened');
-                                        }
-                                      } else if (channel === 'email' && lead.email) {
-                                        window.location.href = `mailto:${lead.email}`;
-                                        toast.success('Email client opened');
-                                      } else if (channel === 'phone' && lead.phone) {
-                                        window.location.href = `tel:${lead.phone}`;
-                                        toast.success('Phone dialer opened');
-                                      } else if (label.includes('mark contacted') || label.includes('mark as contacted')) {
-                                        markContacted(notesLeadId);
-                                      } else {
-                                        // Fallback: copy script
-                                        const scriptText = nba.script.join('\n');
-                                        copyText(scriptText);
-                                        toast.success('Script copied to clipboard');
-                                      }
-                                    }}
-                                    disabled={(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).review_required}
-                                    className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-                                      (canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).review_required
-                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                        : 'bg-green-50 text-green-700 hover:bg-green-100'
-                                    }`}
-                                    title={(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).review_required ? 'Review required before applying' : 'Apply this action'}
-                                  >
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    Apply
-                                  </button>
-                                </div>
-                              </div>
-                              <p className="text-xs text-gray-900 font-medium mb-1">{canonicalNote.next_best_action.label}</p>
-                              <p className="text-xs text-gray-500 mb-2">
-                                Due in {canonicalNote.next_best_action.due_hours} hours
-                                {(canonicalNote as any).version === '1.1' && (canonicalNote.next_best_action as any).channel && (
-                                  <span className="ml-2 text-gray-400">• {(canonicalNote.next_best_action as any).channel}</span>
-                                )}
-                              </p>
-                              {canonicalNote.next_best_action.script.length > 0 && (
-                                <div className="bg-gray-50 rounded p-2 text-xs text-gray-700 font-mono whitespace-pre-wrap">
-                                  {canonicalNote.next_best_action.script.join('\n')}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Missing Fields */}
-                          {canonicalNote.missing_fields.length > 0 && (
-                            <div className="border-t border-gray-200 pt-3">
-                              <p className="text-xs font-semibold text-gray-700 mb-2">Missing Fields:</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {canonicalNote.missing_fields.map((field, idx) => (
-                                  <span key={idx} className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded">
-                                    {field}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Changelog (v1.1) */}
-                          {(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).changelog && (
-                            <div className="border-t border-gray-200 pt-3">
-                              <p className="text-xs font-semibold text-gray-700 mb-2">Changelog:</p>
-                              {(canonicalNote as CanonicalV11).changelog.added.length > 0 && (
-                                <div className="mb-2">
-                                  <p className="text-xs font-medium text-green-700 mb-1">Added:</p>
-                                  <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
-                                    {(canonicalNote as CanonicalV11).changelog.added.map((item, idx) => (
-                                      <li key={idx}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                              {(canonicalNote as CanonicalV11).changelog.updated.length > 0 && (
-                                <div className="mb-2">
-                                  <p className="text-xs font-medium text-blue-700 mb-1">Updated:</p>
-                                  <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
-                                    {(canonicalNote as CanonicalV11).changelog.updated.map((item, idx) => (
-                                      <li key={idx}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                              {(canonicalNote as CanonicalV11).changelog.removed.length > 0 && (
-                                <div className="mb-2">
-                                  <p className="text-xs font-medium text-gray-700 mb-1">Removed:</p>
-                                  <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
-                                    {(canonicalNote as CanonicalV11).changelog.removed.map((item, idx) => (
-                                      <li key={idx}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                              {(canonicalNote as CanonicalV11).changelog.conflicts.length > 0 && (
-                                <div className="mb-2">
-                                  <p className="text-xs font-medium text-red-700 mb-1">Conflicts:</p>
-                                  <ul className="text-xs text-red-600 space-y-0.5 ml-4 list-disc">
-                                    {(canonicalNote as CanonicalV11).changelog.conflicts.map((item, idx) => (
-                                      <li key={idx}>{item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* What Changed (v1.0 backward compatibility) */}
-                          {(canonicalNote as any).what_changed && ((canonicalNote as any).what_changed || []).length > 0 && (
-                            <div className="border-t border-gray-200 pt-3">
-                              <p className="text-xs font-semibold text-gray-700 mb-2">What Changed:</p>
-                              <ul className="text-xs text-gray-600 space-y-0.5 ml-4 list-disc">
-                                {((canonicalNote as any).what_changed || []).map((change: string, idx: number) => (
-                                  <li key={idx}>{change}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {/* Sources (v1.1) */}
-                          {(canonicalNote as any).version === '1.1' && (canonicalNote as CanonicalV11).sources && (
-                            <div className="border-t border-gray-200 pt-3">
-                              <p className="text-xs font-semibold text-gray-700 mb-1">Sources:</p>
-                              <div className="text-xs text-gray-600 space-y-0.5">
-                                <p>Notes used: {(canonicalNote as CanonicalV11).sources.notes_used_count}</p>
-                                <p>Timeline events: {(canonicalNote as CanonicalV11).sources.timeline_used_count}</p>
-                                {(canonicalNote as CanonicalV11).sources.last_note_at && (
-                                  <p>Last note: {new Date((canonicalNote as CanonicalV11).sources.last_note_at).toLocaleString()}</p>
-                                )}
-                                {(canonicalNote as CanonicalV11).updated_at && (
-                                  <p>Updated: {new Date((canonicalNote as CanonicalV11).updated_at).toLocaleString()}</p>
-                                )}
-                                {(canonicalNote as CanonicalV11).security?.firewall && (
-                                  <>
-                                    <p className="mt-1 font-medium">Firewall applied: {new Date((canonicalNote as CanonicalV11).security.firewall.applied_at || '').toLocaleString()}</p>
-                                    {(canonicalNote as CanonicalV11).security.firewall.run_hash && (
-                                      <p className="text-gray-500">
-                                        <span className="font-medium">Audit logged</span>
-                                        <span className="mx-1">•</span>
-                                        <span className="font-mono text-xs">{(canonicalNote as CanonicalV11).security.firewall.run_hash}</span>
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <div className="mb-2">
-                          <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                            <FileText className="w-4 h-4 text-purple-600" />
-                            AI Snapshot
-                          </h4>
-                        </div>
-                        <p className="text-xs text-gray-500">No AI snapshot yet. Click "Normalize Notes" to generate.</p>
-                      </div>
-                    )}
-
-                    {/* AI Analysis Section */}
-                    <div>
-                      <div className="mb-3">
-                        <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                          <Brain className="w-4 h-4 text-purple-600" />
-                          AI Call Brief
-                        </h4>
-                        <p className="text-xs text-gray-500">AI-powered insights for your call preparation</p>
-                      </div>
-
-                      {isLoadingAI ? (
-                        <div className="space-y-3">
-                          <div className="text-gray-500 text-sm flex items-center gap-2 mb-3">
-                            <RefreshCw className="w-3 h-3 animate-spin" />
-                            Generating call briefing...
-                          </div>
-                          {/* Skeleton */}
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gradient-to-r from-gray-50 to-white animate-pulse">
-                            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                            <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                          </div>
-                          <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-blue-50/30 animate-pulse">
-                            <div className="h-3 bg-gray-200 rounded w-1/2 mb-3"></div>
-                            <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-                            <div className="h-3 bg-gray-200 rounded w-4/5 mb-2"></div>
-                            <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-                          </div>
-                        </div>
-                      ) : aiRiskScore !== null || aiSummary ? (
-                        <div className="space-y-3">
-                          {aiRiskScore !== null && (
-                            <div className="border border-gray-200 rounded-lg p-3 bg-gradient-to-r from-gray-50 to-white">
-                              <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className={`w-4 h-4 ${
-                                  aiRiskScore >= 70 ? 'text-red-600' :
-                                  aiRiskScore >= 40 ? 'text-orange-600' :
-                                  aiRiskScore >= 20 ? 'text-yellow-600' :
-                                  'text-green-600'
-                                }`} />
-                                <span className="text-sm font-semibold text-gray-900">
-                                  Risk Score: {aiRiskScore}/100
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                                  aiRiskScore >= 70 ? 'bg-red-100 text-red-800' :
-                                  aiRiskScore >= 40 ? 'bg-orange-100 text-orange-800' :
-                                  aiRiskScore >= 20 ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-green-100 text-green-800'
-                                }`}>
-                                  {aiRiskScore >= 70 ? '🔴 High Risk' :
-                                   aiRiskScore >= 40 ? '🟠 Medium Risk' :
-                                   aiRiskScore >= 20 ? '🟡 Low Risk' :
-                                   '🟢 Very Low Risk'}
-                                </span>
-                                {aiRiskScore >= 70 && (
-                                  <span className="text-xs text-red-600 font-medium ml-auto">
-                                    ⚠️ Immediate action recommended
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {aiSummary && (
-                            <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-white to-blue-50/30">
-                              <FormattedAIBrief content={aiSummary} />
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
-                          <p className="mb-1">No call brief yet.</p>
-                          <p className="text-xs">Click "Generate Brief" to see risk assessment, talking points, and call preparation guidance.</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Timeline Section */}
-                    <div>
-                      <div className="mb-3">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-1">Timeline</h4>
-                        {!isLoadingTimeline && notesLeadId && (() => {
-                          const currentLead = leads.find(l => l.id === notesLeadId);
-                          if (!currentLead) return null;
-                          return (
-                            <p className="text-xs text-gray-500 italic">
-                              {getTimelineSummary(
-                                lastContactedAt,
-                                contactEvents,
-                                !!currentLead.phone,
-                                aiRiskScore ?? 0,
-                                lastContactedAt ? getDaysSinceActivity(lastContactedAt, currentLead.created_at) : getDaysSinceActivity(null, currentLead.created_at)
-                              )}
-                            </p>
-                          );
-                        })()}
-                      </div>
-                      {isLoadingTimeline ? (
-                        <div className="text-gray-500 text-sm">Loading timeline…</div>
-                      ) : timeline.length === 0 ? (
-                        <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
-                          <p>No timeline events yet.</p>
-                          <p className="text-xs mt-1 text-gray-400">Booking events will appear here.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {timeline.map((event) => {
-                            const date = new Date(event.receivedAt);
-                            const formattedDate = date.toLocaleString('tr-TR', {
-                              timeZone: 'Europe/Istanbul',
-                              day: '2-digit',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-
-                            const getEventIcon = () => {
-                              if (event.eventType === 'booking.created') {
-                                return <CheckCircle2 className="w-4 h-4 text-green-600" />;
-                              } else if (event.eventType === 'booking.rescheduled') {
-                                return <RotateCcw className="w-4 h-4 text-blue-600" />;
-                              } else if (event.eventType === 'booking.cancelled') {
-                                return <XCircle className="w-4 h-4 text-red-600" />;
-                              }
-                              return <Clock className="w-4 h-4 text-gray-600" />;
-                            };
-
-                            const getEventLabel = () => {
-                              if (event.eventType === 'booking.created') return 'Booked';
-                              if (event.eventType === 'booking.rescheduled') return 'Rescheduled';
-                              if (event.eventType === 'booking.cancelled') return 'Cancelled';
-                              return event.eventType;
-                            };
-
-                            const formatTime = (timeStr: string | null) => {
-                              if (!timeStr) return null;
-                              try {
-                                const time = new Date(timeStr);
-                                return time.toLocaleTimeString('tr-TR', {
-                                  timeZone: 'Europe/Istanbul',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                });
-                              } catch {
-                                return timeStr;
-                              }
-                            };
-
-                            const startTimeFormatted = formatTime(event.startTime);
-                            const endTimeFormatted = formatTime(event.endTime);
-                            const previousStartFormatted = formatTime(event.previousMeetingStart);
-                            const previousEndFormatted = formatTime(event.previousMeetingEnd);
-                            
-                            // For rescheduled events, show "from -> to" format
-                            let timeRange: string | null = null;
-                            if (event.eventType === 'booking.rescheduled' && previousStartFormatted && startTimeFormatted) {
-                              // Show "from -> to" for rescheduled
-                              const fromTime = previousStartFormatted + (previousEndFormatted ? ` → ${previousEndFormatted}` : '');
-                              const toTime = startTimeFormatted + (endTimeFormatted ? ` → ${endTimeFormatted}` : '');
-                              timeRange = `${fromTime} → ${toTime}`;
-                            } else if (startTimeFormatted && endTimeFormatted) {
-                              // Regular time range
-                              timeRange = `${startTimeFormatted} → ${endTimeFormatted}`;
-                            } else {
-                              timeRange = startTimeFormatted || endTimeFormatted || null;
-                            }
-
-                            return (
-                              <div
-                                key={event.eventId}
-                                className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors group"
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className="mt-0.5">{getEventIcon()}</div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-medium text-sm text-gray-900">
-                                        {getEventLabel()}
-                                      </span>
-                                      <span className="text-xs text-gray-500">—</span>
-                                      <span className="text-xs text-gray-500">{formattedDate}</span>
-                                      {timeRange && (
-                                        <>
-                                          <span className="text-xs text-gray-500">—</span>
-                                          <span className="text-xs text-gray-600">{timeRange}</span>
-                                        </>
-                                      )}
-                                    </div>
-                                    {(event.title || event.additionalNotes) && (
-                                      <div className="mt-2 text-xs text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {event.title && (
-                                          <div className="font-medium mb-1">{event.title}</div>
-                                        )}
-                                        {event.additionalNotes && (
-                                          <div className="whitespace-pre-wrap break-words">
-                                            {event.additionalNotes}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Contact Events Section */}
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        Contact Attempts
-                      </h4>
-                      
-                      {/* Quick Add Form */}
-                      <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            if (isAddingContact || !notesLeadId || !newContactChannel) return;
-                            addContactEvent(notesLeadId);
-                          }}
-                          className="space-y-2"
-                        >
-                          <div className="flex gap-2">
-                            <select
-                              value={newContactChannel}
-                              onChange={(e) => setNewContactChannel(e.target.value)}
-                              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              disabled={isAddingContact}
-                            >
-                              <option value="phone">Phone</option>
-                              <option value="whatsapp">WhatsApp</option>
-                              <option value="email">Email</option>
-                              <option value="sms">SMS</option>
-                              <option value="other">Other</option>
-                            </select>
-                            <input
-                              type="text"
-                              value={newContactNote}
-                              onChange={(e) => setNewContactNote(e.target.value)}
-                              onCompositionStart={() => setIsComposing(true)}
-                              onCompositionEnd={() => setIsComposing(false)}
-                              placeholder="Quick note (optional)..."
-                              className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              disabled={isAddingContact}
-                            />
-                            <button
-                              type="submit"
-                              disabled={isAddingContact || !newContactChannel || !newContactNote.trim()}
-                              className={[
-                                "inline-flex items-center justify-center gap-2",
-                                "px-3 py-2 rounded-md text-sm font-semibold",
-                                "border transition-all duration-200 min-w-[100px]",
-                                isAddingContact || !newContactChannel || !newContactNote.trim()
-                                  ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                                  : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
-                              ].join(" ")}
-                              title={
-                                isAddingContact 
-                                  ? "Adding contact attempt..." 
-                                  : !newContactNote.trim() 
-                                    ? "Type a note to enable" 
-                                    : "Add contact attempt"
-                              }
-                            >
-                              {isAddingContact ? (
-                                <>
-                                  <RefreshCw className="w-4 h-4 animate-spin" />
-                                  <span>Adding...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Phone className="w-4 h-4" />
-                                  <span>Add</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-
-                      {/* Contact Events List */}
-                      {isLoadingContactEvents ? (
-                        <div className="text-gray-500 text-sm">Loading contact events…</div>
-                      ) : contactEvents.length === 0 ? (
-                        <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
-                          <p>Log first attempt...</p>
-                          <p className="text-xs mt-1 text-gray-400">Use the form above to log a call, WhatsApp, or email.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {contactEvents.map((event) => {
-                            const date = new Date(event.created_at);
-                            const formattedDate = date.toLocaleString('tr-TR', {
-                              timeZone: 'Europe/Istanbul',
-                              day: '2-digit',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-
-                            const getChannelIcon = () => {
-                              switch (event.channel) {
-                                case 'phone':
-                                  return <Phone className="w-4 h-4 text-blue-600" />;
-                                case 'whatsapp':
-                                  return <MessageCircle className="w-4 h-4 text-green-600" />;
-                                case 'email':
-                                  return <Mail className="w-4 h-4 text-purple-600" />;
-                                case 'sms':
-                                  return <MessageSquare className="w-4 h-4 text-orange-600" />;
-                                default:
-                                  return <Phone className="w-4 h-4 text-gray-600" />;
-                              }
-                            };
-
-                            const getChannelLabel = () => {
-                              switch (event.channel) {
-                                case 'phone':
-                                  return 'Phone';
-                                case 'whatsapp':
-                                  return 'WhatsApp';
-                                case 'email':
-                                  return 'Email';
-                                case 'sms':
-                                  return 'SMS';
-                                default:
-                                  return event.channel.charAt(0).toUpperCase() + event.channel.slice(1);
-                              }
-                            };
-
-                            return (
-                              <div
-                                key={event.id}
-                                className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className="mt-0.5">{getChannelIcon()}</div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-medium text-sm text-gray-900">
-                                        {getChannelLabel()}
-                                      </span>
-                                      <span className="text-xs text-gray-500">—</span>
-                                      <span className="text-xs text-gray-500">{formattedDate}</span>
-                                    </div>
-                                    {event.note && (
-                                      <div className="mt-2 text-xs text-gray-600 whitespace-pre-wrap break-words">
-                                        {event.note}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Notes Section */}
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Notes</h4>
-                      <div className="space-y-3">
-                        {isLoadingNotes ? (
-                          <div className="text-gray-500 text-sm">Loading notes…</div>
-                        ) : notes.length === 0 ? (
-                          <div className="text-gray-500 text-sm border border-gray-200 rounded-lg p-3 bg-gray-50">
-                            <p>Add first note...</p>
-                            <p className="text-xs mt-1 text-gray-400">Use the form below to add your first note about this lead.</p>
-                          </div>
-                        ) : (
-                          notes.map((n: any) => (
-                            <div key={n.id} className="border border-gray-200 rounded-lg p-3 max-w-full overflow-hidden">
-                              <div className="text-xs text-gray-500 mb-1">
-                                {new Date(n.created_at).toLocaleString()}
-                              </div>
-
-                              {/* CRITICAL: prevent "single endless line" */}
-                              <div
-                                className="text-sm text-gray-900 whitespace-pre-wrap break-all"
-                                style={{ overflowWrap: "anywhere" }}
-                              >
-                                {n.content ?? n.note ?? ""}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {/* FADE BOTTOM */}
-                  <div
-                    className={`pointer-events-none sticky bottom-0 h-6 -mb-4 bg-gradient-to-t from-gray-50 to-transparent z-10 transition-opacity ${
-                      notesScroll.atBottom ? "opacity-0" : "opacity-100"
-                    }`}
-                  />
-                </div>
-
-                {/* FOOTER */}
-                <div className={`shrink-0 border-t border-gray-200 px-5 py-3 bg-gray-50 ${notesScroll.atBottom ? "" : "shadow-[0_-8px_20px_rgba(0,0,0,0.06)]"}`}>
-                  <form onSubmit={handleAddNote} className="space-y-3">
-                    <textarea
-                      value={newNoteContent}
-                      onChange={(e) => setNewNoteContent(e.target.value)}
-                      onCompositionStart={() => setIsComposing(true)}
-                      onCompositionEnd={() => setIsComposing(false)}
-                      onKeyDown={(e) => {
-                        if (isSavingNote) return;
-                        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && newNoteContent.trim()) {
-                          e.preventDefault();
-                          handleAddNote(e as any);
-                        }
-                      }}
-                      readOnly={isSavingNote}
-                      placeholder={(() => {
-                        const currentLead = notesLeadId ? leads.find(l => l.id === notesLeadId) : null;
-                        if (currentLead && !currentLead.last_contacted_at) {
-                          return "Called but no answer... (Cmd/Ctrl+Enter to submit)";
-                        }
-                        return "Add a note... (Cmd/Ctrl+Enter to submit)";
-                      })()}
-                      rows={3}
-                      className={`w-full rounded-lg border p-3 resize-none max-h-28 overflow-y-auto bg-white leading-relaxed placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        isSavingNote ? 'opacity-60 cursor-not-allowed' : ''
-                      }`}
-                    />
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-gray-500 flex items-center gap-3">
-                        <span>ESC to close</span>
-                        <span>•</span>
-                        <span>Cmd/Ctrl+Enter to add note</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowCheatSheet(!showCheatSheet)}
-                          className="ml-2 text-gray-400 hover:text-gray-600 transition-colors"
-                          title="Keyboard shortcuts"
-                        >
-                          <HelpCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {showCheatSheet && (
-                        <div className="absolute right-5 bottom-14 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-50 min-w-[280px]">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-sm font-semibold text-gray-900">Keyboard Shortcuts</h4>
-                            <button
-                              type="button"
-                              onClick={() => setShowCheatSheet(false)}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                          <div className="space-y-2 text-xs">
-                            <div className="font-medium text-gray-700 mb-1">In Modal:</div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">ESC</span>
-                              <span className="text-gray-900">Close modal</span>
-                            </div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">Tab</span>
-                              <span className="text-gray-900">Cycle focus</span>
-                            </div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">Cmd/Ctrl+Enter</span>
-                              <span className="text-gray-900">Add note</span>
-                            </div>
-                            <div className="border-t border-gray-200 my-2"></div>
-                            <div className="font-medium text-gray-700 mb-1">In List:</div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">J / K</span>
-                              <span className="text-gray-900">Next / Previous lead</span>
-                            </div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">G / Shift+G</span>
-                              <span className="text-gray-900">First / Last lead</span>
-                            </div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">Enter</span>
-                              <span className="text-gray-900">Open notes</span>
-                            </div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">/</span>
-                              <span className="text-gray-900">Focus search</span>
-                            </div>
-                            <div className="flex items-center justify-between py-1">
-                              <span className="text-gray-600">1-4</span>
-                              <span className="text-gray-900">Quick actions</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleCloseNotes}
-                          className="px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 transition-colors"
-                        >
-                          Close
-                        </button>
-
-                        <button
-                          type="submit"
-                          disabled={!newNoteContent.trim() || isSavingNote}
-                          className={[
-                            "inline-flex items-center justify-center gap-2",
-                            "px-4 py-2 rounded-md text-sm font-semibold",
-                            "border transition-all duration-200 min-w-[120px]",
-                            !newNoteContent.trim() || isSavingNote
-                              ? "bg-gray-100 !text-gray-700 border-gray-200 opacity-70 cursor-not-allowed"
-                              : "bg-blue-600 !text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700 shadow-sm hover:shadow"
-                          ].join(" ")}
-                          title={
-                            isSavingNote 
-                              ? "Saving note..." 
-                              : !newNoteContent.trim() 
-                                ? "Type a note to enable" 
-                                : "Add note to lead"
-                          }
-                        >
-                          {isSavingNote ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Saving...</span>
-                            </>
-                          ) : (
-                            <>
-                              <MessageSquare className="w-4 h-4" />
-                              <span>Add Note</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              </div>
-          </div>,
-          document.body
-        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { useAuthStore } from '@/store/authStore';
-import { NavigationContext } from '@/App';
+import { NavigationContext } from '@/lib/navigationContext';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 import { RefreshCw, LogOut, Clock, FileText, CheckCircle2, XCircle, AlertCircle, Settings } from 'lucide-react';

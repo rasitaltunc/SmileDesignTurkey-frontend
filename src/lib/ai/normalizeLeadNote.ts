@@ -2,6 +2,7 @@
 
 import type { CanonicalV11 } from './canonicalTypes';
 import type { FirewallReport } from './dataFirewall';
+import { getSupabaseClient } from '../supabaseClient';
 
 export interface CanonicalNote {
   version: string;
@@ -97,7 +98,7 @@ export async function normalizeLeadNote(
   adminToken: string
 ): Promise<CanonicalV11 & { firewallReport?: FirewallReport; runHash?: string }> {
   // Get Supabase access token for auth
-  const { getSupabaseClient } = await import('../supabaseClient');
+  // Import statically (consistent with rest of codebase)
   const supabase = getSupabaseClient();
   
   if (!supabase) {

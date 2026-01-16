@@ -1,19 +1,21 @@
 import { Link } from '../components/Link';
 import { MessageCircle, FileText, Calendar, Plane, Heart, CheckCircle, Lock, Shield, Globe, Video, Building, Headphones, Package } from 'lucide-react';
-import React, { useEffect, useContext } from 'react';
+import React, { useEffect, useContext, lazy, Suspense } from 'react';
 import Footer from '../components/Footer';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
-import { NavigationContext } from '../App';
+import { NavigationContext } from '../lib/navigationContext';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 import { ClinicalStandards } from '../components/trust/ClinicalStandards';
 import { TrustPack } from '../components/trust/TrustPack';
 import { AftercareBlock } from '../components/trust/AftercareBlock';
-import { EvidenceGallery } from '../components/trust/EvidenceGallery';
 import { ClinicalStandardsMini } from '../components/trust/ClinicalStandardsMini';
+
+// Lazy load EvidenceGallery (heavy gallery component)
+const EvidenceGallery = lazy(() => import('../components/trust/EvidenceGallery'));
 
 export default function Process() {
   const { lang, content, copy } = useLanguage();
@@ -138,8 +140,10 @@ export default function Process() {
       {/* Clinical Standards */}
       <ClinicalStandards />
 
-      {/* Evidence Gallery */}
-      <EvidenceGallery pageKey="process" compact />
+      {/* Evidence Gallery - Lazy loaded */}
+      <Suspense fallback={null}>
+        <EvidenceGallery pageKey="process" compact />
+      </Suspense>
 
       {/* Key Expectations */}
       <section className="py-16 bg-gray-50">

@@ -8,7 +8,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
-import { NavigationContext } from '../App';
+import { NavigationContext } from '../lib/navigationContext';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 import { InclusionsList } from '../components/trust/InclusionsList';
 import { TrustPack } from '../components/trust/TrustPack';

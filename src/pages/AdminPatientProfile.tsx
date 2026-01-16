@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { briefLead, type BriefResponse } from '@/lib/ai/briefLead';
-import { NavigationContext } from '@/App';
+import { NavigationContext } from '@/lib/navigationContext';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
 import CalEmbed from '../components/CalEmbed';

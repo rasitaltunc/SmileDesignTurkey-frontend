@@ -1,18 +1,35 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Language, getContent, availableLanguages } from '../content/siteContent';
-import { getCopy, type CopyContent } from '../content/copy';
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import type { Language } from '../content/siteContent';
+import { getInternalContent, type InternalContent } from '../content/internal';
+
+// Available languages (moved here to avoid static import of entire siteContent)
+export const availableLanguages: Language[] = ['en', 'tr'];
+
+// Types for public content (lazy loaded)
+type PublicContent = any;
+type CopyContent = any;
 
 interface LanguageContextType {
   lang: Language;
   setLang: (lang: Language) => void;
-  content: ReturnType<typeof getContent>;
-  copy: CopyContent;
+  content: PublicContent | InternalContent | null;
+  copy: CopyContent | null;
   availableLanguages: Language[];
+  isInternalRoute: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'guidehealth_lang';
+
+/**
+ * Check if current route is internal (admin/doctor/employee)
+ */
+const isInternalRoute = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname || '/';
+  return path.startsWith('/admin') || path.startsWith('/doctor') || path.startsWith('/employee');
+};
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   // Get initial language from URL or localStorage
@@ -27,7 +44,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     // Check localStorage
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && availableLanguages.includes(stored as Language)) {
-      return stored as Language;
+      return stored;
     }
     
     // Default
@@ -35,6 +52,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   };
 
   const [lang, setLangState] = useState<Language>(getInitialLang());
+  const [publicContent, setPublicContent] = useState<PublicContent | null>(null);
+  const [publicCopy, setPublicCopy] = useState<CopyContent | null>(null);
+  const internal = isInternalRoute();
 
   const setLang = (newLang: Language) => {
     setLangState(newLang);
@@ -61,11 +81,38 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [lang]);
 
-  const content = getContent(lang);
-  const copy = getCopy(lang);
+  // Lazy load public content only for public routes
+  useEffect(() => {
+    if (!internal && !publicContent) {
+      // Dynamic import public content (heavy marketing content)
+      Promise.all([
+        import('../content/siteContent'),
+        import('../content/copy'),
+      ]).then(([siteContentModule, copyModule]) => {
+        const content = siteContentModule.getContent(lang);
+        const copy = copyModule.getCopy(lang);
+        setPublicContent(content);
+        setPublicCopy(copy);
+      }).catch((err) => {
+        console.error('[i18n] Failed to load public content:', err);
+      });
+    }
+  }, [internal, lang, publicContent]);
+
+  // Use memoized content/copy based on route type
+  const content = useMemo(() => {
+    if (internal) {
+      return getInternalContent(lang);
+    }
+    return publicContent;
+  }, [internal, lang, publicContent]);
+
+  const copy = useMemo(() => {
+    return internal ? null : publicCopy;
+  }, [internal, publicCopy]);
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, content, copy, availableLanguages }}>
+    <LanguageContext.Provider value={{ lang, setLang, content, copy, availableLanguages, isInternalRoute: internal }}>
       {children}
     </LanguageContext.Provider>
   );
@@ -78,4 +125,3 @@ export function useLanguage() {
   }
   return context;
 }
-

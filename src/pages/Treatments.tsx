@@ -10,7 +10,7 @@ import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 import { useContext } from 'react';
-import { NavigationContext } from '../App';
+import { NavigationContext } from '../lib/navigationContext';
 
 export default function Treatments() {
   const { lang, content, copy } = useLanguage();

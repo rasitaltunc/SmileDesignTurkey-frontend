@@ -1,6 +1,7 @@
 // Session Recovery - Automatic auth recovery for invalid refresh tokens
 
 import { toast } from 'sonner';
+import { capture } from '../posthog';
 
 interface SessionRecoveryOptions {
   onExpired: () => void;
@@ -55,7 +56,6 @@ async function recoverSession(
     
     // Emit audit event (privacy-safe)
     try {
-      const { capture } = await import('../posthog');
       capture('auth_session_recovered', {
         at: new Date().toISOString(),
         reason,

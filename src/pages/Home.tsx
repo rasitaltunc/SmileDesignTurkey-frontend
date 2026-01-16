@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from '../components/Link';
-import { NavigationContext } from '../App';
+import { NavigationContext } from '../lib/navigationContext';
 import { 
   Button, 
   GuidedPanel, 

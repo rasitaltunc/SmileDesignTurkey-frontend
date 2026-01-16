@@ -3,13 +3,12 @@ import { BrowserRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
-import { initPosthog } from "./lib/posthog";
 import { LanguageProvider } from "./lib/i18n";
 import { Toaster } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// Initialize PostHog once at app startup
-initPosthog();
+// PostHog is now lazy-loaded on first capture() call in public routes
+// (No eager init at app startup - reduces initial bundle size)
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

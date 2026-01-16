@@ -1,9 +1,10 @@
-import { useState, createContext, useEffect, ReactNode } from 'react';
+import { useState, useEffect, ReactNode, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
 import { getHomePath } from './lib/roleHome';
+import { NavigationContext } from './lib/navigationContext';
 import Home from './pages/Home';
 import Treatments from './pages/Treatments';
 import TreatmentDetail from './pages/TreatmentDetail';
@@ -12,21 +13,35 @@ import Process from './pages/Process';
 import Reviews from './pages/Reviews';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
-import UploadCenter from './pages/UploadCenter';
 import Onboarding from './pages/Onboarding';
 import PlanDashboard from './pages/PlanDashboard';
-import AdminLeads from './pages/AdminLeads';
-import AdminPatientProfile from './pages/AdminPatientProfile';
 import Intake from './pages/Intake';
-import PatientPortal from './pages/PatientPortal';
-import DoctorPortal from './pages/DoctorPortal';
-import DoctorSettings from './pages/DoctorSettings';
-import DoctorLeadView from './pages/DoctorLeadView';
 import Login from './pages/auth/Login';
 import DoctorLayout from './layouts/DoctorLayout';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
 import BuildStamp from './components/BuildStamp';
+
+// Lazy load admin/portal pages (code splitting)
+const AdminLeads = lazy(() => import('./pages/AdminLeads'));
+const AdminPatientProfile = lazy(() => import('./pages/AdminPatientProfile'));
+const PatientPortal = lazy(() => import('./pages/PatientPortal'));
+const DoctorPortal = lazy(() => import('./pages/DoctorPortal'));
+const DoctorSettings = lazy(() => import('./pages/DoctorSettings'));
+const DoctorLeadView = lazy(() => import('./pages/DoctorLeadView'));
+const UploadCenter = lazy(() => import('./pages/UploadCenter'));
+
+// Loading fallback component
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading page...</p>
+      </div>
+    </div>
+  );
+}
 
 // NotFound component for route debugging
 function NotFound() {
@@ -139,15 +154,9 @@ function RequireRole({
   return <>{children}</>;
 }
 
-export const NavigationContext = createContext<{
-  navigate: (path: string, params?: any) => void;
-  currentPath: string;
-  params: any;
-}>({
-  navigate: () => {},
-  currentPath: '/',
-  params: {}
-});
+// NavigationContext moved to src/lib/navigationContext.tsx to avoid pulling App.tsx dependencies into admin chunk
+// // NavigationContext moved to src/lib/navigationContext.tsx to avoid pulling App.tsx dependencies into admin chunk
+// Import from '@/lib/navigationContext' instead
 
 export default function App() {
   // ✅ ALL HOOKS FIRST - never after conditional returns
@@ -212,7 +221,14 @@ export default function App() {
           <Route path="/reviews" element={<Reviews />} />
           <Route path="/faq" element={<FAQ />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/upload-center" element={<UploadCenter />} />
+          <Route
+            path="/upload-center"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <UploadCenter />
+              </Suspense>
+            }
+          />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/intake" element={<Intake />} />
           <Route path="/plan-dashboard" element={<PlanDashboard />} />
@@ -226,8 +242,10 @@ export default function App() {
             path="/patient/portal" 
             element={
               <RequireRole roles={['patient']} navigate={syncNavigate}>
-            <PatientPortal />
-          </RequireRole>
+                <Suspense fallback={<PageLoader />}>
+                  <PatientPortal />
+                </Suspense>
+              </RequireRole>
             } 
           />
           
@@ -242,7 +260,9 @@ export default function App() {
               index 
               element={
                 <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
-                  <DoctorPortal />
+                  <Suspense fallback={<PageLoader />}>
+                    <DoctorPortal />
+                  </Suspense>
                 </RequireRole>
               } 
             />
@@ -251,7 +271,9 @@ export default function App() {
               path="settings" 
               element={
                 <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
-                  <DoctorSettings />
+                  <Suspense fallback={<PageLoader />}>
+                    <DoctorSettings />
+                  </Suspense>
                 </RequireRole>
               } 
             />
@@ -261,7 +283,9 @@ export default function App() {
               path="lead/:ref" 
               element={
                 <RequireRole roles={['doctor']} navigate={syncNavigate} isLoading={isLoading}>
-                  <DoctorLeadView />
+                  <Suspense fallback={<PageLoader />}>
+                    <DoctorLeadView />
+                  </Suspense>
                 </RequireRole>
               } 
             />
@@ -276,16 +300,20 @@ export default function App() {
             path="/admin/leads" 
             element={
               <RequireRole roles={['admin']} navigate={syncNavigate} isLoading={isLoading}>
-            <AdminLeads />
-          </RequireRole>
+                <Suspense fallback={<PageLoader />}>
+                  <AdminLeads />
+                </Suspense>
+              </RequireRole>
             } 
           />
           <Route 
             path="/admin/lead/:id" 
             element={
               <RequireRole roles={['admin', 'employee']} navigate={syncNavigate} isLoading={isLoading}>
-              <AdminPatientProfile />
-            </RequireRole>
+                <Suspense fallback={<PageLoader />}>
+                  <AdminPatientProfile />
+                </Suspense>
+              </RequireRole>
             } 
           />
           
@@ -295,8 +323,10 @@ export default function App() {
             path="/employee/leads" 
             element={
               <RequireRole roles={['employee', 'admin']} navigate={syncNavigate} isLoading={isLoading}>
-                <AdminLeads />
-            </RequireRole>
+                <Suspense fallback={<PageLoader />}>
+                  <AdminLeads />
+                </Suspense>
+              </RequireRole>
             } 
           />
           

@@ -2,7 +2,7 @@ import { Heart, Shield, CheckCircle, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../../lib/i18n';
 import { RevealOnScroll } from '../animations/RevealOnScroll';
 import { useContext, useEffect, useRef } from 'react';
-import { NavigationContext } from '../../App';
+import { NavigationContext } from '../../lib/navigationContext';
 import { ProfessionalCTA } from '../animations/ProfessionalCTA';
 import { trackEvent } from '../../lib/analytics';
 

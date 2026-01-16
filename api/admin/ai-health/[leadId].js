@@ -7,7 +7,7 @@ module.exports = async function handler(req, res) {
   try {
     // CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     if (req.method === "OPTIONS") return res.status(200).end();
@@ -17,7 +17,8 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true, source: "api/admin/ai-health/[leadId]", requestId });
     }
 
-    if (req.method !== "GET") {
+    // Support both GET (legacy) and POST (new)
+    if (req.method !== "GET" && req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "Method not allowed", requestId });
     }
 
@@ -59,7 +60,14 @@ module.exports = async function handler(req, res) {
     });
 
     // Check if bulk fetch (multiple leadIds)
-    const leadIdsParam = req.query.leadIds;
+    // Support both GET (query param) and POST (body)
+    let leadIdsParam = req.query.leadIds;
+    if (req.method === "POST" && req.body && req.body.leadIds) {
+      leadIdsParam = Array.isArray(req.body.leadIds) 
+        ? req.body.leadIds.join(",") 
+        : String(req.body.leadIds);
+    }
+    
     if (leadIdsParam) {
       // Bulk fetch: comma-separated leadIds
       const leadIds = String(leadIdsParam)

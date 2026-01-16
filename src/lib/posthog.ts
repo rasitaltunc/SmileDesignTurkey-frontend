@@ -1,8 +1,26 @@
-import posthog from 'posthog-js';
+// Dynamic import for posthog-js (heavy ~165KB) - lazy load when needed
 import { ANALYTICS_CONFIG } from '../config.analytics';
 
 let posthogInitialized = false;
-let posthogInstance: typeof posthog | null = null;
+let posthogInstance: any = null;
+let posthogModule: typeof import('posthog-js') | null = null;
+
+/**
+ * Route guard: only allow analytics on public routes
+ * Blocks admin/doctor/employee routes (hard block)
+ */
+const isAnalyticsAllowedRoute = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname || '/';
+
+  // Hard block: internal apps never load analytics
+  if (path.startsWith('/admin')) return false;
+  if (path.startsWith('/doctor')) return false;
+  if (path.startsWith('/employee')) return false;
+
+  // Allow public pages only
+  return true;
+};
 
 // Check if PostHog should be enabled (prod only, or via ENV override)
 const shouldEnablePosthog = () => {
@@ -15,14 +33,29 @@ const shouldEnablePosthog = () => {
   return import.meta.env.PROD;
 };
 
-export function initPosthog() {
+/**
+ * Initialize PostHog (lazy loads posthog-js when called)
+ * Safe to call multiple times - will only initialize once.
+ * 
+ * HARD BLOCK: Never initializes on admin/doctor/employee routes.
+ */
+export async function initPosthog(): Promise<void> {
   // Only initialize in browser
   if (typeof window === 'undefined') {
     return;
   }
 
+  // ✅ HARD BLOCK: never init outside public routes
+  // This ensures posthog-js is NEVER imported on internal routes
+  if (!isAnalyticsAllowedRoute()) {
+    if (import.meta.env.DEV) {
+      console.log('[PostHog] Blocked initialization - internal route');
+    }
+    return;
+  }
+
   // Don't initialize if already done
-  if (posthogInitialized) {
+  if (posthogInitialized && posthogInstance) {
     return;
   }
 
@@ -52,6 +85,13 @@ export function initPosthog() {
   }
 
   try {
+    // Lazy load posthog-js module
+    if (!posthogModule) {
+      posthogModule = await import('posthog-js');
+    }
+    
+    const posthog = posthogModule.default;
+    
     if (import.meta.env.DEV) {
       console.log('[PostHog] Initializing...', {
         key: ANALYTICS_CONFIG.posthogKey ? `${ANALYTICS_CONFIG.posthogKey.substring(0, 10)}...` : 'MISSING',
@@ -87,10 +127,32 @@ export function initPosthog() {
     console.error('[PostHog] Failed to initialize:', error);
     posthogInstance = null;
     posthogInitialized = false;
+    posthogModule = null;
   }
 }
 
+/**
+ * Capture event (lazy init on first call if needed)
+ * Safe wrapper - never throws, auto-initializes PostHog if needed.
+ * 
+ * HARD NO-OP: Never executes on admin/doctor/employee routes.
+ */
 export function capture(eventName: string, properties?: Record<string, any>) {
+  // ✅ HARD NO-OP on internal routes (prevents any posthog-js import)
+  if (!isAnalyticsAllowedRoute()) {
+    if (import.meta.env.DEV) {
+      console.log('[PostHog] capture() blocked - internal route:', eventName);
+    }
+    return;
+  }
+
+  // Auto-init if public route and not yet initialized
+  if (!posthogInitialized && shouldEnablePosthog() && ANALYTICS_CONFIG.enabled) {
+    initPosthog().catch(() => {
+      // Silent fail - continue without analytics
+    });
+  }
+  
   // Safe wrapper - never throws
   if (!posthogInitialized || !posthogInstance) {
     if (import.meta.env.DEV) {
