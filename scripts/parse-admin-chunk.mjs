@@ -162,49 +162,62 @@ modules.slice(0, 15).forEach((m, i) => {
 // Use REAL asset file gzip size, not visualizer's module total (more accurate)
 const MAX_ADMIN_GZIP_KB = Number(process.env.MAX_ADMIN_GZIP_KB || 35);
 
-// Find admin chunk asset file in dist/assets
-const adminChunkName = adminNode.name; // e.g., "admin-DfJOe3qr"
-const assetsDir = path.join(rootDir, 'dist', 'assets');
-let adminAssetPath = null;
-let realGzipKb = null;
+// Find admin chunk asset file in dist/assets by searching for admin-*.js files
+function tryGetRealAdminAssetGzipKB() {
+  const assetsDir = path.join(rootDir, 'dist', 'assets');
+  if (!fs.existsSync(assetsDir)) return null;
 
-if (fs.existsSync(assetsDir)) {
   try {
     const files = fs.readdirSync(assetsDir);
-    // Find file matching admin chunk name (e.g., admin-DfJOe3qr.js)
-    const adminFile = files.find((f) => f.startsWith(adminChunkName) && f.endsWith('.js'));
-    if (adminFile) {
-      adminAssetPath = path.join(assetsDir, adminFile);
-      const fileContent = fs.readFileSync(adminAssetPath);
-      const gzipped = gzipSync(fileContent);
-      realGzipKb = gzipped.length / 1024;
-      console.log(`\n📦 Real admin asset file: ${adminFile}`);
-      console.log(`   Real gzip size: ${realGzipKb.toFixed(2)} KB`);
-    } else {
-      console.warn(`\n⚠️  Admin asset file not found in dist/assets (chunk: ${adminChunkName})`);
-      console.warn(`   Falling back to visualizer module total: ${totalGzip.toFixed(2)} KB`);
-      realGzipKb = totalGzip; // fallback
+    // Find all admin-*.js files (should be only one, but we'll take the largest if multiple)
+    const adminFiles = files.filter((f) => f.startsWith('admin-') && f.endsWith('.js'));
+    if (adminFiles.length === 0) return null;
+
+    // If multiple, use the largest one (shouldn't happen, but safe fallback)
+    let largestFile = null;
+    let largestSize = 0;
+    for (const file of adminFiles) {
+      const filePath = path.join(assetsDir, file);
+      const stats = fs.statSync(filePath);
+      if (stats.size > largestSize) {
+        largestSize = stats.size;
+        largestFile = filePath;
+      }
     }
+
+    if (!largestFile) return null;
+
+    const fileContent = fs.readFileSync(largestFile);
+    const gzipped = gzipSync(fileContent);
+    return {
+      path: path.basename(largestFile),
+      gzipKb: gzipped.length / 1024,
+    };
   } catch (e) {
-    console.warn(`\n⚠️  Could not read dist/assets: ${e.message}`);
-    console.warn(`   Falling back to visualizer module total: ${totalGzip.toFixed(2)} KB`);
-    realGzipKb = totalGzip; // fallback
+    return null;
   }
-} else {
-  console.warn(`\n⚠️  dist/assets directory not found`);
-  console.warn(`   Falling back to visualizer module total: ${totalGzip.toFixed(2)} KB`);
-  realGzipKb = totalGzip; // fallback
 }
 
-// Apply threshold check to REAL asset gzip size
-if (realGzipKb > MAX_ADMIN_GZIP_KB) {
+const realAsset = tryGetRealAdminAssetGzipKB();
+const gzipToCheck = realAsset ? realAsset.gzipKb : totalGzip;
+
+if (realAsset) {
+  console.log(`\n📦 Admin gzip (checked): ${gzipToCheck.toFixed(2)} KB (real asset: ${realAsset.path})`);
+} else {
+  console.log(`\n📦 Admin gzip (checked): ${gzipToCheck.toFixed(2)} KB (module total fallback)`);
+}
+
+// Apply threshold check to REAL asset gzip size (or fallback)
+if (gzipToCheck > MAX_ADMIN_GZIP_KB) {
   console.error('');
-  console.error(`❌ Regression detected: Admin chunk gzip too large (${realGzipKb.toFixed(2)} KB > ${MAX_ADMIN_GZIP_KB} KB)`);
+  console.error(`❌ Regression detected: Admin chunk gzip too large (${gzipToCheck.toFixed(2)} KB > ${MAX_ADMIN_GZIP_KB} KB)`);
   console.error(`   Threshold: ${MAX_ADMIN_GZIP_KB} KB gzip (override with MAX_ADMIN_GZIP_KB env var)`);
-  console.error(`   Asset file: ${adminAssetPath || 'N/A'}`);
+  if (realAsset) {
+    console.error(`   Asset file: ${realAsset.path}`);
+  }
   process.exit(1); // CI-friendly: fail on size regression
 }
 
-console.log(`\n✅ Size check passed (${realGzipKb.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
+console.log(`\n✅ Size check passed (${gzipToCheck.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
 console.log('\n✅ Analysis complete.\n');
 
