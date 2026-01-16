@@ -69,6 +69,8 @@
             "analyze": "vite build --mode analyze",
             "parse-stats": "node scripts/parse-admin-chunk.mjs",
             "guard:bundle": "npm run analyze && npm run parse-stats",
+            "lint": "npx eslint .",
+            "lint:boundaries": "npx eslint \"src/**/*.{ts,tsx}\"",
             "preview": "vite preview"
       }
 }
