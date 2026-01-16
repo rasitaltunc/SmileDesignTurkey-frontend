@@ -157,5 +157,16 @@ modules.slice(0, 15).forEach((m, i) => {
   console.log(`${String(i + 1).padStart(2, '0')}. ${gzip.toFixed(2)} KB gzip (${raw.toFixed(2)} KB raw) | ${m.id}`);
 });
 
+// --- Regression thresholds (CI guard) ---
+const MAX_ADMIN_GZIP_KB = Number(process.env.MAX_ADMIN_GZIP_KB || 35);
+
+if (totalGzip > MAX_ADMIN_GZIP_KB) {
+  console.error('');
+  console.error(`❌ Regression detected: Admin chunk gzip too large (${totalGzip.toFixed(2)} KB > ${MAX_ADMIN_GZIP_KB} KB)`);
+  console.error(`   Threshold: ${MAX_ADMIN_GZIP_KB} KB gzip (override with MAX_ADMIN_GZIP_KB env var)`);
+  process.exit(1); // CI-friendly: fail on size regression
+}
+
+console.log(`\n✅ Size check passed (${totalGzip.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
 console.log('\n✅ Analysis complete.\n');
 
