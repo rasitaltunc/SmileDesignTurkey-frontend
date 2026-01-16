@@ -68,6 +68,7 @@
             "build": "vite build",
             "analyze": "vite build --mode analyze",
             "parse-stats": "node scripts/parse-admin-chunk.mjs",
+            "guard:bundle": "npm run analyze && npm run parse-stats",
             "preview": "vite preview"
       }
 }
