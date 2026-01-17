@@ -28,4 +28,9 @@ jobs:
         run: npm run guard:bundle
         env:
           MAX_ADMIN_GZIP_KB: 35
+          MAX_DOCTOR_GZIP_KB: 40
+          MAX_INDEX_GZIP_KB: 180
+
+      - name: Lint import boundaries
+        run: npm run lint:boundaries
 

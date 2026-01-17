@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Parse admin chunk modules from stats.html
+ * Parse chunk modules from stats.html and enforce size budgets
  * Usage: node scripts/parse-admin-chunk.mjs
  * 
- * This script finds the admin chunk in rollup-plugin-visualizer's stats.html
- * and lists the top modules by gzip size.
+ * This script finds chunks (admin, doctor, index/main) in rollup-plugin-visualizer's stats.html
+ * and enforces size budgets to prevent bundle regressions.
  */
 
 import fs from 'node:fs';
@@ -161,22 +161,24 @@ modules.slice(0, 15).forEach((m, i) => {
 // --- Regression thresholds (CI guard) ---
 // Use REAL asset file gzip size, not visualizer's module total (more accurate)
 const MAX_ADMIN_GZIP_KB = Number(process.env.MAX_ADMIN_GZIP_KB || 35);
+const MAX_DOCTOR_GZIP_KB = Number(process.env.MAX_DOCTOR_GZIP_KB || 40);
+const MAX_INDEX_GZIP_KB = Number(process.env.MAX_INDEX_GZIP_KB || 180);
 
-// Find admin chunk asset file in dist/assets by searching for admin-*.js files
-function tryGetRealAdminAssetGzipKB() {
+// Generic function to get real asset gzip size for any chunk prefix
+function tryGetRealAssetGzipKB(chunkPrefix) {
   const assetsDir = path.join(rootDir, 'dist', 'assets');
   if (!fs.existsSync(assetsDir)) return null;
 
   try {
     const files = fs.readdirSync(assetsDir);
-    // Find all admin-*.js files (should be only one, but we'll take the largest if multiple)
-    const adminFiles = files.filter((f) => f.startsWith('admin-') && f.endsWith('.js'));
-    if (adminFiles.length === 0) return null;
+    // Find all files matching prefix (e.g., admin-*.js, doctor-*.js, index-*.js)
+    const chunkFiles = files.filter((f) => f.startsWith(chunkPrefix) && f.endsWith('.js'));
+    if (chunkFiles.length === 0) return null;
 
     // If multiple, use the largest one (shouldn't happen, but safe fallback)
     let largestFile = null;
     let largestSize = 0;
-    for (const file of adminFiles) {
+    for (const file of chunkFiles) {
       const filePath = path.join(assetsDir, file);
       const stats = fs.statSync(filePath);
       if (stats.size > largestSize) {
@@ -198,26 +200,102 @@ function tryGetRealAdminAssetGzipKB() {
   }
 }
 
-const realAsset = tryGetRealAdminAssetGzipKB();
-const gzipToCheck = realAsset ? realAsset.gzipKb : totalGzip;
+// Check admin chunk
+const adminAsset = tryGetRealAssetGzipKB('admin-');
+const adminGzipToCheck = adminAsset ? adminAsset.gzipKb : totalGzip;
 
-if (realAsset) {
-  console.log(`\n📦 Admin gzip (checked): ${gzipToCheck.toFixed(2)} KB (real asset: ${realAsset.path})`);
+if (adminAsset) {
+  console.log(`\n📦 Admin gzip (checked): ${adminGzipToCheck.toFixed(2)} KB (real asset: ${adminAsset.path})`);
 } else {
-  console.log(`\n📦 Admin gzip (checked): ${gzipToCheck.toFixed(2)} KB (module total fallback)`);
+  console.log(`\n📦 Admin gzip (checked): ${adminGzipToCheck.toFixed(2)} KB (module total fallback)`);
 }
 
-// Apply threshold check to REAL asset gzip size (or fallback)
-if (gzipToCheck > MAX_ADMIN_GZIP_KB) {
+if (adminGzipToCheck > MAX_ADMIN_GZIP_KB) {
   console.error('');
-  console.error(`❌ Regression detected: Admin chunk gzip too large (${gzipToCheck.toFixed(2)} KB > ${MAX_ADMIN_GZIP_KB} KB)`);
+  console.error(`❌ Regression detected: Admin chunk gzip too large (${adminGzipToCheck.toFixed(2)} KB > ${MAX_ADMIN_GZIP_KB} KB)`);
   console.error(`   Threshold: ${MAX_ADMIN_GZIP_KB} KB gzip (override with MAX_ADMIN_GZIP_KB env var)`);
-  if (realAsset) {
-    console.error(`   Asset file: ${realAsset.path}`);
+  if (adminAsset) {
+    console.error(`   Asset file: ${adminAsset.path}`);
   }
-  process.exit(1); // CI-friendly: fail on size regression
+  process.exit(1);
 }
 
-console.log(`\n✅ Size check passed (${gzipToCheck.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
-console.log('\n✅ Analysis complete.\n');
+console.log(`\n✅ Admin size check passed (${adminGzipToCheck.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
+
+// Check doctor chunk (if exists)
+const doctorNode = findNodeByName(tree, 'doctor-');
+if (doctorNode) {
+  console.log(`\n✅ Doctor chunk found: ${doctorNode.name}`);
+  
+  // Map doctor chunk tree for uid -> name mapping
+  mapTree(doctorNode);
+  
+  // Collect doctor modules (similar to admin)
+  const doctorModuleUids = new Set();
+  function collectDoctorModuleUids(node) {
+    if (node.uid) doctorModuleUids.add(node.uid);
+    if (node.children) {
+      node.children.forEach(collectDoctorModuleUids);
+    }
+  }
+  collectDoctorModuleUids(doctorNode);
+  
+  const doctorModules = [];
+  for (const uid of doctorModuleUids) {
+    const part = nodeParts[uid];
+    if (part && (part.gzipLength || part.renderedLength)) {
+      const name = uidToName.get(uid) || part.id || uid;
+      doctorModules.push({
+        id: name,
+        gzipLength: part.gzipLength || 0,
+        renderedLength: part.renderedLength || 0,
+      });
+    }
+  }
+  
+  const doctorTotalGzip = doctorModules.reduce((sum, m) => sum + m.gzipLength, 0) / 1024;
+  
+  const doctorAsset = tryGetRealAssetGzipKB('doctor-');
+  const doctorGzipToCheck = doctorAsset ? doctorAsset.gzipKb : doctorTotalGzip;
+  
+  if (doctorAsset) {
+    console.log(`📦 Doctor gzip (checked): ${doctorGzipToCheck.toFixed(2)} KB (real asset: ${doctorAsset.path})`);
+  } else {
+    console.log(`📦 Doctor gzip (checked): ${doctorGzipToCheck.toFixed(2)} KB (module total fallback)`);
+  }
+  
+  if (doctorGzipToCheck > MAX_DOCTOR_GZIP_KB) {
+    console.error('');
+    console.error(`❌ Regression detected: Doctor chunk gzip too large (${doctorGzipToCheck.toFixed(2)} KB > ${MAX_DOCTOR_GZIP_KB} KB)`);
+    console.error(`   Threshold: ${MAX_DOCTOR_GZIP_KB} KB gzip (override with MAX_DOCTOR_GZIP_KB env var)`);
+    if (doctorAsset) {
+      console.error(`   Asset file: ${doctorAsset.path}`);
+    }
+    process.exit(1);
+  }
+  
+  console.log(`✅ Doctor size check passed (${doctorGzipToCheck.toFixed(2)} KB ≤ ${MAX_DOCTOR_GZIP_KB} KB threshold)`);
+} else {
+  console.log(`\n⚠️  Doctor chunk not found (skipping doctor check)`);
+}
+
+// Check index/main entry chunk (public initial bundle)
+const indexAsset = tryGetRealAssetGzipKB('index-');
+if (indexAsset) {
+  console.log(`\n📦 Index/main entry gzip: ${indexAsset.gzipKb.toFixed(2)} KB (real asset: ${indexAsset.path})`);
+  
+  if (indexAsset.gzipKb > MAX_INDEX_GZIP_KB) {
+    console.error('');
+    console.error(`❌ Regression detected: Index/main entry gzip too large (${indexAsset.gzipKb.toFixed(2)} KB > ${MAX_INDEX_GZIP_KB} KB)`);
+    console.error(`   Threshold: ${MAX_INDEX_GZIP_KB} KB gzip (override with MAX_INDEX_GZIP_KB env var)`);
+    console.error(`   Asset file: ${indexAsset.path}`);
+    process.exit(1);
+  }
+  
+  console.log(`✅ Index/main size check passed (${indexAsset.gzipKb.toFixed(2)} KB ≤ ${MAX_INDEX_GZIP_KB} KB threshold)`);
+} else {
+  console.log(`\n⚠️  Index/main entry chunk not found (skipping index check)`);
+}
+
+console.log('\n✅ All chunk size checks passed.\n');
 
