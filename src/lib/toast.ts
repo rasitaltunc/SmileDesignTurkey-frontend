@@ -1,54 +1,76 @@
 // src/lib/toast.ts
 // Safe Sonner wrapper: if Sonner crashes in some browsers/builds, app still works.
+// Safari: Never import Sonner (prevents TDZ crash - "Cannot access uninitialized variable")
 
-type SonnerModule = typeof import('sonner');
+type AnyFn = (...args: any[]) => any;
 
-let sonnerMod: SonnerModule | null = null;
-let sonnerPromise: Promise<SonnerModule> | null = null;
+function isSafariUA(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Safari/i.test(ua) && !/Chrome|Chromium|Edg|OPR|Android/i.test(ua);
+}
 
-async function loadSonner(): Promise<SonnerModule> {
-  if (sonnerMod) return sonnerMod;
-  if (!sonnerPromise) {
-    sonnerPromise = import('sonner')
-      .then((m) => (sonnerMod = m))
-      .catch((err) => {
-        sonnerPromise = null;
-        console.error('[toast] Failed to load sonner:', err);
-        throw err;
-      });
-  }
+function toastsDisabled(): boolean {
+  const envDisabled = (import.meta as any)?.env?.VITE_DISABLE_SONNER === "true";
+  return envDisabled || (typeof window !== "undefined" && isSafariUA());
+}
+
+let sonnerPromise: Promise<any> | null = null;
+async function getSonner(): Promise<any | null> {
+  if (toastsDisabled()) return null;
+  if (!sonnerPromise) sonnerPromise = import("sonner").catch(() => null);
   return sonnerPromise;
 }
 
-// Minimal safe API (extend if you use more)
-export const toast = {
-  message: (msg: any, opts?: any) =>
-    loadSonner().then((m) => m.toast.message(msg, opts)).catch(() => 0),
+function logFallback(kind: string, msg: any) {
+  try {
+    // keep it quiet but visible for debugging
+    console.log(`[toast:${kind}]`, msg);
+  } catch {}
+}
 
-  success: (msg: any, opts?: any) =>
-    loadSonner().then((m) => m.toast.success(msg, opts)).catch(() => 0),
-
-  info: (msg: any, opts?: any) =>
-    loadSonner().then((m) => m.toast.info(msg, opts)).catch(() => 0),
-
-  warning: (msg: any, opts?: any) =>
-    loadSonner().then((m) => m.toast.warning(msg, opts)).catch(() => 0),
-
-  error: (msg: any, opts?: any) =>
-    loadSonner().then((m) => m.toast.error(msg, opts)).catch(() => 0),
-
-  loading: (msg: any, opts?: any) =>
-    loadSonner().then((m) => m.toast.loading(msg, opts)).catch(() => 0),
-
-  dismiss: (id?: any) =>
-    loadSonner().then((m) => m.toast.dismiss(id)).catch(() => id),
-
-  // If you use toast.promise somewhere, keep it safe too:
-  promise: (promise: any, data: any) =>
-    loadSonner()
-      .then((m) => m.toast.promise(promise, data))
-      .catch(() => ({
-        unwrap: async () => (promise instanceof Function ? await promise() : await promise),
-      })),
+export const toast: {
+  success: AnyFn;
+  error: AnyFn;
+  info: AnyFn;
+  message: AnyFn;
+  warning: AnyFn;
+  loading: AnyFn;
+  dismiss: AnyFn;
+  promise: <T>(p: Promise<T>, msgs: any, opts?: any) => Promise<T>;
+} = {
+  success: (msg: any, opts?: any) => {
+    if (toastsDisabled()) return logFallback("success", msg);
+    void getSonner().then((m) => m?.toast?.success?.(msg, opts)).catch(() => {});
+  },
+  error: (msg: any, opts?: any) => {
+    if (toastsDisabled()) return logFallback("error", msg);
+    void getSonner().then((m) => m?.toast?.error?.(msg, opts)).catch(() => {});
+  },
+  info: (msg: any, opts?: any) => {
+    if (toastsDisabled()) return logFallback("info", msg);
+    void getSonner().then((m) => m?.toast?.info?.(msg, opts)).catch(() => {});
+  },
+  message: (msg: any, opts?: any) => {
+    if (toastsDisabled()) return logFallback("message", msg);
+    void getSonner().then((m) => m?.toast?.message?.(msg, opts)).catch(() => {});
+  },
+  warning: (msg: any, opts?: any) => {
+    if (toastsDisabled()) return logFallback("warning", msg);
+    void getSonner().then((m) => m?.toast?.warning?.(msg, opts)).catch(() => {});
+  },
+  loading: (msg: any, opts?: any) => {
+    if (toastsDisabled()) return logFallback("loading", msg);
+    void getSonner().then((m) => m?.toast?.loading?.(msg, opts)).catch(() => {});
+  },
+  dismiss: (id?: any) => {
+    if (toastsDisabled()) return;
+    void getSonner().then((m) => m?.toast?.dismiss?.(id)).catch(() => {});
+  },
+  promise: async <T,>(p: Promise<T>, msgs: any, opts?: any): Promise<T> => {
+    if (toastsDisabled()) return p;
+    const m = await getSonner();
+    if (!m?.toast?.promise) return p;
+    return m.toast.promise(p, msgs, opts);
+  },
 };
-

@@ -1,30 +1,42 @@
 // src/components/ToasterMount.tsx
 // Safe Toaster mount: if Sonner fails to load, app continues without toasts
+// Safari: Never import Sonner (prevents TDZ crash)
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from "react";
+
+function isSafariUA(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Safari/i.test(ua) && !/Chrome|Chromium|Edg|OPR|Android/i.test(ua);
+}
 
 export default function ToasterMount() {
-  const [Toaster, setToaster] = React.useState<React.ComponentType<any> | null>(null);
+  const [Comp, setComp] = useState<React.ComponentType<any> | null>(null);
 
-  React.useEffect(() => {
-    let alive = true;
+  const disabled = useMemo(() => {
+    const envDisabled = (import.meta as any)?.env?.VITE_DISABLE_SONNER === "true";
+    return envDisabled || isSafariUA();
+  }, []);
 
-    import('sonner')
-      .then((m) => {
-        if (!alive) return;
-        setToaster(() => m.Toaster);
+  useEffect(() => {
+    if (disabled) return;
+    let cancelled = false;
+
+    import("sonner")
+      .then((mod) => {
+        if (cancelled) return;
+        if (typeof mod?.Toaster === "function") setComp(() => mod.Toaster);
       })
       .catch((err) => {
-        console.error('[ToasterMount] Sonner failed to load:', err);
-        // swallow: no toaster, but app stays alive
+        console.warn("[ToasterMount] Sonner failed to load; disabling toasts.", err);
       });
 
     return () => {
-      alive = false;
+      cancelled = true;
     };
-  }, []);
+  }, [disabled]);
 
-  if (!Toaster) return null;
-  return <Toaster richColors position="top-right" closeButton />;
+  if (disabled || !Comp) return null;
+  const Toaster = Comp;
+  return <Toaster richColors position="top-right" />;
 }
-
