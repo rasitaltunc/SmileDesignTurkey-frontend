@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from '../components/Link';
-import { Upload, ChevronRight, ArrowLeft, CheckCircle, Lock, Shield, X, FileText, Image } from 'lucide-react';
+import { Upload, ChevronRight, ArrowLeft, CheckCircle, Lock, Shield, X, FileText, Image, Loader2 } from 'lucide-react';
 import { 
   TopNav, 
   Stepper, 
@@ -16,6 +16,7 @@ import Footer from '../components/Footer';
 import { trackEvent } from '../lib/analytics';
 import { BRAND } from '../config';
 import { saveLead, addStagedFiles, getStagedFiles, removeStagedFile, clearStagedFiles, uploadStagedFiles } from '../lib/leadStore';
+import { getWhatsAppUrl } from '../lib/whatsapp';
 import { createPortalSession } from '../lib/portalSession';
 import { validateSubmission, getHoneypotFieldName } from '../lib/antiSpam';
 import { SEO } from '../lib/seo';
@@ -29,6 +30,8 @@ export default function Onboarding() {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stagedFilesList, setStagedFilesList] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // SEO handled by <SEO> component below
   const seo = copy?.seo?.onboarding ?? DEFAULT_COPY.seo.onboarding;
@@ -107,11 +110,14 @@ export default function Onboarding() {
 
   const handleSubmit = async () => {
     setErrorMessage(null);
+    setSubmitError(null);
+    setIsSubmitting(true);
     
     // Anti-spam validation
     const validation = validateSubmission(formData, formOpenTime);
     if (!validation.allowed) {
       setErrorMessage(validation.message || 'Please try again in a moment.');
+      setIsSubmitting(false);
       return;
     }
     
@@ -137,17 +143,35 @@ export default function Onboarding() {
     }
 
     // Save lead using new leads system (async) - returns case_id + portal_token
-    const { case_id, portal_token } = await saveLead({
-      source: 'onboarding',
-      name: formData.name || undefined,
-      email: formData.email || undefined,
-      phone: formData.whatsapp || undefined,
-      treatment: formData.treatment || undefined,
-      message: formData.goals || undefined,
-      timeline: formData.timeline || undefined,
-      lang: lang,
-      pageUrl: window.location.href,
-    });
+    let case_id: string | undefined;
+    let portal_token: string | undefined;
+    
+    try {
+      const result = await saveLead({
+        source: 'onboarding',
+        name: formData.name || undefined,
+        email: formData.email || undefined,
+        phone: formData.whatsapp || undefined,
+        treatment: formData.treatment || undefined,
+        message: formData.goals || undefined,
+        timeline: formData.timeline || undefined,
+        lang: lang,
+        pageUrl: window.location.href,
+      });
+      
+      case_id = result.case_id;
+      portal_token = result.portal_token;
+      
+      if (!case_id || !portal_token) {
+        throw new Error('Failed to create lead. Please try again or contact us via WhatsApp.');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to submit. Please try again or contact us via WhatsApp.';
+      setSubmitError(errorMsg);
+      setIsSubmitting(false);
+      trackEvent({ type: 'onboarding_submit_error', lang, error: errorMsg });
+      return;
+    }
 
     // Create portal session with portal_token (secure, never in URL)
     if (case_id && portal_token) {
@@ -194,6 +218,9 @@ export default function Onboarding() {
       has_case_id: !!case_id,
       lang,
     });
+    
+    // Clear submitting state and redirect
+    setIsSubmitting(false);
     
     // Redirect to portal (new flow) or fallback to plan-dashboard
     setTimeout(() => {
@@ -614,6 +641,7 @@ export default function Onboarding() {
               variant="secondary"
               size="lg"
               onClick={handleBack}
+              disabled={isSubmitting}
               className="w-full sm:w-auto"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -628,24 +656,75 @@ export default function Onboarding() {
               variant="primary"
               size="lg"
               onClick={handleNext}
-              disabled={!canProceed()}
+              disabled={!canProceed() || isSubmitting}
               className="w-full sm:w-auto min-w-[200px]"
             >
               Continue
               <ChevronRight className="w-5 h-5" />
             </Button>
           ) : (
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={handleSubmit}
-              className="w-full sm:w-auto min-w-[200px]"
-            >
-              <CheckCircle className="w-5 h-5" />
-              See My Plan
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto min-w-[200px]"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating your plan…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    See My Plan
+                  </>
+                )}
+              </Button>
+              {isSubmitting && (
+                <p className="text-sm text-text-tertiary mt-2 text-center w-full">
+                  This usually takes 5–10 seconds. Please wait…
+                </p>
+              )}
+              {submitError && (
+                <div className="w-full mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800 mb-2">{submitError}</p>
+                  <button
+                    onClick={() => {
+                      const url = getWhatsAppUrl({
+                        phoneE164: BRAND.whatsappPhoneE164,
+                        text: "Hi, I'm having trouble submitting my onboarding form. Can you help?",
+                      });
+                      if (url) {
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
+                    className="text-sm text-red-700 underline hover:text-red-900"
+                  >
+                    Contact us via WhatsApp instead
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
+        
+        {/* Loading Overlay */}
+        {isSubmitting && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-xl p-8 max-w-md mx-4 text-center">
+              <Loader2 className="w-12 h-12 animate-spin text-accent-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-text-primary mb-2">
+                We're generating your secure portal…
+              </h3>
+              <p className="text-sm text-text-secondary">
+                This usually takes 5–10 seconds. Please don't close this page.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Trust Line */}
         <div className="flex flex-wrap justify-center gap-4 mt-12">

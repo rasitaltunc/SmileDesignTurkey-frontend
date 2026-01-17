@@ -59,6 +59,7 @@ export default function PendingReviewPortal() {
   const [verificationEmail, setVerificationEmail] = useState('');
   const [isSendingVerification, setIsSendingVerification] = useState(false);
   const [showVerificationSuccess, setShowVerificationSuccess] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   // Fetch portal data on mount
   useEffect(() => {
@@ -75,6 +76,10 @@ export default function PendingReviewPortal() {
         setPortalData(result.data);
         setIsVerified(!!result.data.email_verified_at);
         setSession(session);
+        // Auto-fill email from lead data if available
+        if (result.data.email) {
+          setVerificationEmail(result.data.email);
+        }
         trackEvent({ type: 'portal_viewed', case_id: result.data.case_id, is_verified: !!result.data.email_verified_at });
       } else {
         setError(result.error || 'Failed to load portal data');
@@ -84,6 +89,16 @@ export default function PendingReviewPortal() {
 
     loadPortalData();
   }, []);
+  
+  // Cooldown timer for resend
+  useEffect(() => {
+    if (cooldownSeconds > 0) {
+      const timer = setTimeout(() => {
+        setCooldownSeconds(cooldownSeconds - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldownSeconds]);
 
   // Handle verification callback from URL (PKCE flow)
   useEffect(() => {
@@ -112,7 +127,7 @@ export default function PendingReviewPortal() {
 
 
   const handleVerifyEmail = async () => {
-    if (!verificationEmail) return;
+    if (!verificationEmail || cooldownSeconds > 0) return;
 
     setIsSendingVerification(true);
     const result = await startEmailVerification(verificationEmail);
@@ -120,6 +135,7 @@ export default function PendingReviewPortal() {
 
     if (result.success) {
       setShowVerificationSuccess(true);
+      setCooldownSeconds(30); // 30 second cooldown
       trackEvent({ type: 'verification_started', case_id: session?.case_id || '', method: 'email' });
     } else {
       setError(result.error || 'Failed to send verification email');
@@ -195,17 +211,30 @@ export default function PendingReviewPortal() {
                     />
                     <button
                       onClick={handleVerifyEmail}
-                      disabled={isSendingVerification || !verificationEmail}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isSendingVerification || !verificationEmail || cooldownSeconds > 0}
+                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                     >
-                      {isSendingVerification ? 'Sending...' : 'Send Link'}
+                      {isSendingVerification ? 'Sending...' : cooldownSeconds > 0 ? `Resend in ${cooldownSeconds}s` : 'Send Link'}
                     </button>
                   </div>
                 ) : (
                   <div className="bg-white rounded-lg p-4 border border-blue-200">
-                    <p className="text-sm text-blue-900 font-medium">
-                      ✓ Verification link sent! Check your email and click the link to verify your access.
+                    <p className="text-sm text-blue-900 font-medium mb-2">
+                      ✓ Verification link sent! Check your inbox (and spam folder).
                     </p>
+                    {cooldownSeconds > 0 ? (
+                      <p className="text-xs text-blue-700">
+                        Didn't get it? Resend in {cooldownSeconds}s.
+                      </p>
+                    ) : (
+                      <button
+                        onClick={handleVerifyEmail}
+                        disabled={!verificationEmail || isSendingVerification}
+                        className="text-xs text-blue-700 underline hover:text-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Didn't get it? Resend link
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

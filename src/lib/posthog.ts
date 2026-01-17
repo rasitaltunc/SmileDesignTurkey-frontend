@@ -103,9 +103,12 @@ export async function initPosthog(): Promise<void> {
       api_host: ANALYTICS_CONFIG.posthogHost,
       autocapture: false, // Manual events only
       disable_session_recording: true, // Disable session recording
-      // Prevent loading config.js from eu-assets (causes 401/404/nosniff errors)
-      // By using api_host directly, PostHog won't try to load config.js
-      ui_host: ANALYTICS_CONFIG.posthogHost, // Use same host for UI to prevent config.js fetch
+      // Use same host for UI to prevent config.js fetch from eu-assets (prevents 404/401/nosniff)
+      ui_host: ANALYTICS_CONFIG.posthogHost,
+      // Batch requests to reduce network errors
+      request_batching: true,
+      // Disable internal metrics to reduce requests
+      _capture_metrics: false,
       loaded: (ph) => {
         if (import.meta.env.DEV) {
           console.log('[PostHog] Initialized successfully');
@@ -114,7 +117,25 @@ export async function initPosthog(): Promise<void> {
         if (typeof window !== 'undefined') {
           (window as any).posthog = ph;
         }
+        
+        // Wrap capture to catch and silence errors
+        const originalCapture = ph.capture.bind(ph);
+        ph.capture = (eventName: string, properties?: Record<string, any>) => {
+          try {
+            originalCapture(eventName, properties);
+          } catch (err) {
+            // Silent fail - don't break app if PostHog fails
+            // Only log in dev
+            if (import.meta.env.DEV) {
+              console.warn('[PostHog] capture() failed (silenced in prod):', eventName);
+            }
+          }
+        };
       },
+      // Catch initialization errors (soft-fail)
+      persistence: 'localStorage+cookie',
+      // Disable opt-out UI (we handle privacy separately)
+      opt_out_capturing_by_default: false,
     });
     
     posthogInstance = posthog;
@@ -124,10 +145,14 @@ export async function initPosthog(): Promise<void> {
       console.log('[PostHog] Initialization complete');
     }
   } catch (error) {
-    console.error('[PostHog] Failed to initialize:', error);
+    // Soft-fail: only log in dev, silent in prod
+    if (import.meta.env.DEV) {
+      console.warn('[PostHog] Failed to initialize (silenced in prod):', error);
+    }
     posthogInstance = null;
     posthogInitialized = false;
     posthogModule = null;
+    // Don't throw - app continues without analytics
   }
 }
 
