@@ -1,4 +1,5 @@
 import { Link } from './Link';
+import { PrefetchLink } from './PrefetchLink';
 import { Menu, X, MessageCircle, Globe, User, LogOut } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BRAND } from '../config';
@@ -214,24 +215,24 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
           {/* ✅ Doctor mode: Hide navigation links (minimal navbar) */}
           {variant !== 'admin' && !isDoctorMode && (
             <div className="hidden md:flex items-center gap-8">
-              <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors">
+              <PrefetchLink to="/treatments" prefetch="treatments" className="text-gray-700 hover:text-teal-600 transition-colors">
                 Treatments
-              </Link>
-              <Link to="/pricing" className="text-gray-700 hover:text-teal-600 transition-colors">
+              </PrefetchLink>
+              <PrefetchLink to="/pricing" prefetch="pricing" className="text-gray-700 hover:text-teal-600 transition-colors">
                 Pricing
-              </Link>
-              <Link to="/process" className="text-gray-700 hover:text-teal-600 transition-colors">
+              </PrefetchLink>
+              <PrefetchLink to="/process" prefetch="process" className="text-gray-700 hover:text-teal-600 transition-colors">
                 Process
-              </Link>
-              <Link to="/reviews" className="text-gray-700 hover:text-teal-600 transition-colors">
+              </PrefetchLink>
+              <PrefetchLink to="/reviews" prefetch="reviews" className="text-gray-700 hover:text-teal-600 transition-colors">
                 Reviews
-              </Link>
-              <Link to="/faq" className="text-gray-700 hover:text-teal-600 transition-colors">
+              </PrefetchLink>
+              <PrefetchLink to="/faq" prefetch="faq" className="text-gray-700 hover:text-teal-600 transition-colors">
                 FAQ
-              </Link>
-              <Link to="/contact" className="text-gray-700 hover:text-teal-600 transition-colors">
+              </PrefetchLink>
+              <PrefetchLink to="/contact" prefetch="contact" className="text-gray-700 hover:text-teal-600 transition-colors">
                 Contact
-              </Link>
+              </PrefetchLink>
             </div>
           )}
           
@@ -265,13 +266,14 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                   {content.whatsapp.ctaText}
                 </button>
 
-                <Link
+                <PrefetchLink
                   to="/onboarding"
+                  prefetch="onboarding"
                   className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors whitespace-nowrap shrink-0"
                   onClick={() => trackEvent({ type: 'cta_click', where: 'navbar', cta: 'free_consultation', lang })}
                 >
                   {content.cta.primary}
-                </Link>
+                </PrefetchLink>
               </>
             )}
 
@@ -287,12 +289,13 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
             ) : (
               <div className="flex items-center gap-2">
                 {roleLabel && role ? (
-                  <Link
+                  <PrefetchLink
                     to={getHomePath(role)}
+                    prefetch={role === 'admin' || role === 'employee' ? 'admin' : role === 'doctor' ? 'doctor' : role === 'patient' ? 'patient' : undefined}
                     className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
                   >
                     {roleLabel}
-                  </Link>
+                  </PrefetchLink>
                 ) : roleLabel ? (
                   <span className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-500 whitespace-nowrap shrink-0">
                     {roleLabel}
@@ -327,24 +330,24 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               {/* ✅ Doctor mode: Hide navigation links (minimal navbar) */}
               {variant !== 'admin' && !isDoctorMode && (
                 <>
-                  <Link to="/treatments" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                  <PrefetchLink to="/treatments" prefetch="treatments" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
                     Treatments
-                  </Link>
-                  <Link to="/pricing" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                  </PrefetchLink>
+                  <PrefetchLink to="/pricing" prefetch="pricing" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
                     Pricing
-                  </Link>
-                  <Link to="/process" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                  </PrefetchLink>
+                  <PrefetchLink to="/process" prefetch="process" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
                     Process
-                  </Link>
-                  <Link to="/reviews" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                  </PrefetchLink>
+                  <PrefetchLink to="/reviews" prefetch="reviews" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
                     Reviews
-                  </Link>
-                  <Link to="/faq" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                  </PrefetchLink>
+                  <PrefetchLink to="/faq" prefetch="faq" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
                     FAQ
-                  </Link>
-                  <Link to="/contact" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
+                  </PrefetchLink>
+                  <PrefetchLink to="/contact" prefetch="contact" className="text-gray-700 hover:text-teal-600 transition-colors" onClick={() => setIsOpen(false)}>
                     Contact
-                  </Link>
+                  </PrefetchLink>
 
                   <button
                     onClick={() => {
@@ -358,8 +361,9 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                     {content.whatsapp.ctaText}
                   </button>
 
-                  <Link
+                  <PrefetchLink
                     to="/onboarding"
+                    prefetch="onboarding"
                     className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center"
                     onClick={() => {
                       setIsOpen(false);
@@ -367,7 +371,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                     }}
                   >
                     {content.cta.primary}
-                  </Link>
+                  </PrefetchLink>
                 </>
               )}
               
@@ -403,13 +407,14 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               ) : (
                 <div className="flex items-center gap-2 w-full">
                   {roleLabel && role ? (
-                    <Link
+                    <PrefetchLink
                       to={getHomePath(role)}
+                      prefetch={role === 'admin' || role === 'employee' ? 'admin' : role === 'doctor' ? 'doctor' : role === 'patient' ? 'patient' : undefined}
                       onClick={() => setIsOpen(false)}
                       className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-center"
                     >
                       {roleLabel}
-                    </Link>
+                    </PrefetchLink>
                   ) : roleLabel ? (
                     <span className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500 text-center">
                       {roleLabel}
