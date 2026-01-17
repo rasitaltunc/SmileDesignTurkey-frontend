@@ -87,6 +87,17 @@
 
             if (isAdmin) return 'admin';
 
+            // 1.5) Doctor-only: doctor ekranları + doctor alt yapıları
+            // Public sayfalar doctor chunk'a girmemeli
+            const isDoctor =
+              id.includes('/src/pages/Doctor') ||
+              id.includes('/src/pages/doctor/') ||
+              id.includes('/src/components/doctor/') ||
+              id.includes('/src/hooks/doctor/') ||
+              id.includes('/src/lib/doctor/');
+
+            if (isDoctor) return 'doctor';
+
             // 2) Vendor chunks - daha stabil cache
             if (id.includes('node_modules')) {
               // React + React DOM + Router

@@ -30,6 +30,10 @@ jobs:
           MAX_ADMIN_GZIP_KB: 35
           MAX_DOCTOR_GZIP_KB: 40
           MAX_INDEX_GZIP_KB: 180
+          MAX_REACT_VENDOR_GZIP_KB: 70
+          MAX_ANALYTICS_VENDOR_GZIP_KB: 65
+          MAX_SUPABASE_VENDOR_GZIP_KB: 50
+          MAX_VENDOR_GZIP_KB: 30
 
       - name: Lint import boundaries
         run: npm run lint:boundaries

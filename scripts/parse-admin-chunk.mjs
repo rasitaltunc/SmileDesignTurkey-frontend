@@ -164,6 +164,12 @@ const MAX_ADMIN_GZIP_KB = Number(process.env.MAX_ADMIN_GZIP_KB || 35);
 const MAX_DOCTOR_GZIP_KB = Number(process.env.MAX_DOCTOR_GZIP_KB || 40);
 const MAX_INDEX_GZIP_KB = Number(process.env.MAX_INDEX_GZIP_KB || 180);
 
+// Vendor chunk budgets
+const MAX_REACT_VENDOR_GZIP_KB = Number(process.env.MAX_REACT_VENDOR_GZIP_KB || 70);
+const MAX_ANALYTICS_VENDOR_GZIP_KB = Number(process.env.MAX_ANALYTICS_VENDOR_GZIP_KB || 65);
+const MAX_SUPABASE_VENDOR_GZIP_KB = Number(process.env.MAX_SUPABASE_VENDOR_GZIP_KB || 50);
+const MAX_VENDOR_GZIP_KB = Number(process.env.MAX_VENDOR_GZIP_KB || 30);
+
 // Generic function to get real asset gzip size for any chunk prefix
 function tryGetRealAssetGzipKB(chunkPrefix) {
   const assetsDir = path.join(rootDir, 'dist', 'assets');
@@ -223,7 +229,20 @@ if (adminGzipToCheck > MAX_ADMIN_GZIP_KB) {
 console.log(`\n✅ Admin size check passed (${adminGzipToCheck.toFixed(2)} KB ≤ ${MAX_ADMIN_GZIP_KB} KB threshold)`);
 
 // Check doctor chunk (if exists)
+// Try multiple prefixes: doctor-*.js, DoctorPortal-*.js, DoctorLeadView-*.js
+function tryGetDoctorChunkAsset() {
+  const prefixes = ['doctor-', 'DoctorPortal-', 'DoctorLeadView-'];
+  for (const prefix of prefixes) {
+    const asset = tryGetRealAssetGzipKB(prefix);
+    if (asset) return asset;
+  }
+  return null;
+}
+
 const doctorNode = findNodeByName(tree, 'doctor-');
+let doctorAsset = null;
+let doctorGzipToCheck = null;
+
 if (doctorNode) {
   console.log(`\n✅ Doctor chunk found: ${doctorNode.name}`);
   
@@ -255,8 +274,8 @@ if (doctorNode) {
   
   const doctorTotalGzip = doctorModules.reduce((sum, m) => sum + m.gzipLength, 0) / 1024;
   
-  const doctorAsset = tryGetRealAssetGzipKB('doctor-');
-  const doctorGzipToCheck = doctorAsset ? doctorAsset.gzipKb : doctorTotalGzip;
+  doctorAsset = tryGetDoctorChunkAsset();
+  doctorGzipToCheck = doctorAsset ? doctorAsset.gzipKb : doctorTotalGzip;
   
   if (doctorAsset) {
     console.log(`📦 Doctor gzip (checked): ${doctorGzipToCheck.toFixed(2)} KB (real asset: ${doctorAsset.path})`);
@@ -276,7 +295,26 @@ if (doctorNode) {
   
   console.log(`✅ Doctor size check passed (${doctorGzipToCheck.toFixed(2)} KB ≤ ${MAX_DOCTOR_GZIP_KB} KB threshold)`);
 } else {
-  console.log(`\n⚠️  Doctor chunk not found (skipping doctor check)`);
+  // Try to find doctor chunk by asset file even if not in tree
+  doctorAsset = tryGetDoctorChunkAsset();
+  if (doctorAsset) {
+    console.log(`\n✅ Doctor chunk found via asset file: ${doctorAsset.path}`);
+    doctorGzipToCheck = doctorAsset.gzipKb;
+    
+    console.log(`📦 Doctor gzip (checked): ${doctorGzipToCheck.toFixed(2)} KB (real asset: ${doctorAsset.path})`);
+    
+    if (doctorGzipToCheck > MAX_DOCTOR_GZIP_KB) {
+      console.error('');
+      console.error(`❌ Regression detected: Doctor chunk gzip too large (${doctorGzipToCheck.toFixed(2)} KB > ${MAX_DOCTOR_GZIP_KB} KB)`);
+      console.error(`   Threshold: ${MAX_DOCTOR_GZIP_KB} KB gzip (override with MAX_DOCTOR_GZIP_KB env var)`);
+      console.error(`   Asset file: ${doctorAsset.path}`);
+      process.exit(1);
+    }
+    
+    console.log(`✅ Doctor size check passed (${doctorGzipToCheck.toFixed(2)} KB ≤ ${MAX_DOCTOR_GZIP_KB} KB threshold)`);
+  } else {
+    console.log(`\n⚠️  Doctor chunk not found (skipping doctor check)`);
+  }
 }
 
 // Check index/main entry chunk (public initial bundle)
@@ -295,6 +333,35 @@ if (indexAsset) {
   console.log(`✅ Index/main size check passed (${indexAsset.gzipKb.toFixed(2)} KB ≤ ${MAX_INDEX_GZIP_KB} KB threshold)`);
 } else {
   console.log(`\n⚠️  Index/main entry chunk not found (skipping index check)`);
+}
+
+// Check vendor chunks
+const vendorPrefixes = [
+  { name: 'react-vendor', prefix: 'react-vendor-', max: MAX_REACT_VENDOR_GZIP_KB, envVar: 'MAX_REACT_VENDOR_GZIP_KB' },
+  { name: 'analytics-vendor', prefix: 'analytics-vendor-', max: MAX_ANALYTICS_VENDOR_GZIP_KB, envVar: 'MAX_ANALYTICS_VENDOR_GZIP_KB' },
+  { name: 'supabase-vendor', prefix: 'supabase-vendor-', max: MAX_SUPABASE_VENDOR_GZIP_KB, envVar: 'MAX_SUPABASE_VENDOR_GZIP_KB' },
+  { name: 'vendor', prefix: 'vendor-', max: MAX_VENDOR_GZIP_KB, envVar: 'MAX_VENDOR_GZIP_KB' },
+];
+
+console.log('\n📦 Vendor Chunk Budgets:\n');
+
+for (const vendor of vendorPrefixes) {
+  const vendorAsset = tryGetRealAssetGzipKB(vendor.prefix);
+  if (vendorAsset) {
+    console.log(`📦 ${vendor.name} gzip: ${vendorAsset.gzipKb.toFixed(2)} KB (real asset: ${vendorAsset.path})`);
+    
+    if (vendorAsset.gzipKb > vendor.max) {
+      console.error('');
+      console.error(`❌ Regression detected: ${vendor.name} gzip too large (${vendorAsset.gzipKb.toFixed(2)} KB > ${vendor.max} KB)`);
+      console.error(`   Threshold: ${vendor.max} KB gzip (override with ${vendor.envVar} env var)`);
+      console.error(`   Asset file: ${vendorAsset.path}`);
+      process.exit(1);
+    }
+    
+    console.log(`✅ ${vendor.name} size check passed (${vendorAsset.gzipKb.toFixed(2)} KB ≤ ${vendor.max} KB threshold)`);
+  } else {
+    console.log(`⚠️  ${vendor.name} chunk not found (skipping)`);
+  }
 }
 
 console.log('\n✅ All chunk size checks passed.\n');
