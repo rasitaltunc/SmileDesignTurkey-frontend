@@ -55,8 +55,11 @@
       },
       "devDependencies": {
             "@types/node": "^20.10.0",
+            "@typescript-eslint/eslint-plugin": "^8.53.0",
+            "@typescript-eslint/parser": "^8.53.0",
             "@vercel/node": "^3.2.29",
             "@vitejs/plugin-react-swc": "^3.10.2",
+            "eslint": "^9.39.2",
             "rollup-plugin-visualizer": "^6.0.5",
             "typescript": "^5.4.5",
             "vite": "6.3.5"
@@ -69,8 +72,8 @@
             "analyze": "vite build --mode analyze",
             "parse-stats": "node scripts/parse-admin-chunk.mjs",
             "guard:bundle": "npm run analyze && npm run parse-stats",
-            "lint": "npx eslint .",
-            "lint:boundaries": "npx eslint \"src/**/*.{ts,tsx}\"",
+            "lint": "eslint .",
+            "lint:boundaries": "eslint \"src/**/*.{ts,tsx}\"",
             "preview": "vite preview"
       }
 }
