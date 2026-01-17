@@ -3,6 +3,7 @@
 
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
   {
@@ -30,6 +31,7 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
+      'react-hooks': reactHooks,
     },
     rules: {
       // No general TS rules - we only enforce import boundaries
