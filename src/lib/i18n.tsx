@@ -116,6 +116,18 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
                 ...(copy.process || {}),
                 steps: copy.process?.steps || DEFAULT_COPY.process.steps,
               },
+              whyUs: {
+                ...DEFAULT_COPY.whyUs,
+                ...(copy.whyUs || {}),
+                points: copy.whyUs?.points || DEFAULT_COPY.whyUs.points,
+              },
+              packages: {
+                ...DEFAULT_COPY.packages,
+                ...(copy.packages || {}),
+                items: copy.packages?.items || DEFAULT_COPY.packages.items,
+              },
+              testimonials: copy.testimonials || DEFAULT_COPY.testimonials,
+              faq: copy.faq || DEFAULT_COPY.faq,
             }
           : DEFAULT_COPY;
         setPublicContent(safeContent);

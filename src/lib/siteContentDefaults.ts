@@ -71,5 +71,41 @@ export const DEFAULT_COPY = {
     subtitle: "From initial consultation to lifetime aftercare, we guide you every step",
     steps: [],
   },
+  whyUs: {
+    title: "Why Choose GuideHealth?",
+    subtitle: "We combine world-class dental care with personalized service, transparent pricing, and comprehensive support.",
+    points: [
+      {
+        title: "Up to 70% Cost Savings",
+        description: "Same quality treatments at a fraction of Western prices, without compromising on materials or expertise.",
+        icon: "Award",
+      },
+      {
+        title: "JCI Accredited Clinics",
+        description: "All partner clinics meet international healthcare standards with state-of-the-art equipment and sterile environments.",
+        icon: "Shield",
+      },
+      {
+        title: "Licensed Specialists",
+        description: "Board-certified dentists with 15+ years of experience, many trained internationally and fluent in multiple languages.",
+        icon: "Users",
+      },
+    ],
+  },
+  packages: {
+    title: "Treatment Packages",
+    subtitle: "Comprehensive packages with transparent pricing. Final cost depends on clinical examination.",
+    disclaimer: "All prices are starting ranges. Final quote provided after clinical examination and treatment planning.",
+    items: [
+      {
+        name: "Single Implant Package",
+        priceRange: "€800 - €1,500",
+        includes: ["Implant placement", "Abutment", "Porcelain crown"],
+        popular: false,
+      },
+    ],
+  },
+  testimonials: [],
+  faq: [],
 } as const;
 

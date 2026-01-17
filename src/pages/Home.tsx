@@ -231,14 +231,14 @@ export default function Home() {
         <section className="py-20 bg-white">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16 max-w-3xl mx-auto">
-              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy.whyUs.title}</h2>
+              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy?.whyUs?.title || DEFAULT_COPY.whyUs.title}</h2>
               <p className="text-text-secondary text-lg">
-                {copy.whyUs.subtitle}
+                {copy?.whyUs?.subtitle || DEFAULT_COPY.whyUs.subtitle}
               </p>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {copy.whyUs.points.map((point, idx) => {
+              {(copy?.whyUs?.points || DEFAULT_COPY.whyUs.points).map((point, idx) => {
                 const PointIcon = trustIconMap[point.icon] || iconMap[point.icon] || Shield;
                 return (
                   <div key={idx} className="bg-bg-secondary rounded-lg p-6 border border-gray-100 hover:shadow-md transition-shadow">
@@ -260,14 +260,14 @@ export default function Home() {
         <section className="py-20 bg-white">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-12">
-              <h2 className="text-text-primary mb-4 text-3xl font-semibold">{copy.packages.title}</h2>
+              <h2 className="text-text-primary mb-4 text-3xl font-semibold">{copy?.packages?.title || DEFAULT_COPY.packages.title}</h2>
               <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-                {copy.packages.subtitle}
+                {copy?.packages?.subtitle || DEFAULT_COPY.packages.subtitle}
               </p>
             </div>
             
             <div className="grid md:grid-cols-3 gap-6 mb-8">
-              {copy.packages.items.map((pkg, idx) => (
+              {(copy?.packages?.items || DEFAULT_COPY.packages.items).map((pkg, idx) => (
                 <div
                   key={idx}
                   className={`bg-white rounded-lg p-8 border-2 ${pkg.popular ? 'border-accent-primary shadow-lg' : 'border-gray-200'} hover:shadow-xl transition-all`}
@@ -306,7 +306,7 @@ export default function Home() {
             
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
               <p className="text-sm text-text-secondary text-center">
-                <strong className="text-text-primary">{copy.packages.disclaimer}</strong>
+                <strong className="text-text-primary">{copy?.packages?.disclaimer || DEFAULT_COPY.packages.disclaimer}</strong>
               </p>
             </div>
           </div>
@@ -326,7 +326,7 @@ export default function Home() {
 
             <div className="max-w-5xl mx-auto">
               <div className="grid md:grid-cols-3 gap-6 mb-8">
-                {copy.testimonials.map((testimonial, index) => (
+                {(copy?.testimonials || DEFAULT_COPY.testimonials).map((testimonial, index) => (
                   <div key={index} className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-1 mb-3">
                       {[...Array(testimonial.rating)].map((_, i) => (
@@ -368,7 +368,7 @@ export default function Home() {
             </div>
 
             <div className="space-y-4 mb-12">
-              {copy.faq.slice(0, 6).map((faq, index) => (
+              {(copy?.faq || DEFAULT_COPY.faq).slice(0, 6).map((faq, index) => (
                 <div
                   key={index}
                   className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
