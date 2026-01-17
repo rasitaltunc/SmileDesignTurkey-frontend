@@ -34,6 +34,14 @@ const canPrefetch = (): boolean => {
 };
 
 /**
+ * Checks if document is visible (for idle prefetch)
+ */
+const isVisible = (): boolean => {
+  if (typeof document === 'undefined') return true;
+  return document.visibilityState === 'visible';
+};
+
+/**
  * Runs a function during idle time (requestIdleCallback with fallback)
  */
 const runIdle = (fn: () => void): number => {
@@ -67,6 +75,13 @@ const importers: Record<RouteKey, () => Promise<any>> = {
 const prefetched = new Set<RouteKey>();
 
 /**
+ * Check if a route has been prefetched
+ */
+export function hasPrefetched(key: RouteKey): boolean {
+  return prefetched.has(key);
+}
+
+/**
  * Prefetch a route chunk
  * @param key - Route key to prefetch
  * @param mode - 'hover' = immediate, 'idle' = wait for idle time
@@ -74,6 +89,9 @@ const prefetched = new Set<RouteKey>();
 export function prefetchRoute(key: RouteKey, mode: 'hover' | 'idle' = 'hover'): void {
   if (!canPrefetch()) return;
   if (prefetched.has(key)) return;
+
+  // Idle mode: skip if document is hidden
+  if (mode === 'idle' && !isVisible()) return;
 
   const run = (): void => {
     // Double-check (race condition guard)
@@ -94,12 +112,32 @@ export function prefetchRoute(key: RouteKey, mode: 'hover' | 'idle' = 'hover'): 
 }
 
 /**
- * Prefetch multiple routes
+ * Prefetch multiple routes with quota limit (for idle mode)
  * @param keys - Array of route keys
  * @param mode - 'hover' = immediate, 'idle' = wait for idle time
+ * @param quota - Maximum number of routes to prefetch in one batch (default: unlimited for hover, 2 for idle)
  */
-export function prefetchMany(keys: RouteKey[], mode: 'hover' | 'idle' = 'idle'): void {
-  keys.forEach((k) => prefetchRoute(k, mode));
+export function prefetchMany(keys: RouteKey[], mode: 'hover' | 'idle' = 'idle', quota?: number): void {
+  if (mode === 'idle' && !isVisible()) return;
+
+  // Filter out already prefetched routes
+  const toPrefetch = keys.filter((k) => !prefetched.has(k));
+  
+  if (toPrefetch.length === 0) return;
+
+  // Apply quota for idle mode (default: 2)
+  const maxRoutes = quota ?? (mode === 'idle' ? 2 : Infinity);
+  const limited = toPrefetch.slice(0, maxRoutes);
+
+  limited.forEach((k) => prefetchRoute(k, mode));
+
+  // Schedule remaining routes for next idle cycle (if any)
+  if (mode === 'idle' && toPrefetch.length > maxRoutes) {
+    const remaining = toPrefetch.slice(maxRoutes);
+    runIdle(() => {
+      prefetchMany(remaining, 'idle', maxRoutes);
+    });
+  }
 }
 
 
