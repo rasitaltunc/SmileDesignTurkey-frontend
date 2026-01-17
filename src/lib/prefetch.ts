@@ -5,7 +5,6 @@ export type RouteKey =
   | 'admin'
   | 'doctor'
   | 'patient'
-  | 'home'
   | 'pricing'
   | 'process'
   | 'treatments'
@@ -55,8 +54,7 @@ const importers: Record<RouteKey, () => Promise<any>> = {
   doctor: () => import('@/pages/DoctorPortal'),
   patient: () => import('@/pages/PatientPortal'),
   
-  // Static routes (prefetch still helps with browser caching)
-  home: () => import('@/pages/Home'),
+  // Marketing routes (lazy-loaded, enables real prefetch)
   pricing: () => import('@/pages/Pricing'),
   process: () => import('@/pages/Process'),
   treatments: () => import('@/pages/Treatments'),
@@ -103,4 +101,5 @@ export function prefetchRoute(key: RouteKey, mode: 'hover' | 'idle' = 'hover'): 
 export function prefetchMany(keys: RouteKey[], mode: 'hover' | 'idle' = 'idle'): void {
   keys.forEach((k) => prefetchRoute(k, mode));
 }
+
 

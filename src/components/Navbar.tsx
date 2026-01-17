@@ -134,9 +134,9 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
       <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <PrefetchLink to="/" prefetch="home" className="text-teal-600">
+            <Link to="/" className="text-teal-600">
               GuideHealth
-            </PrefetchLink>
+            </Link>
 
             <div className="flex items-center gap-3">
               <button

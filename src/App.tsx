@@ -7,11 +7,7 @@ import { getHomePath } from './lib/roleHome';
 import { NavigationContext } from './lib/navigationContext';
 import { useRoleBasedPrefetch } from './hooks/useRoleBasedPrefetch';
 import Home from './pages/Home';
-import Treatments from './pages/Treatments';
 import TreatmentDetail from './pages/TreatmentDetail';
-import Pricing from './pages/Pricing';
-import Process from './pages/Process';
-import Reviews from './pages/Reviews';
 import PlanDashboard from './pages/PlanDashboard';
 import Intake from './pages/Intake';
 import Login from './pages/auth/Login';
@@ -30,6 +26,10 @@ const DoctorLeadView = lazy(() => import('./pages/DoctorLeadView'));
 const UploadCenter = lazy(() => import('./pages/UploadCenter'));
 
 // Lazy load public pages (enables prefetch and reduces initial bundle)
+const Treatments = lazy(() => import('./pages/Treatments'));
+const Pricing = lazy(() => import('./pages/Pricing'));
+const Process = lazy(() => import('./pages/Process'));
+const Reviews = lazy(() => import('./pages/Reviews'));
 const FAQ = lazy(() => import('./pages/FAQ'));
 const Contact = lazy(() => import('./pages/Contact'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
@@ -220,11 +220,39 @@ export default function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Home />} />
-          <Route path="/treatments" element={<Treatments />} />
+          <Route 
+            path="/treatments" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Treatments />
+              </Suspense>
+            } 
+          />
           <Route path="/treatment-detail" element={<TreatmentDetail />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="/process" element={<Process />} />
-          <Route path="/reviews" element={<Reviews />} />
+          <Route 
+            path="/pricing" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Pricing />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="/process" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Process />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="/reviews" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Reviews />
+              </Suspense>
+            } 
+          />
           <Route 
             path="/faq" 
             element={
