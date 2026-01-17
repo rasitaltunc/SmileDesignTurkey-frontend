@@ -24,7 +24,7 @@ export async function submitLead(payload: {
   referrer?: string | null;
   device?: string | null;
   companyWebsite?: string | null; // Honeypot field
-}): Promise<{ success: boolean; error?: string; data?: any }> {
+}): Promise<{ success: boolean; error?: string; data?: any; case_id?: string }> {
   try {
     const res = await fetch("/api/secure/lead", {
       method: "POST",

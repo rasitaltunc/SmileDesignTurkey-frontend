@@ -16,6 +16,7 @@ import Footer from '../components/Footer';
 import { trackEvent } from '../lib/analytics';
 import { BRAND } from '../config';
 import { saveLead } from '../lib/leadStore';
+import { createPortalSession } from '../lib/portalSession';
 import { validateSubmission, getHoneypotFieldName } from '../lib/antiSpam';
 import { SEO } from '../lib/seo';
 import { useLanguage } from '../lib/i18n';
@@ -123,8 +124,8 @@ export default function Onboarding() {
       console.warn('Failed to save onboarding data:', error);
     }
 
-    // Save lead using new leads system (async)
-    await saveLead({
+    // Save lead using new leads system (async) - returns case_id
+    const { case_id } = await saveLead({
       source: 'onboarding',
       name: formData.name || undefined,
       email: formData.email || undefined,
@@ -136,17 +137,36 @@ export default function Onboarding() {
       pageUrl: window.location.href,
     });
 
+    // Create portal session for immediate access (24h)
+    if (case_id) {
+      createPortalSession(case_id, formData.email, formData.whatsapp);
+    }
+
     // Track analytics (no PII) - note: submit_lead is now tracked in leadStore
     trackEvent({ 
       type: 'onboarding_step_complete', 
       step: 5,
       goal: formData.goals,
       timeline: formData.timeline || 'Not specified',
-      lang 
+      lang,
+      case_id 
+    });
+
+    // Track lead submission
+    trackEvent({
+      type: 'lead_submitted',
+      source: 'onboarding',
+      has_case_id: !!case_id,
+      lang,
     });
     
+    // Redirect to portal (new flow) or fallback to plan-dashboard
     setTimeout(() => {
-      navigate('/plan-dashboard');
+      if (case_id) {
+        navigate(`/portal?case_id=${case_id}`);
+      } else {
+        navigate('/plan-dashboard');
+      }
     }, 500);
   };
 

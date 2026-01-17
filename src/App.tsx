@@ -33,6 +33,7 @@ const Reviews = lazy(() => import('./pages/Reviews'));
 const FAQ = lazy(() => import('./pages/FAQ'));
 const Contact = lazy(() => import('./pages/Contact'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
+const PendingReviewPortal = lazy(() => import('./pages/PendingReviewPortal'));
 
 // Loading fallback component
 function PageLoader() {
@@ -266,6 +267,14 @@ export default function App() {
             element={
               <Suspense fallback={<PageLoader />}>
                 <Contact />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="/portal" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <PendingReviewPortal />
               </Suspense>
             } 
           />
