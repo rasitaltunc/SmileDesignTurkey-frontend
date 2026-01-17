@@ -22,7 +22,8 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { getPortalSession, createPortalSession, hasValidPortalSession } from '@/lib/portalSession';
-import { sendMagicLink, verifyMagicLink } from '@/lib/verification';
+import { startEmailVerification, handleVerifyCallback } from '@/lib/verification';
+import { fetchPortalData, type PortalData } from '@/lib/portalApi';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
 import { trackEvent } from '@/lib/analytics';
@@ -51,6 +52,7 @@ export default function PendingReviewPortal() {
   const verificationToken = searchParams.get('token');
   
   const [session, setSession] = useState(getPortalSession());
+  const [portalData, setPortalData] = useState<PortalData | null>(null);
   const [isVerified, setIsVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,59 +60,80 @@ export default function PendingReviewPortal() {
   const [isSendingVerification, setIsSendingVerification] = useState(false);
   const [showVerificationSuccess, setShowVerificationSuccess] = useState(false);
 
-  // Check if user has valid portal session
+  // Fetch portal data on mount
   useEffect(() => {
-    setIsVerified(hasValidPortalSession());
-    setIsLoading(false);
+    const loadPortalData = async () => {
+      const session = getPortalSession();
+      if (!session || !session.case_id || !session.portal_token) {
+        setError('No valid portal session. Please restart the onboarding process.');
+        setIsLoading(false);
+        return;
+      }
+
+      const result = await fetchPortalData();
+      if (result.success && result.data) {
+        setPortalData(result.data);
+        setIsVerified(!!result.data.email_verified_at);
+        setSession(session);
+        trackEvent({ type: 'portal_viewed', case_id: result.data.case_id, is_verified: !!result.data.email_verified_at });
+      } else {
+        setError(result.error || 'Failed to load portal data');
+      }
+      setIsLoading(false);
+    };
+
+    loadPortalData();
   }, []);
 
-  // Handle verification token from URL
+  // Handle verification callback from URL (PKCE flow)
   useEffect(() => {
-    if (verificationToken && case_id) {
+    const session = getPortalSession();
+    if (session && session.case_id && session.portal_token && window.location.hash.includes('code=')) {
       setIsLoading(true);
-      verifyMagicLink(verificationToken, case_id).then((result) => {
+      handleVerifyCallback(session.case_id, session.portal_token).then((result) => {
         if (result.success) {
           setIsVerified(true);
-          setSession(getPortalSession());
-          trackEvent({ type: 'verification_completed', case_id });
+          const updatedSession = getPortalSession();
+          if (updatedSession) setSession(updatedSession);
+          // Reload portal data to get updated email_verified_at
+          fetchPortalData().then((dataResult) => {
+            if (dataResult.success && dataResult.data) {
+              setPortalData(dataResult.data);
+            }
+          });
+          trackEvent({ type: 'verification_completed', case_id: session.case_id });
         } else {
           setError(result.error || 'Verification failed');
         }
         setIsLoading(false);
       });
     }
-  }, [verificationToken, case_id]);
+  }, []);
 
-  // Track portal view
-  useEffect(() => {
-    if (case_id) {
-      trackEvent({ type: 'portal_viewed', case_id, is_verified: isVerified });
-    }
-  }, [case_id, isVerified]);
 
   const handleVerifyEmail = async () => {
-    if (!verificationEmail || !case_id) return;
+    if (!verificationEmail) return;
 
     setIsSendingVerification(true);
-    const result = await sendMagicLink(verificationEmail, case_id);
+    const result = await startEmailVerification(verificationEmail);
     setIsSendingVerification(false);
 
     if (result.success) {
       setShowVerificationSuccess(true);
-      createPortalSession(case_id, verificationEmail);
-      trackEvent({ type: 'verification_started', case_id, method: 'email' });
+      trackEvent({ type: 'verification_started', case_id: session?.case_id || '', method: 'email' });
     } else {
       setError(result.error || 'Failed to send verification email');
     }
   };
 
   const handleWhatsAppClick = () => {
-    const message = `Hi, I submitted a request with case ID ${case_id}. I'd like to follow up.`;
+    const activeCaseId = portalData?.case_id || session?.case_id || '';
+    const message = `Hi, I submitted a request with case ID ${activeCaseId}. I'd like to follow up.`;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
-      trackEvent({ type: 'whatsapp_clicked', where: 'pending_portal', case_id });
+      trackEvent({ type: 'whatsapp_clicked', where: 'pending_portal', case_id: activeCaseId });
     }
   };
 
@@ -133,8 +156,8 @@ export default function PendingReviewPortal() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Your Treatment Plan</h1>
-              {case_id && (
-                <p className="text-sm text-gray-600 mt-1">Case ID: <span className="font-mono font-semibold">{case_id}</span></p>
+              {(portalData?.case_id || session?.case_id) && (
+                <p className="text-sm text-gray-600 mt-1">Case ID: <span className="font-mono font-semibold">{portalData?.case_id || session?.case_id}</span></p>
               )}
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -146,7 +169,7 @@ export default function PendingReviewPortal() {
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4" />
-              <span>Assigned Coordinator: <span className="font-medium">Pending assignment</span></span>
+              <span>Assigned Coordinator: <span className="font-medium">{portalData?.coordinator_email || 'Pending assignment'}</span></span>
             </div>
           </div>
         </div>

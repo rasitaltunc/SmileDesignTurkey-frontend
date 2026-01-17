@@ -1,15 +1,20 @@
--- Add case_id and coordinator_email to leads table
+-- Add case_id, portal_token, email_verified_at, coordinator_email, portal_status to leads table
 -- case_id: Short human-readable identifier (e.g., "GH-2024-1234")
+-- portal_token: High-entropy secure token for portal access (192-bit hex)
+-- email_verified_at: Timestamp when email was verified via magic link
 -- coordinator_email: Optional email of assigned coordinator
+-- portal_status: Status for portal UI (pending_review, verified, etc.)
 
 ALTER TABLE leads 
 ADD COLUMN IF NOT EXISTS case_id TEXT UNIQUE,
-ADD COLUMN IF NOT EXISTS coordinator_email TEXT;
+ADD COLUMN IF NOT EXISTS portal_token TEXT UNIQUE,
+ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS coordinator_email TEXT,
+ADD COLUMN IF NOT EXISTS portal_status TEXT DEFAULT 'pending_review';
 
--- Create index on case_id for fast lookups
+-- Create indexes for fast lookups
 CREATE INDEX IF NOT EXISTS idx_leads_case_id ON leads(case_id) WHERE case_id IS NOT NULL;
-
--- Create index on coordinator_email
+CREATE INDEX IF NOT EXISTS idx_leads_portal_token ON leads(portal_token) WHERE portal_token IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_coordinator_email ON leads(coordinator_email) WHERE coordinator_email IS NOT NULL;
 
 -- Generate case_id for existing leads (optional backfill)

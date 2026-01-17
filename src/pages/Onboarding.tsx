@@ -124,8 +124,8 @@ export default function Onboarding() {
       console.warn('Failed to save onboarding data:', error);
     }
 
-    // Save lead using new leads system (async) - returns case_id
-    const { case_id } = await saveLead({
+    // Save lead using new leads system (async) - returns case_id + portal_token
+    const { case_id, portal_token } = await saveLead({
       source: 'onboarding',
       name: formData.name || undefined,
       email: formData.email || undefined,
@@ -137,9 +137,9 @@ export default function Onboarding() {
       pageUrl: window.location.href,
     });
 
-    // Create portal session for immediate access (24h)
-    if (case_id) {
-      createPortalSession(case_id, formData.email, formData.whatsapp);
+    // Create portal session with portal_token (secure, never in URL)
+    if (case_id && portal_token) {
+      createPortalSession(case_id, portal_token, formData.email, formData.whatsapp, false);
     }
 
     // Track analytics (no PII) - note: submit_lead is now tracked in leadStore

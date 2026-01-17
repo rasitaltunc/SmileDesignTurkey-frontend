@@ -1,44 +1,38 @@
 /**
- * Verification System (Magic Link)
- * V1: Email magic link only (OTP/SMS can be added later)
+ * Verification System (Supabase Auth OTP Magic Link)
+ * Uses Supabase Auth signInWithOtp for secure email verification
  */
 
 import { getSupabaseClient } from './supabaseClient';
-import { createPortalSession } from './portalSession';
+import { getPortalSession, createPortalSession } from './portalSession';
 
 /**
- * Send magic link verification email
- * For now, this is a placeholder that simulates the flow
- * In production, this should trigger Supabase Auth email or custom email service
+ * Send magic link verification email using Supabase Auth OTP
+ * The email will contain a link to /portal/verify with PKCE code
  */
-export async function sendMagicLink(email: string, case_id: string): Promise<{ success: boolean; error?: string }> {
+export async function startEmailVerification(email: string): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = getSupabaseClient();
     if (!supabase) {
       return { success: false, error: 'Supabase not configured' };
     }
 
-    // TODO: In production, use Supabase Auth magic link or custom email service
-    // For V1, we'll show a simple "check your email" message
-    // The actual magic link should include a signed token: /portal?token=XXX&case_id=YYY
-    
-    // Store a temporary verification token (24h expiry)
-    const token = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-    const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-    
-    try {
-      localStorage.setItem(`verification_token_${case_id}`, JSON.stringify({
-        token,
-        email,
-        expires_at: expiresAt,
-      }));
-    } catch (err) {
-      console.warn('[Verification] Failed to store token:', err);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const redirectTo = `${origin}/portal/verify`;
+
+    // Send OTP magic link via Supabase Auth
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.toLowerCase().trim(),
+      options: {
+        emailRedirectTo: redirectTo,
+        shouldCreateUser: false, // Only verify existing email, don't create user
+      },
+    });
+
+    if (error) {
+      return { success: false, error: error.message || 'Failed to send verification email' };
     }
 
-    // In production: Send actual email with link like:
-    // https://guidehealth.com/portal/verify?token=XXX&case_id=YYY
-    
     return { success: true };
   } catch (error) {
     return {
@@ -49,29 +43,67 @@ export async function sendMagicLink(email: string, case_id: string): Promise<{ s
 }
 
 /**
- * Verify magic link token
- * Creates authenticated session if valid
+ * Handle verification callback from magic link (PKCE flow)
+ * Exchanges code for session and verifies lead email
  */
-export async function verifyMagicLink(token: string, case_id: string): Promise<{ success: boolean; error?: string }> {
+export async function handleVerifyCallback(
+  case_id: string,
+  portal_token: string
+): Promise<{ success: boolean; email?: string; error?: string }> {
   try {
-    const stored = localStorage.getItem(`verification_token_${case_id}`);
-    if (!stored) {
-      return { success: false, error: 'Invalid or expired verification link' };
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return { success: false, error: 'Supabase not configured' };
     }
 
-    const data = JSON.parse(stored);
-    if (data.token !== token || Date.now() > data.expires_at) {
-      localStorage.removeItem(`verification_token_${case_id}`);
-      return { success: false, error: 'Verification link expired' };
+    // Extract code from URL hash (Supabase Auth PKCE flow)
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const code = hashParams.get('code');
+    const error = hashParams.get('error');
+    const errorDescription = hashParams.get('error_description');
+
+    if (error) {
+      return { success: false, error: errorDescription || error || 'Verification failed' };
     }
 
-    // Create portal session
-    createPortalSession(case_id, data.email);
+    if (!code) {
+      return { success: false, error: 'No verification code found' };
+    }
 
-    // Clean up token
-    localStorage.removeItem(`verification_token_${case_id}`);
+    // Exchange code for session
+    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
-    return { success: true };
+    if (exchangeError || !data?.session?.user?.email) {
+      return { success: false, error: exchangeError?.message || 'Failed to verify email' };
+    }
+
+    const verifiedEmail = data.session.user.email.toLowerCase().trim();
+
+    // Call server endpoint to mark lead as verified
+    const verifyResponse = await fetch('/api/secure/verify-lead', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${data.session.access_token}`,
+      },
+      body: JSON.stringify({ case_id, portal_token }),
+    });
+
+    const verifyResult = await verifyResponse.json().catch(() => ({}));
+    if (!verifyResponse.ok || !verifyResult.ok) {
+      return { success: false, error: verifyResult.error || 'Failed to update verification status' };
+    }
+
+    // Update portal session with verified status
+    const session = getPortalSession();
+    if (session && session.case_id === case_id) {
+      createPortalSession(case_id, portal_token, verifiedEmail, session.phone, true);
+    }
+
+    // Clear URL hash to remove verification code
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    return { success: true, email: verifiedEmail };
   } catch (error) {
     return {
       success: false,

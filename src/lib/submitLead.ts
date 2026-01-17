@@ -24,7 +24,7 @@ export async function submitLead(payload: {
   referrer?: string | null;
   device?: string | null;
   companyWebsite?: string | null; // Honeypot field
-}): Promise<{ success: boolean; error?: string; data?: any; case_id?: string }> {
+}): Promise<{ success: boolean; error?: string; data?: any; case_id?: string; portal_token?: string }> {
   try {
     const res = await fetch("/api/secure/lead", {
       method: "POST",
@@ -37,7 +37,7 @@ export async function submitLead(payload: {
       return { success: false, error: data?.error || "Lead submit failed" };
     }
 
-    return { success: true, data };
+    return { success: true, data, case_id: data.case_id, portal_token: data.portal_token };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (import.meta.env.DEV) {

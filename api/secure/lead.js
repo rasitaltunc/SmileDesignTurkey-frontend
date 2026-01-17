@@ -42,11 +42,16 @@ module.exports = async function handler(req, res) {
     const year = new Date().getFullYear();
     const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     const case_id = `GH-${year}-${randomSuffix}`;
+    
+    // Generate secure portal_token: 24 bytes (192-bit) hex string
+    const portal_token = crypto.randomBytes(24).toString('hex');
 
     const row = {
       id,
       case_id,
+      portal_token,
       status: "new", // ✅ Canonical value (never use "new_lead")
+      portal_status: "pending_review",
       // sende zaten kolonlar var: name/email/phone/utm/message/meta vs.
       name: (body.name || "").trim() || null,
       email: email || null,
@@ -89,7 +94,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ ok: true, id, case_id });
+    return res.status(200).json({ ok: true, id, case_id, portal_token });
   } catch (e) {
     return res.status(500).json({ ok: false, error: "Server error" });
   }

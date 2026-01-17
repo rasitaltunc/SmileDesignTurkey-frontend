@@ -129,7 +129,7 @@ async function sendToWebhook(lead: Lead): Promise<boolean> {
  * Does NOT send id/created_at (let DB handle defaults)
  * Returns { success: boolean, case_id?: string }
  */
-export async function submitLeadSupabase(lead: Omit<Lead, 'id' | 'createdAt'>): Promise<{ success: boolean; case_id?: string }> {
+export async function submitLeadSupabase(lead: Omit<Lead, 'id' | 'createdAt'>): Promise<{ success: boolean; case_id?: string; portal_token?: string }> {
   const result = await submitLead({
     source: lead.source,
     name: lead.name || null,
@@ -147,7 +147,7 @@ export async function submitLeadSupabase(lead: Omit<Lead, 'id' | 'createdAt'>): 
     device: lead.device || null,
   });
 
-  return { success: result.success, case_id: result.case_id || result.data?.case_id };
+  return { success: result.success, case_id: result.case_id || result.data?.case_id, portal_token: result.portal_token || result.data?.portal_token };
 }
 
 /**
@@ -156,7 +156,7 @@ export async function submitLeadSupabase(lead: Omit<Lead, 'id' | 'createdAt'>): 
  * If Supabase insert succeeds, marks meta.savedTo = "supabase" in localStorage
  * Returns case_id if available from Supabase
  */
-export async function saveLead(lead: Omit<Lead, 'id' | 'createdAt'>): Promise<{ case_id?: string }> {
+export async function saveLead(lead: Omit<Lead, 'id' | 'createdAt'>): Promise<{ case_id?: string; portal_token?: string }> {
   try {
     // Enrich lead with metadata
     const utmParams = getUtmParams();
@@ -180,12 +180,14 @@ export async function saveLead(lead: Omit<Lead, 'id' | 'createdAt'>): Promise<{ 
 
     // Submit to Supabase if configured (await it, but don't block on failure)
     let case_id: string | undefined;
+    let portal_token: string | undefined;
     try {
       const supabaseResult = await submitLeadSupabase(lead);
       if (supabaseResult.success) {
         case_id = supabaseResult.case_id;
+        portal_token = supabaseResult.portal_token;
         // Update localStorage to mark as saved to Supabase
-        leadWithMeta = { ...enrichedLead, meta: { savedTo: 'supabase', case_id } as any };
+        leadWithMeta = { ...enrichedLead, meta: { savedTo: 'supabase', case_id, portal_token } as any };
         const updatedLeadsWithMeta = [leadWithMeta, ...existingLeads.filter(l => l.id !== enrichedLead.id)];
         const trimmedWithMeta = updatedLeadsWithMeta.slice(0, MAX_LEADS);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedWithMeta));
@@ -215,7 +217,7 @@ export async function saveLead(lead: Omit<Lead, 'id' | 'createdAt'>): Promise<{ 
       utm_campaign: enrichedLead.utmCampaign,
     });
 
-    return { case_id };
+    return { case_id, portal_token };
   } catch (error) {
     console.warn('[Leads] Failed to save lead:', error);
     return {};

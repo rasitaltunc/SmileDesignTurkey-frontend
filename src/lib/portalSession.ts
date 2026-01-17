@@ -9,8 +9,10 @@ const PORTAL_SESSION_EXPIRY_HOURS = 24;
 
 export interface PortalSession {
   case_id: string;
+  portal_token: string; // Required: secure token for API access
   email?: string;
   phone?: string;
+  email_verified?: boolean;
   created_at: string;
   expires_at: string;
 }
@@ -18,15 +20,18 @@ export interface PortalSession {
 /**
  * Create a portal session (store in localStorage)
  * Expires after 24 hours
+ * portal_token is REQUIRED and never stored in URL
  */
-export function createPortalSession(case_id: string, email?: string, phone?: string): void {
+export function createPortalSession(case_id: string, portal_token: string, email?: string, phone?: string, email_verified?: boolean): void {
   const now = Date.now();
   const expiresAt = now + PORTAL_SESSION_EXPIRY_HOURS * 60 * 60 * 1000;
 
   const session: PortalSession = {
     case_id,
+    portal_token,
     email,
     phone,
+    email_verified: email_verified || false,
     created_at: new Date(now).toISOString(),
     expires_at: new Date(expiresAt).toISOString(),
   };
