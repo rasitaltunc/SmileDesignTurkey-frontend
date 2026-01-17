@@ -51,11 +51,13 @@ export default function Process() {
     Headphones: Headphones,
   };
 
-  const timeline = (copy?.process?.steps || DEFAULT_COPY.process.steps).map((step) => ({
-    step: step.number,
-    title: step.title,
-    description: step.description,
-    icon: iconMap[step.icon] || Heart,
+  // Safe access to process steps with fallback
+  const processSteps = copy?.process?.steps ?? DEFAULT_COPY.process.steps ?? [];
+  const timeline = processSteps.map((step) => ({
+    step: step?.number ?? 0,
+    title: step?.title ?? '',
+    description: step?.description ?? '',
+    icon: iconMap[step?.icon ?? ''] || Heart,
     microcopy: '',
     duration: ''
   }));

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from '../components/Link';
-import { Upload, ChevronRight, ArrowLeft, CheckCircle, Lock, Shield } from 'lucide-react';
+import { Upload, ChevronRight, ArrowLeft, CheckCircle, Lock, Shield, X, FileText, Image } from 'lucide-react';
 import { 
   TopNav, 
   Stepper, 
@@ -15,20 +15,28 @@ import { Smile, Anchor, Layers, Crown, Sun, FileCheck } from 'lucide-react';
 import Footer from '../components/Footer';
 import { trackEvent } from '../lib/analytics';
 import { BRAND } from '../config';
-import { saveLead } from '../lib/leadStore';
+import { saveLead, addStagedFiles, getStagedFiles, removeStagedFile, clearStagedFiles, uploadStagedFiles } from '../lib/leadStore';
 import { createPortalSession } from '../lib/portalSession';
 import { validateSubmission, getHoneypotFieldName } from '../lib/antiSpam';
 import { SEO } from '../lib/seo';
 import { useLanguage } from '../lib/i18n';
 import { DEFAULT_COPY } from '../lib/siteContentDefaults';
+import { toast } from '../lib/toast';
 
 export default function Onboarding() {
   const { copy } = useLanguage();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [stagedFilesList, setStagedFilesList] = useState<File[]>([]);
 
   // SEO handled by <SEO> component below
   const seo = copy?.seo?.onboarding ?? DEFAULT_COPY.seo.onboarding;
+  
+  // Sync staged files from store on mount
+  useEffect(() => {
+    setStagedFilesList(getStagedFiles());
+  }, []);
   
   const [formData, setFormData] = useState({
     treatment: '',
@@ -146,6 +154,29 @@ export default function Onboarding() {
       createPortalSession(case_id, portal_token, formData.email, formData.whatsapp, false);
     }
 
+    // Upload staged files if any (after lead creation)
+    if (case_id && stagedFilesList.length > 0) {
+      try {
+        const uploadedPaths = await uploadStagedFiles(case_id);
+        if (uploadedPaths.length > 0) {
+          trackEvent({
+            type: 'staged_files_uploaded',
+            count: uploadedPaths.length,
+            case_id,
+          });
+          toast.success(`${uploadedPaths.length} file${uploadedPaths.length > 1 ? 's' : ''} uploaded successfully`);
+        } else if (stagedFilesList.length > 0) {
+          // Some files failed to upload
+          toast.info('Files will be available to upload in your portal');
+        }
+      } catch (uploadError) {
+        console.warn('[Onboarding] Failed to upload staged files:', uploadError);
+        toast.info('You can upload files later from your portal');
+      }
+      // Clear local state
+      setStagedFilesList([]);
+    }
+
     // Track analytics (no PII) - note: submit_lead is now tracked in leadStore
     trackEvent({ 
       type: 'onboarding_step_complete', 
@@ -172,6 +203,43 @@ export default function Onboarding() {
         navigate('/plan-dashboard');
       }
     }, 500);
+  };
+
+  // File upload handlers
+  const handleFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files);
+      addStagedFiles(fileArray);
+      setStagedFilesList(getStagedFiles());
+      trackEvent({ type: 'files_staged', count: fileArray.length, source: 'onboarding' });
+    }
+    // Reset input so same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  const handleRemoveFile = (index: number) => {
+    removeStagedFile(index);
+    setStagedFilesList(getStagedFiles());
+  };
+  
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith('image/')) {
+      return <Image className="w-4 h-4 text-accent-primary" />;
+    }
+    return <FileText className="w-4 h-4 text-accent-primary" />;
+  };
+  
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const canProceed = () => {
@@ -255,7 +323,23 @@ export default function Onboarding() {
                 placeholder="Example: I'm looking to improve my smile confidence. I have some staining and a chipped tooth that I'd like to address..."
               />
 
-              <div className="bg-accent-soft rounded-[var(--radius-md)] p-6 border border-accent-primary/20">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf,.pdf"
+                onChange={handleFileChange}
+                className="hidden"
+                aria-label="Upload photos or X-rays"
+              />
+              
+              {/* Clickable upload card */}
+              <button
+                type="button"
+                onClick={handleFileSelect}
+                className="w-full bg-accent-soft rounded-[var(--radius-md)] p-6 border border-accent-primary/20 hover:border-accent-primary hover:bg-accent-soft/80 transition-all cursor-pointer text-left"
+              >
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-white rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0 shadow-premium-sm">
                     <Upload className="w-5 h-5 text-accent-primary" />
@@ -265,9 +349,48 @@ export default function Onboarding() {
                     <p className="text-text-secondary text-sm">
                       Secure & encrypted. Only your coordinator sees this. You can also skip and upload later.
                     </p>
+                    <p className="text-accent-primary text-sm mt-2 font-medium">
+                      Click to select files →
+                    </p>
                   </div>
                 </div>
-              </div>
+              </button>
+              
+              {/* Staged files list */}
+              {stagedFilesList.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm text-text-secondary font-medium">
+                    {stagedFilesList.length} file{stagedFilesList.length > 1 ? 's' : ''} ready to upload:
+                  </p>
+                  <div className="space-y-2">
+                    {stagedFilesList.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex items-center justify-between bg-white rounded-[var(--radius-sm)] p-3 border border-border-subtle"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {getFileIcon(file)}
+                          <div className="min-w-0">
+                            <p className="text-sm text-text-primary truncate">{file.name}</p>
+                            <p className="text-xs text-text-tertiary">{formatFileSize(file.size)}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFile(index);
+                          }}
+                          className="p-1 hover:bg-red-50 rounded transition-colors"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <X className="w-4 h-4 text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
