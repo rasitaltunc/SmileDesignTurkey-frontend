@@ -20,11 +20,15 @@ import { createPortalSession } from '../lib/portalSession';
 import { validateSubmission, getHoneypotFieldName } from '../lib/antiSpam';
 import { SEO } from '../lib/seo';
 import { useLanguage } from '../lib/i18n';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 
 export default function Onboarding() {
   const { copy } = useLanguage();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+
+  // SEO handled by <SEO> component below
+  const seo = copy?.seo?.onboarding ?? DEFAULT_COPY.seo.onboarding;
   
   const [formData, setFormData] = useState({
     treatment: '',
@@ -190,8 +194,8 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-overlay-wash">
       <SEO 
-        title={copy.seo.onboarding.title} 
-        description={copy.seo.onboarding.description}
+        title={seo.title} 
+        description={seo.description}
         url="/onboarding"
       />
       <TopNav variant="desktop" />

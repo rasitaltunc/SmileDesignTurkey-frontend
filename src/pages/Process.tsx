@@ -7,6 +7,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 import { NavigationContext } from '../lib/navigationContext';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 import { ClinicalStandards } from '../components/trust/ClinicalStandards';
@@ -22,6 +23,7 @@ export default function Process() {
   const { navigate } = useContext(NavigationContext);
 
   // SEO handled by <SEO> component below
+  const seo = copy?.seo?.process ?? DEFAULT_COPY.seo.process;
   
   const handleGetStartedClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -35,7 +37,7 @@ export default function Process() {
   
   const handleWhatsAppClick = (location: string) => {
     trackEvent({ type: 'whatsapp_click', where: location, lang });
-    const message = copy.whatsapp.templates.question;
+    const message = copy?.whatsapp?.templates?.question || DEFAULT_COPY.whatsapp.templates.question;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -79,8 +81,8 @@ export default function Process() {
   return (
     <div className="min-h-screen bg-white">
       <SEO 
-        title={copy.seo.process.title} 
-        description={copy.seo.process.description}
+        title={seo.title} 
+        description={seo.description}
         url="/process"
       />
 
@@ -194,10 +196,10 @@ export default function Process() {
             <button
               onClick={() => handleWhatsAppClick('process_cta')}
               className="inline-flex items-center justify-center px-8 py-3 border-2 border-white text-white rounded-lg hover:bg-white/10 transition-colors font-semibold"
-              aria-label={copy.whatsapp.ctaText}
+              aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             >
               <MessageCircle className="w-4 h-4 mr-2" />
-              {copy.whatsapp.ctaText}
+              {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             </button>
           </div>
           <p className="text-teal-100 text-sm mt-4">

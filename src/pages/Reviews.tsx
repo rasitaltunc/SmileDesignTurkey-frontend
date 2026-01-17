@@ -7,6 +7,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 import { NavigationContext } from '../lib/navigationContext';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 
@@ -42,7 +43,7 @@ export default function Reviews() {
   
   const handleWhatsAppClick = (location: string) => {
     trackEvent({ type: 'whatsapp_click', where: location, lang });
-    const message = copy.whatsapp.templates.question;
+    const message = copy?.whatsapp?.templates?.question || DEFAULT_COPY.whatsapp.templates.question;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -142,20 +143,23 @@ export default function Reviews() {
     return matchesTreatment && matchesLanguage;
   });
 
+  // SEO handled by <SEO> component below
+  const seo = copy?.seo?.reviews ?? DEFAULT_COPY.seo.reviews;
+
   return (
     <div className="min-h-screen bg-white">
       <SEO 
-        title={copy.seo.reviews.title} 
-        description={copy.seo.reviews.description}
+        title={seo.title} 
+        description={seo.description}
         url="/reviews"
       />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{copy.seo.reviews.title.split('|')[0].trim()}</h1>
+          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{seo.title.split('|')[0].trim()}</h1>
           <p className="text-gray-600 max-w-3xl mx-auto mb-4 text-lg">
-            {copy.seo.reviews.description}
+            {seo.description}
           </p>
           <p className="text-sm text-gray-500">
             All reviews are verified and anonymized with consent.
@@ -279,10 +283,10 @@ export default function Reviews() {
             <button
               onClick={() => handleWhatsAppClick('reviews_cta')}
               className="inline-flex items-center justify-center px-8 py-3 border-2 border-white text-white rounded-lg hover:bg-white/10 transition-colors font-semibold"
-              aria-label={copy.whatsapp.ctaText}
+              aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             >
               <MessageCircle className="w-4 h-4 mr-2" />
-              {copy.whatsapp.ctaText}
+              {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             </button>
           </div>
           <p className="text-teal-100 text-sm mt-4">

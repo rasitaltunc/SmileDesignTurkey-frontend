@@ -5,6 +5,7 @@ import Footer from '../components/Footer';
 import { treatments } from '../data/treatments';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 import { trackEvent } from '../lib/analytics';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
@@ -17,6 +18,7 @@ export default function Treatments() {
   const { navigate } = useContext(NavigationContext);
 
   // SEO handled by <SEO> component below
+  const seo = copy?.seo?.treatments ?? DEFAULT_COPY.seo.treatments;
 
   const handleCTAClick = (ctaName: string) => {
     trackEvent({ type: 'cta_click', where: 'treatments', cta: ctaName, lang });
@@ -24,7 +26,7 @@ export default function Treatments() {
   
   const handleWhatsAppClick = (location: string) => {
     trackEvent({ type: 'whatsapp_click', where: location, lang });
-    const message = copy.whatsapp.templates.consultation;
+    const message = copy?.whatsapp?.templates?.consultation || DEFAULT_COPY.whatsapp.templates.consultation;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -52,8 +54,8 @@ export default function Treatments() {
   return (
     <div className="min-h-screen bg-white">
       <SEO 
-        title={copy.seo.treatments.title} 
-        description={copy.seo.treatments.description}
+        title={seo.title} 
+        description={seo.description}
         url="/treatments"
       />
 
@@ -62,7 +64,7 @@ export default function Treatments() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-gray-900 mb-4 text-4xl font-bold">Our Treatments</h1>
           <p className="text-gray-600 max-w-3xl mx-auto text-lg">
-            {copy.seo.treatments.description}
+            {seo.description}
           </p>
         </div>
       </section>

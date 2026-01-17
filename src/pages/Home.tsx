@@ -43,6 +43,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 import { RevealOnScroll } from '../components/animations/RevealOnScroll';
 import { ProofStrip } from '../components/trust/ProofStrip';
@@ -56,6 +57,7 @@ export default function Home() {
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
 
   // SEO handled by <SEO> component below
+  const seo = copy?.seo?.home ?? DEFAULT_COPY.seo.home;
 
   const handleWhatsAppClick = (location: string) => {
     trackEvent({ 
@@ -64,7 +66,7 @@ export default function Home() {
       lang 
     });
     
-    const message = copy.whatsapp.templates?.consultation || copy.whatsapp.ctaText || 'Hi, I want a free consultation.';
+    const message = copy?.whatsapp?.templates?.consultation || copy?.whatsapp?.ctaText || 'Hi, I want a free consultation.';
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     
     if (url) {
@@ -124,8 +126,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-bg-primary">
       <SEO 
-        title={copy.seo.home.title} 
-        description={copy.seo.home.description}
+        title={seo.title} 
+        description={seo.description}
         url="/"
       />
 
@@ -153,10 +155,10 @@ export default function Home() {
                 <button
                   onClick={() => handleWhatsAppClick('hero_cta')}
                   className="px-6 py-3 bg-white border-2 border-accent-primary text-accent-primary rounded-lg hover:bg-accent-soft transition-colors font-semibold w-full sm:w-auto"
-                  aria-label={copy.whatsapp.ctaText}
+                  aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
                 >
                   <MessageCircle className="w-5 h-5 inline mr-2" />
-                  {copy.whatsapp.ctaText}
+                  {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
                 </button>
               </div>
               <p className="text-xs text-text-tertiary mt-3">
@@ -444,10 +446,10 @@ export default function Home() {
             <button
               onClick={() => handleWhatsAppClick('final_cta')}
               className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg hover:bg-white/10 transition-colors font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-              aria-label={copy.whatsapp.ctaText}
+              aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             >
               <MessageCircle className="w-5 h-5" />
-              {copy.whatsapp.ctaText}
+              {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             </button>
           </div>
           

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import type { Language } from '../content/siteContent';
 import { getInternalContent, type InternalContent } from '../content/internal';
+import { DEFAULT_SITE_CONTENT, DEFAULT_COPY } from './siteContentDefaults';
 
 // Available languages (moved here to avoid static import of entire siteContent)
 export const availableLanguages: Language[] = ['en', 'tr'];
@@ -12,8 +13,8 @@ type CopyContent = any;
 interface LanguageContextType {
   lang: Language;
   setLang: (lang: Language) => void;
-  content: PublicContent | InternalContent | null;
-  copy: CopyContent | null;
+  content: PublicContent | InternalContent;
+  copy: CopyContent;
   availableLanguages: Language[];
   isInternalRoute: boolean;
 }
@@ -91,24 +92,45 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       ]).then(([siteContentModule, copyModule]) => {
         const content = siteContentModule.getContent(lang);
         const copy = copyModule.getCopy(lang);
-        setPublicContent(content);
-        setPublicCopy(copy);
+        // Ensure content/copy always have required fields (merge with defaults)
+        const safeContent = content && typeof content === 'object' 
+          ? { ...DEFAULT_SITE_CONTENT, ...content, 
+              whatsapp: { ...DEFAULT_SITE_CONTENT.whatsapp, ...(content.whatsapp || {}) },
+              seo: { ...DEFAULT_SITE_CONTENT.seo, ...(content.seo || {}) },
+            }
+          : DEFAULT_SITE_CONTENT;
+        const safeCopy = copy && typeof copy === 'object'
+          ? { ...DEFAULT_COPY, ...copy,
+              whatsapp: { ...DEFAULT_COPY.whatsapp, ...(copy.whatsapp || {}), 
+                templates: { ...DEFAULT_COPY.whatsapp.templates, ...(copy.whatsapp?.templates || {}) } },
+              seo: { ...DEFAULT_COPY.seo, ...(copy.seo || {}) },
+            }
+          : DEFAULT_COPY;
+        setPublicContent(safeContent);
+        setPublicCopy(safeCopy);
       }).catch((err) => {
         console.error('[i18n] Failed to load public content:', err);
+        // On error, use defaults
+        setPublicContent(DEFAULT_SITE_CONTENT as any);
+        setPublicCopy(DEFAULT_COPY as any);
       });
     }
   }, [internal, lang, publicContent]);
 
   // Use memoized content/copy based on route type
+  // Always return a safe object (never null)
   const content = useMemo(() => {
     if (internal) {
       return getInternalContent(lang);
     }
-    return publicContent;
+    return publicContent || DEFAULT_SITE_CONTENT as any;
   }, [internal, lang, publicContent]);
 
   const copy = useMemo(() => {
-    return internal ? null : publicCopy;
+    if (internal) {
+      return DEFAULT_COPY as any; // Internal routes may not need copy, but provide defaults
+    }
+    return publicCopy || DEFAULT_COPY as any;
   }, [internal, publicCopy]);
 
   return (
