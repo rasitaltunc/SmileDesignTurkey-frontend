@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { apiJsonAuth } from '@/lib/api';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import {
   FileText,
   Save,

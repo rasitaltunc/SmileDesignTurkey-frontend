@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useContext, useMemo, lazy, Suspense } from 'react';
 import { RefreshCw, X, Save, LogOut, MessageSquare, CheckCircle2, RotateCcw, XCircle, Clock, Brain, AlertTriangle, Phone, Mail, MessageCircle, Copy, HelpCircle, FileText, User, ChevronRight } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { NavigationContext } from '@/lib/navigationContext';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';

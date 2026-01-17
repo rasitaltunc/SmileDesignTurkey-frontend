@@ -1,6 +1,6 @@
 // Session Recovery - Automatic auth recovery for invalid refresh tokens
 
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { capture } from '../posthog';
 
 interface SessionRecoveryOptions {

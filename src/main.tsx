@@ -4,7 +4,7 @@ import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
 import { LanguageProvider } from "./lib/i18n";
-import { Toaster } from "sonner";
+import ToasterMount from "./components/ToasterMount";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // PostHog is now lazy-loaded on first capture() call in public routes
@@ -16,7 +16,7 @@ createRoot(document.getElementById("root")!).render(
   <HelmetProvider>
     <LanguageProvider>
       <App />
-      <Toaster richColors position="top-right" />
+      <ToasterMount />
     </LanguageProvider>
   </HelmetProvider>
     </BrowserRouter>

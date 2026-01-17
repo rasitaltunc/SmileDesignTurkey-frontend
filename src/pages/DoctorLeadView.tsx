@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { apiJsonAuth } from '@/lib/api';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import { ArrowLeft, Brain, RefreshCw, FileText } from 'lucide-react';
 import DoctorNotePanel from '@/components/doctor/DoctorNotePanel';
 

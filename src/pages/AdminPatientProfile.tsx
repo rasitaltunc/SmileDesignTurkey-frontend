@@ -4,7 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 import type { BriefResponse } from '@/lib/ai/briefLead';
 import { NavigationContext } from '@/lib/navigationContext';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
