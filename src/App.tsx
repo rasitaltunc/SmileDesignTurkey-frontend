@@ -5,15 +5,13 @@ import { getSupabaseClient } from './lib/supabaseClient';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
 import { getHomePath } from './lib/roleHome';
 import { NavigationContext } from './lib/navigationContext';
+import { useRoleBasedPrefetch } from './hooks/useRoleBasedPrefetch';
 import Home from './pages/Home';
 import Treatments from './pages/Treatments';
 import TreatmentDetail from './pages/TreatmentDetail';
 import Pricing from './pages/Pricing';
 import Process from './pages/Process';
 import Reviews from './pages/Reviews';
-import FAQ from './pages/FAQ';
-import Contact from './pages/Contact';
-import Onboarding from './pages/Onboarding';
 import PlanDashboard from './pages/PlanDashboard';
 import Intake from './pages/Intake';
 import Login from './pages/auth/Login';
@@ -30,6 +28,11 @@ const DoctorPortal = lazy(() => import('./pages/DoctorPortal'));
 const DoctorSettings = lazy(() => import('./pages/DoctorSettings'));
 const DoctorLeadView = lazy(() => import('./pages/DoctorLeadView'));
 const UploadCenter = lazy(() => import('./pages/UploadCenter'));
+
+// Lazy load public pages (enables prefetch and reduces initial bundle)
+const FAQ = lazy(() => import('./pages/FAQ'));
+const Contact = lazy(() => import('./pages/Contact'));
+const Onboarding = lazy(() => import('./pages/Onboarding'));
 
 // Loading fallback component
 function PageLoader() {
@@ -164,6 +167,9 @@ export default function App() {
   const location = useLocation();
   const reactRouterNavigate = useNavigate();
   
+  // Role-based prefetch during idle time
+  useRoleBasedPrefetch();
+  
   const [currentPath, setCurrentPath] = useState(location.pathname);
   const [params, setParams] = useState<any>({});
 
@@ -219,17 +225,38 @@ export default function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/process" element={<Process />} />
           <Route path="/reviews" element={<Reviews />} />
-          <Route path="/faq" element={<FAQ />} />
-          <Route path="/contact" element={<Contact />} />
+          <Route 
+            path="/faq" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <FAQ />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="/contact" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Contact />
+              </Suspense>
+            } 
+          />
           <Route
             path="/upload-center"
             element={
               <Suspense fallback={<PageLoader />}>
                 <UploadCenter />
               </Suspense>
-            }
+            } 
           />
-          <Route path="/onboarding" element={<Onboarding />} />
+          <Route 
+            path="/onboarding" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Onboarding />
+              </Suspense>
+            } 
+          />
           <Route path="/intake" element={<Intake />} />
           <Route path="/plan-dashboard" element={<PlanDashboard />} />
           
