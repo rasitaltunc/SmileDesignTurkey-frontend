@@ -276,9 +276,9 @@ export default function Reviews() {
               onClick={handleGetStartedClick}
               onNavigate={handleNavigateToOnboarding}
               className="inline-flex items-center justify-center px-8 py-3 bg-white text-teal-600 rounded-lg hover:bg-gray-100 transition-colors font-semibold"
-              aria-label={copy.hero.ctaPrimary}
+              aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             >
-              {copy.hero.ctaPrimary}
+              {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             </ProfessionalCTA>
             <button
               onClick={() => handleWhatsAppClick('reviews_cta')}
@@ -290,7 +290,7 @@ export default function Reviews() {
             </button>
           </div>
           <p className="text-teal-100 text-sm mt-4">
-            {copy.disclaimer.medical}
+            {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
           </p>
         </div>
       </section>

@@ -37,6 +37,12 @@ export const DEFAULT_COPY = {
       pricing: "Hello, I'd like to learn about pricing.",
     },
   },
+  hero: {
+    headline: "Premium Dental Care in Turkey",
+    subheadline: "World-class treatments at up to 70% savings. Licensed specialists, accredited clinics, and comprehensive aftercare.",
+    ctaPrimary: "Get Free Consultation",
+    ctaSecondary: "Ask on WhatsApp",
+  },
   seo: {
     home: { title: "Smile Design Turkey", description: "Dental tourism in Turkey" },
     treatments: { title: "Treatments", description: "Dental treatments" },
@@ -54,6 +60,16 @@ export const DEFAULT_COPY = {
       title: "Ready to Start?",
       subtitle: "Get started today",
     },
+  },
+  disclaimer: {
+    medical: "This website provides information only. Consult with a qualified dentist for medical advice. Individual results may vary.",
+    ethics: "",
+    warranty: "",
+  },
+  process: {
+    title: "Your Treatment Journey",
+    subtitle: "From initial consultation to lifetime aftercare, we guide you every step",
+    steps: [],
   },
 } as const;
 

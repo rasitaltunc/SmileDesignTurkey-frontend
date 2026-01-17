@@ -51,7 +51,7 @@ export default function Process() {
     Headphones: Headphones,
   };
 
-  const timeline = copy.process.steps.map((step) => ({
+  const timeline = (copy?.process?.steps || DEFAULT_COPY.process.steps).map((step) => ({
     step: step.number,
     title: step.title,
     description: step.description,
@@ -89,9 +89,9 @@ export default function Process() {
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{copy.process.title}</h1>
+          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{copy?.process?.title || DEFAULT_COPY.process.title}</h1>
           <p className="text-gray-600 max-w-3xl mx-auto text-lg">
-            {copy.process.subtitle}
+            {copy?.process?.subtitle || DEFAULT_COPY.process.subtitle}
           </p>
         </div>
       </section>
@@ -180,18 +180,18 @@ export default function Process() {
       {/* CTA */}
       <section className="py-12 bg-gradient-to-r from-teal-600 to-teal-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-white mb-4">{copy.cta.final.title}</h2>
+          <h2 className="text-white mb-4">{copy?.cta?.final?.title || DEFAULT_COPY.cta.final.title}</h2>
           <p className="text-teal-100 mb-8 max-w-2xl mx-auto">
-            {copy.cta.final.subtitle}
+            {copy?.cta?.final?.subtitle || DEFAULT_COPY.cta.final.subtitle}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <ProfessionalCTA
               onClick={handleGetStartedClick}
               onNavigate={handleNavigateToOnboarding}
               className="inline-flex items-center justify-center px-8 py-3 bg-white text-teal-600 rounded-lg hover:bg-gray-100 transition-colors font-semibold"
-              aria-label={copy.hero.ctaPrimary}
+              aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             >
-              {copy.hero.ctaPrimary}
+              {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             </ProfessionalCTA>
             <button
               onClick={() => handleWhatsAppClick('process_cta')}
@@ -203,7 +203,7 @@ export default function Process() {
             </button>
           </div>
           <p className="text-teal-100 text-sm mt-4">
-            {copy.disclaimer.medical}
+            {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
           </p>
         </div>
       </section>

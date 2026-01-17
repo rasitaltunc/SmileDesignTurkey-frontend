@@ -104,6 +104,18 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
               whatsapp: { ...DEFAULT_COPY.whatsapp, ...(copy.whatsapp || {}), 
                 templates: { ...DEFAULT_COPY.whatsapp.templates, ...(copy.whatsapp?.templates || {}) } },
               seo: { ...DEFAULT_COPY.seo, ...(copy.seo || {}) },
+              hero: { ...DEFAULT_COPY.hero, ...(copy.hero || {}) },
+              cta: { 
+                ...DEFAULT_COPY.cta, 
+                ...(copy.cta || {}),
+                final: { ...DEFAULT_COPY.cta.final, ...(copy.cta?.final || {}) },
+              },
+              disclaimer: { ...DEFAULT_COPY.disclaimer, ...(copy.disclaimer || {}) },
+              process: { 
+                ...DEFAULT_COPY.process, 
+                ...(copy.process || {}),
+                steps: copy.process?.steps || DEFAULT_COPY.process.steps,
+              },
             }
           : DEFAULT_COPY;
         setPublicContent(safeContent);

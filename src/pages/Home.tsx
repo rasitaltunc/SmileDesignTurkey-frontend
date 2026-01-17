@@ -138,8 +138,8 @@ export default function Home() {
             {/* Left: Guided Panel */}
             <GuidedPanel
               showStepper={false}
-              headline={copy.hero.headline}
-              subheadline={copy.hero.subheadline}
+              headline={copy?.hero?.headline || DEFAULT_COPY.hero.headline}
+              subheadline={copy?.hero?.subheadline || DEFAULT_COPY.hero.subheadline}
               showTrustLine={true}
             >
               <div className="flex flex-col sm:flex-row gap-4">
@@ -147,9 +147,9 @@ export default function Home() {
                   onClick={handleGetStartedClick}
                   onNavigate={handleNavigateToOnboarding}
                   className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-                  aria-label={copy.hero.ctaPrimary}
+                  aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
                 >
-                  {copy.hero.ctaPrimary}
+                  {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
                   <ChevronRight className="w-5 h-5" />
                 </ProfessionalCTA>
                 <button
@@ -162,7 +162,7 @@ export default function Home() {
                 </button>
               </div>
               <p className="text-xs text-text-tertiary mt-3">
-                {copy.disclaimer.medical}
+                {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
               </p>
             </GuidedPanel>
 
@@ -421,12 +421,12 @@ export default function Home() {
       {/* FinalCTA */}
       <section className="py-24 bg-gradient-to-br from-accent-primary to-accent-hover">
         <div className="max-w-4xl mx-auto px-8 text-center">
-          <h2 className="text-white mb-6 text-4xl font-bold">{copy.cta.final.title}</h2>
+          <h2 className="text-white mb-6 text-4xl font-bold">{copy?.cta?.final?.title || DEFAULT_COPY.cta.final.title}</h2>
           <p className="text-white/90 text-lg mb-6 max-w-2xl mx-auto leading-relaxed">
-            {copy.cta.final.subtitle}
+            {copy?.cta?.final?.subtitle || DEFAULT_COPY.cta.final.subtitle}
           </p>
           <p className="text-white/70 text-sm mb-10">
-            {copy.disclaimer.medical}
+            {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
@@ -438,9 +438,9 @@ export default function Home() {
               }}
               onNavigate={() => navigate('/onboarding')}
               className="px-8 py-4 bg-white text-accent-primary hover:bg-white/95 shadow-lg font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-              aria-label={copy.hero.ctaPrimary}
+              aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             >
-              {copy.hero.ctaPrimary}
+              {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
               <ChevronRight className="w-5 h-5" />
             </ProfessionalCTA>
             <button
