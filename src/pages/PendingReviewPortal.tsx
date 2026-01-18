@@ -22,6 +22,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { getPortalSession, createPortalSession, hasValidPortalSession } from '@/lib/portalSession';
+import { CheckCircle } from 'lucide-react';
 import { startEmailVerification } from '@/lib/verification';
 import { fetchPortalData, type PortalData } from '@/lib/portalApi';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
@@ -61,7 +62,7 @@ export default function PendingReviewPortal() {
   const [showVerificationSuccess, setShowVerificationSuccess] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
-  // Fetch portal data on mount
+  // Fetch portal data on mount and when verified
   useEffect(() => {
     const loadPortalData = async () => {
       const session = getPortalSession();
@@ -74,13 +75,15 @@ export default function PendingReviewPortal() {
       const result = await fetchPortalData();
       if (result.success && result.data) {
         setPortalData(result.data);
-        setIsVerified(!!result.data.email_verified_at);
+        // Use email_verified_at from portal data (authoritative)
+        const verified = !!(result.data.email_verified_at || session.email_verified);
+        setIsVerified(verified);
         setSession(session);
         // Auto-fill email from lead data if available
         if (result.data.email) {
           setVerificationEmail(result.data.email);
         }
-        trackEvent({ type: 'portal_viewed', case_id: result.data.case_id, is_verified: !!result.data.email_verified_at });
+        trackEvent({ type: 'portal_viewed', case_id: result.data.case_id, is_verified: verified });
       } else {
         setError(result.error || 'Failed to load portal data');
       }
@@ -88,7 +91,42 @@ export default function PendingReviewPortal() {
     };
 
     loadPortalData();
-  }, []);
+    
+    // Poll for verification status updates (every 5 seconds, max 2 minutes)
+    // Only poll if not yet verified
+    if (!isVerified) {
+      let pollCount = 0;
+      const maxPolls = 24; // 24 * 5s = 2 minutes
+      const pollInterval = setInterval(() => {
+        pollCount++;
+        if (pollCount > maxPolls) {
+          clearInterval(pollInterval);
+          return;
+        }
+        
+        fetchPortalData().then((result) => {
+          if (result.success && result.data) {
+            const verified = !!result.data.email_verified_at;
+            if (verified) {
+              // Verification just completed - update state and stop polling
+              setPortalData(result.data);
+              setIsVerified(true);
+              const session = getPortalSession();
+              if (session) {
+                createPortalSession(session.case_id, session.portal_token, session.email, session.phone, true);
+                setSession(getPortalSession());
+              }
+              clearInterval(pollInterval);
+            }
+          }
+        }).catch(() => {
+          // Silent fail on poll errors
+        });
+      }, 5000);
+      
+      return () => clearInterval(pollInterval);
+    }
+  }, [isVerified]);
   
   // Cooldown timer for resend
   useEffect(() => {
@@ -100,11 +138,17 @@ export default function PendingReviewPortal() {
     }
   }, [cooldownSeconds]);
 
-  // Check if verification was just completed (redirected from /auth/callback)
+  // Refresh portal data when returning from auth callback
   useEffect(() => {
     const session = getPortalSession();
     if (session?.email_verified) {
-      setIsVerified(true);
+      // Reload portal data to sync email_verified_at
+      fetchPortalData().then((result) => {
+        if (result.success && result.data) {
+          setPortalData(result.data);
+          setIsVerified(!!result.data.email_verified_at);
+        }
+      });
     }
   }, []);
 
@@ -159,9 +203,17 @@ export default function PendingReviewPortal() {
                 <p className="text-sm text-gray-600 mt-1">Case ID: <span className="font-mono font-semibold">{portalData?.case_id || session?.case_id}</span></p>
               )}
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <Clock className="w-4 h-4 text-yellow-700" />
-              <span className="text-sm font-medium text-yellow-800">Pending Doctor Review</span>
+            <div className="flex items-center gap-3">
+              {isVerified ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle className="w-4 h-4 text-green-700" />
+                  <span className="text-sm font-medium text-green-800">Verified</span>
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <Clock className="w-4 h-4 text-yellow-700" />
+                <span className="text-sm font-medium text-yellow-800">Pending Doctor Review</span>
+              </div>
             </div>
           </div>
 
@@ -277,7 +329,7 @@ export default function PendingReviewPortal() {
             <button
               onClick={() => {
                 trackEvent({ type: 'upload_started', case_id });
-                navigate('/upload-center');
+                navigate(`/upload-center?returnTo=/portal${case_id ? `&case_id=${case_id}` : ''}`);
               }}
               className="w-full flex items-center justify-between p-4 bg-white rounded-lg border border-teal-200 hover:border-teal-400 hover:shadow-md transition-all"
             >
@@ -314,7 +366,7 @@ export default function PendingReviewPortal() {
             Upload photos, X-rays, or medical records to help our team prepare your personalized treatment plan.
           </p>
           <button
-            onClick={() => navigate('/upload-center')}
+            onClick={() => navigate(`/upload-center?returnTo=/portal${portalData?.case_id || session?.case_id ? `&case_id=${portalData?.case_id || session?.case_id}` : ''}`)}
             className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-lg text-teal-600 hover:border-teal-400 hover:bg-teal-50 transition-colors"
           >
             <Upload className="w-5 h-5 inline mr-2" />
@@ -322,28 +374,45 @@ export default function PendingReviewPortal() {
           </button>
         </div>
 
-        {/* Locked Modules */}
+        {/* Locked/Unlocked Modules */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Coming Soon</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            {isVerified ? 'Available Features' : 'Coming Soon'}
+          </h2>
           <p className="text-sm text-gray-600 mb-4">
-            These features will unlock after your case is reviewed by a doctor.
+            {isVerified 
+              ? 'These features are now available to you.'
+              : 'These features will unlock after you verify your email and your case is reviewed by a doctor.'}
           </p>
           <div className="grid md:grid-cols-2 gap-3">
             {[
-              { icon: <Plane className="w-5 h-5" />, label: 'Travel Arrangements', locked: true },
-              { icon: <DollarSign className="w-5 h-5" />, label: 'Payment & Packages', locked: true },
-              { icon: <Calendar className="w-5 h-5" />, label: 'Accommodation', locked: true },
-              { icon: <FileText className="w-5 h-5" />, label: 'Treatment Details', locked: true },
+              { icon: <Plane className="w-5 h-5" />, label: 'Travel Arrangements', locked: !isVerified },
+              { icon: <DollarSign className="w-5 h-5" />, label: 'Payment & Packages', locked: !isVerified },
+              { icon: <Calendar className="w-5 h-5" />, label: 'Accommodation', locked: !isVerified },
+              { icon: <FileText className="w-5 h-5" />, label: 'Treatment Details', locked: !isVerified },
             ].map((module, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-60"
+                className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
+                  module.locked
+                    ? 'bg-gray-50 border-gray-200 opacity-60'
+                    : 'bg-teal-50 border-teal-200 hover:border-teal-300 cursor-pointer'
+                }`}
               >
-                <div className="text-gray-400">{module.icon}</div>
+                <div className={module.locked ? 'text-gray-400' : 'text-teal-600'}>{module.icon}</div>
                 <div className="flex-1">
-                  <p className="font-medium text-gray-600">{module.label}</p>
+                  <p className={`font-medium ${module.locked ? 'text-gray-600' : 'text-teal-900'}`}>
+                    {module.label}
+                  </p>
+                  {!module.locked && (
+                    <p className="text-xs text-teal-700 mt-1">Available soon</p>
+                  )}
                 </div>
-                <Lock className="w-4 h-4 text-gray-400" />
+                {module.locked ? (
+                  <Lock className="w-4 h-4 text-gray-400" />
+                ) : (
+                  <CheckCircle className="w-4 h-4 text-teal-600" />
+                )}
               </div>
             ))}
           </div>

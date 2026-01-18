@@ -1,10 +1,13 @@
-import { Link } from '../components/Link';
+import { Link, useNavigate } from '../components/Link';
 import { Upload, File, CheckCircle, XCircle, Shield, Lock, HelpCircle, MessageCircle, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Footer from '../components/Footer';
 import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
+import { hasValidPortalSession } from '../lib/portalSession';
+import { getReturnToFromQuery } from '../lib/utils';
 
 interface UploadedFile {
   id: string;
@@ -15,9 +18,18 @@ interface UploadedFile {
 }
 
 export default function UploadCenter() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
+  const [returnTo, setReturnTo] = useState<string>('/onboarding');
+
+  // Determine return destination on mount
+  useEffect(() => {
+    const destination = getReturnToFromQuery(searchParams, hasValidPortalSession, '/portal');
+    setReturnTo(destination);
+  }, [searchParams]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -303,18 +315,24 @@ export default function UploadCenter() {
 
         {/* Action Buttons */}
         <div className="mt-8 flex flex-col sm:flex-row gap-4">
-          <Link
-            to="/onboarding"
+          <button
+            onClick={() => {
+              trackEvent({ type: 'upload_continue', has_files: uploadedFiles.length > 0, return_to: returnTo });
+              navigate(returnTo);
+            }}
             className="flex-1 px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-center"
           >
             Continue
-          </Link>
-          <Link
-            to="/onboarding"
+          </button>
+          <button
+            onClick={() => {
+              trackEvent({ type: 'upload_skip', return_to: returnTo });
+              navigate(returnTo);
+            }}
             className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-center"
           >
             Continue Without Upload
-          </Link>
+          </button>
         </div>
         <p className="text-center text-sm text-gray-500 mt-4">
           You can upload later. This won't affect your plan.

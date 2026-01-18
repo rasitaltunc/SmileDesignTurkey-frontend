@@ -17,7 +17,7 @@ import { trackEvent } from '../lib/analytics';
 import { BRAND } from '../config';
 import { saveLead, addStagedFiles, getStagedFiles, removeStagedFile, clearStagedFiles, uploadStagedFiles } from '../lib/leadStore';
 import { getWhatsAppUrl } from '../lib/whatsapp';
-import { createPortalSession } from '../lib/portalSession';
+import { createPortalSession, hasValidPortalSession } from '../lib/portalSession';
 import { validateSubmission, getHoneypotFieldName } from '../lib/antiSpam';
 import { SEO } from '../lib/seo';
 import { useLanguage } from '../lib/i18n';
@@ -35,6 +35,19 @@ export default function Onboarding() {
 
   // SEO handled by <SEO> component below
   const seo = copy?.seo?.onboarding ?? DEFAULT_COPY.seo.onboarding;
+  
+  // Guardrail: If user has valid portal session, redirect to portal unless explicitly starting new plan
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const startNew = urlParams.get('startNew') === 'true';
+    
+    if (!startNew && hasValidPortalSession()) {
+      // User has active portal session - redirect to portal
+      // Only allow onboarding if ?startNew=true is explicitly set
+      navigate('/portal', { replace: true });
+      return;
+    }
+  }, [navigate]);
   
   // Sync staged files from store on mount
   useEffect(() => {

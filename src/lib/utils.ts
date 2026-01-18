@@ -38,3 +38,23 @@ export function getPublicSiteUrl(): string {
   throw new Error('getPublicSiteUrl: No valid site URL found. Set VITE_PUBLIC_SITE_URL or ensure window.location.origin is available.');
 }
 
+/**
+ * Get returnTo destination from URL query params with smart defaults
+ * Returns portal path if user has valid portal session, otherwise onboarding
+ */
+export function getReturnToFromQuery(searchParams: URLSearchParams, hasValidPortalSession: () => boolean, defaultPortalPath: string = '/portal'): string {
+  // Explicit returnTo takes precedence
+  const returnTo = searchParams.get('returnTo');
+  if (returnTo && returnTo.trim().length > 0) {
+    return returnTo.trim();
+  }
+  
+  // If user has valid portal session, default to portal
+  if (hasValidPortalSession()) {
+    return defaultPortalPath;
+  }
+  
+  // Otherwise default to onboarding
+  return '/onboarding';
+}
+

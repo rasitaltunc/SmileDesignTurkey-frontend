@@ -9,12 +9,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { getSupabaseClient } from '../../lib/supabaseClient';
 import { getPortalSession, createPortalSession } from '../../lib/portalSession';
+import { startEmailVerification } from '../../lib/verification';
+import { fetchPortalData } from '../../lib/portalApi';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your email...');
+  const [showResend, setShowResend] = useState(false);
+  const [resendEmail, setResendEmail] = useState<string>('');
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -27,7 +31,43 @@ export default function AuthCallback() {
           return;
         }
 
-        // Check if we already have a session
+        // Extract error from hash or query params first
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const hashError = hashParams.get('error');
+        const hashErrorDescription = hashParams.get('error_description');
+        const queryError = searchParams.get('error');
+        const queryErrorDescription = searchParams.get('error_description');
+
+        if (hashError || queryError) {
+          const errorMsg = hashErrorDescription || queryErrorDescription || hashError || queryError || 'Verification failed';
+          
+          // Check if it's an expired/invalid token error
+          if (hashError === 'otp_expired' || queryError === 'otp_expired' || 
+              errorMsg.toLowerCase().includes('expired') ||
+              errorMsg.toLowerCase().includes('invalid') ||
+              errorMsg.toLowerCase().includes('requested path is invalid')) {
+            setStatus('error');
+            setMessage('This verification link has expired. Please request a new one.');
+            setShowResend(true);
+            // Try to get email from portal session for resend
+            const session = getPortalSession();
+            if (session?.email) {
+              setResendEmail(session.email);
+            }
+            return;
+          }
+          
+          setStatus('error');
+          setMessage(errorMsg);
+          setShowResend(true);
+          const session = getPortalSession();
+          if (session?.email) {
+            setResendEmail(session.email);
+          }
+          return;
+        }
+
+        // Check if we already have a session (implicit flow: #access_token=...)
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData?.session?.user?.email) {
           // Session already exists - verification succeeded
@@ -35,27 +75,33 @@ export default function AuthCallback() {
           return;
         }
 
-        // Try PKCE flow first (code in hash)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        // Try PKCE flow (code in hash)
         const code = hashParams.get('code');
-        const error = hashParams.get('error');
-        const errorDescription = hashParams.get('error_description');
-
-        if (error) {
-          setStatus('error');
-          setMessage(errorDescription || error || 'Verification failed');
-          setTimeout(() => navigate('/'), 3000);
-          return;
-        }
-
         if (code) {
           // PKCE flow: exchange code for session
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           
           if (exchangeError || !data?.session?.user?.email) {
+            // Check for expired/invalid errors
+            if (exchangeError?.message?.toLowerCase().includes('expired') || 
+                exchangeError?.message?.toLowerCase().includes('invalid')) {
+              setStatus('error');
+              setMessage('This verification link has expired. Please request a new one.');
+              setShowResend(true);
+              const session = getPortalSession();
+              if (session?.email) {
+                setResendEmail(session.email);
+              }
+              return;
+            }
+            
             setStatus('error');
             setMessage(exchangeError?.message || 'Failed to verify email');
-            setTimeout(() => navigate('/'), 3000);
+            setShowResend(true);
+            const session = getPortalSession();
+            if (session?.email) {
+              setResendEmail(session.email);
+            }
             return;
           }
 
@@ -63,30 +109,74 @@ export default function AuthCallback() {
           return;
         }
 
-        // Try token flow (token in query params)
+        // Try token flow (token in query params: ?token=...&type=magiclink)
         const token = searchParams.get('token');
         const type = searchParams.get('type');
 
         if (token && type === 'magiclink') {
-          // Token flow: verify OTP
-          // Note: Supabase magic link tokens need to be handled via signInWithPassword with the token
-          // But since we're using OTP, we should have the code flow above
-          // If we get here, it might be an older format or error
-          setStatus('error');
-          setMessage('Invalid verification link format. Please request a new verification email.');
-          setTimeout(() => navigate('/'), 3000);
-          return;
+          // Token flow: verify OTP token
+          // Supabase v2 uses verifyOtp for magic link tokens
+          try {
+            const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+              type: 'magiclink',
+              token_hash: token,
+            });
+
+            if (verifyError || !verifyData?.user?.email) {
+              if (verifyError?.message?.toLowerCase().includes('expired') || 
+                  verifyError?.message?.toLowerCase().includes('invalid')) {
+                setStatus('error');
+                setMessage('This verification link has expired. Please request a new one.');
+                setShowResend(true);
+                const session = getPortalSession();
+                if (session?.email) {
+                  setResendEmail(session.email);
+                }
+                return;
+              }
+              
+              setStatus('error');
+              setMessage(verifyError?.message || 'Failed to verify email');
+              setShowResend(true);
+              const session = getPortalSession();
+              if (session?.email) {
+                setResendEmail(session.email);
+              }
+              return;
+            }
+
+            await completeVerification(verifyData.user.email);
+            return;
+          } catch (verifyErr) {
+            console.error('[AuthCallback] Token verification error:', verifyErr);
+            setStatus('error');
+            setMessage('Invalid verification link format. Please request a new verification email.');
+            setShowResend(true);
+            const session = getPortalSession();
+            if (session?.email) {
+              setResendEmail(session.email);
+            }
+            return;
+          }
         }
 
         // No code or token found
         setStatus('error');
         setMessage('No verification code found in the link');
-        setTimeout(() => navigate('/'), 3000);
+        setShowResend(true);
+        const session = getPortalSession();
+        if (session?.email) {
+          setResendEmail(session.email);
+        }
       } catch (error) {
         console.error('[AuthCallback] Error:', error);
         setStatus('error');
         setMessage(error instanceof Error ? error.message : 'Verification failed');
-        setTimeout(() => navigate('/'), 3000);
+        setShowResend(true);
+        const session = getPortalSession();
+        if (session?.email) {
+          setResendEmail(session.email);
+        }
       }
     };
 
@@ -122,10 +212,18 @@ export default function AuthCallback() {
                 session.phone,
                 true
               );
+              
+              // Refresh portal data to get updated email_verified_at
+              try {
+                await fetchPortalData();
+              } catch (refreshError) {
+                console.warn('[AuthCallback] Failed to refresh portal data:', refreshError);
+                // Continue anyway
+              }
             }
           }
 
-          // Redirect to portal
+          // Redirect to portal after 1-2s
           setStatus('success');
           setMessage('Email verified! Redirecting to your portal...');
           setTimeout(() => {
@@ -159,6 +257,28 @@ export default function AuthCallback() {
         }
       }
     };
+    
+    const handleResendVerification = async () => {
+      if (!resendEmail) return;
+      
+      setStatus('loading');
+      setMessage('Sending new verification link...');
+      setShowResend(false);
+      
+      const result = await startEmailVerification(resendEmail);
+      
+      if (result.success) {
+        setStatus('success');
+        setMessage('New verification link sent! Check your email.');
+        setTimeout(() => {
+          navigate('/portal', { replace: true });
+        }, 2000);
+      } else {
+        setStatus('error');
+        setMessage(result.error || 'Failed to send verification link');
+        setShowResend(true);
+      }
+    };
 
     handleCallback();
   }, [navigate, searchParams]);
@@ -187,11 +307,31 @@ export default function AuthCallback() {
             <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Verification failed</h2>
             <p className="text-gray-600 mb-4">{message}</p>
+            {showResend && (
+              <div className="space-y-3">
+                {!resendEmail && (
+                  <input
+                    type="email"
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                )}
+                <button
+                  onClick={handleResendVerification}
+                  disabled={!resendEmail}
+                  className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Resend verification link
+                </button>
+              </div>
+            )}
             <button
-              onClick={() => navigate('/')}
-              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              onClick={() => navigate('/portal')}
+              className="mt-3 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Go to Home
+              Go to Portal
             </button>
           </>
         )}
