@@ -36,8 +36,10 @@ export async function startEmailVerification(email: string, case_id?: string, po
       finalPortalToken = finalPortalToken || session?.portal_token || '';
     }
     
-    // ✅ ENSURE: redirectTo ALWAYS has query params (or fail if missing)
-    let redirectTo = `${window.location.origin}/auth/callback`;
+    // ✅ CRITICAL: redirectTo MUST be exactly `${window.location.origin}/auth/callback`
+    // No extra paths like /employee, no hash routes, just the base callback path
+    const baseRedirectPath = '/auth/callback';
+    let redirectTo = `${window.location.origin}${baseRedirectPath}`;
     
     if (finalCaseId && finalPortalToken) {
       const params = new URLSearchParams({
@@ -49,6 +51,12 @@ export async function startEmailVerification(email: string, case_id?: string, po
       // If we can't get case_id/portal_token, this is an error
       console.error('[startEmailVerification] Missing case_id or portal_token');
       return { success: false, error: 'Missing case information. Please refresh the page and try again.' };
+    }
+    
+    // ✅ VALIDATE: Ensure redirectTo does NOT contain /employee or any hash routes
+    if (redirectTo.includes('/employee') || redirectTo.includes('#')) {
+      console.error('[startEmailVerification] Invalid redirect URL - contains /employee or hash:', redirectTo);
+      return { success: false, error: 'Invalid redirect URL configuration' };
     }
     
     // Validate URL is safe (no localhost in production)

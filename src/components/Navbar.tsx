@@ -279,7 +279,8 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
             )}
 
             {/* Account - her zaman görünür */}
-            {/* ✅ PRIORITY: Patient portal session ALWAYS shows Portal (even if Supabase auth exists) */}
+            {/* ✅ CRITICAL HARD GUARD: Patient portal session ALWAYS shows Portal, NEVER shows Leads */}
+            {/* hasValidPortalSession() takes absolute priority over Supabase auth state */}
             {hasValidPortalSession() ? (
               <Link
                 to="/portal"

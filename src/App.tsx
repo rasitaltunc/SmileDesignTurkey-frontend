@@ -413,7 +413,8 @@ export default function App() {
             } 
           />
           
-          {/* ✅ CRITICAL: Employee routes - STRICT guard: NEVER render if not employee/admin */}
+          {/* ✅ CRITICAL HARD GUARD: Employee routes - NEVER render if not employee/admin */}
+          {/* Patient users MUST be redirected to /portal, never see employee UI */}
           <Route path="/employee" element={<Navigate to="/employee/leads" replace />} />
           <Route 
             path="/employee/leads" 
@@ -425,7 +426,7 @@ export default function App() {
               </RequireRole>
             }
           />
-          {/* Catch-all for /employee/* - redirect to portal if not employee/admin */}
+          {/* Catch-all for /employee/* - hard redirect to portal if not employee/admin */}
           <Route 
             path="/employee/*" 
             element={

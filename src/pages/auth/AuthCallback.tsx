@@ -28,6 +28,9 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleCallback = async () => {
+      // ✅ DEFENSIVE LOG: Log current URL at start
+      console.log('[AuthCallback] Starting callback handler. Current URL:', window.location.href);
+      
       try {
         const supabase = getSupabaseClient();
         if (!supabase) {
@@ -41,6 +44,11 @@ export default function AuthCallback() {
         // This ensures we can verify even if localStorage is empty (different browser/incognito/device)
         const urlCaseId = searchParams.get('case_id');
         const urlPortalToken = searchParams.get('portal_token');
+        
+        // ✅ DEFENSIVE LOG: Log if case_id/portal_token missing
+        if (!urlCaseId || !urlPortalToken) {
+          console.warn('[AuthCallback] Missing case_id or portal_token in URL query params:', { urlCaseId, urlPortalToken });
+        }
         
         // Fallback to localStorage session if query params missing
         let case_id = urlCaseId;
@@ -290,18 +298,21 @@ export default function AuthCallback() {
             // Continue anyway
           }
 
-          // STEP 6: Sign out of Supabase auth (patient shouldn't stay logged in as employee/admin)
-          // This ensures patient portal users don't see Leads/Logout in navbar
+          // STEP 6: Force signOut and redirect to portal
+          // ✅ CRITICAL: Sign out Supabase auth (patient shouldn't stay logged in as employee/admin)
+          // Ignore errors - we must redirect to portal regardless
           try {
             await supabase.auth.signOut();
+            console.log('[AuthCallback] Supabase auth signed out successfully');
           } catch (signOutError) {
-            console.warn('[AuthCallback] Failed to sign out:', signOutError);
-            // Continue anyway - redirect will still work
+            // Ignore signOut errors but log them
+            console.warn('[AuthCallback] Sign out error (ignored):', signOutError);
           }
 
-          // STEP 7: Clean URL hash/query to avoid React 306 crashes and redirect to portal
-          // ✅ CRITICAL: Clean URL immediately (replace hash and query params) - no token in history
+          // ✅ CRITICAL: Clean URL hash/query to avoid React 306 crashes
+          // Replace hash and query params - no token in history
           window.history.replaceState({}, '', '/portal');
+          console.log('[AuthCallback] URL cleaned, redirecting to /portal');
 
           setStatus('success');
           setMessage('Email verified! Redirecting to your portal...');
