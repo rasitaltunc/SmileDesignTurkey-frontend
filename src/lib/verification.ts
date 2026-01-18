@@ -5,10 +5,11 @@
 
 import { getSupabaseClient } from './supabaseClient';
 import { getPortalSession, createPortalSession } from './portalSession';
+import { getPublicSiteUrl } from './utils';
 
 /**
  * Send magic link verification email using Supabase Auth OTP
- * The email will contain a link to /portal/verify with PKCE code
+ * The email will contain a link to /auth/callback with PKCE code
  */
 export async function startEmailVerification(email: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -17,8 +18,7 @@ export async function startEmailVerification(email: string): Promise<{ success: 
       return { success: false, error: 'Supabase not configured' };
     }
 
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const redirectTo = `${origin}/portal/verify`;
+    const redirectTo = `${getPublicSiteUrl()}/auth/callback`;
 
     // Send OTP magic link via Supabase Auth
     const { error } = await supabase.auth.signInWithOtp({

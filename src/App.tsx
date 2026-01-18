@@ -11,6 +11,7 @@ import TreatmentDetail from './pages/TreatmentDetail';
 import PlanDashboard from './pages/PlanDashboard';
 import Intake from './pages/Intake';
 import Login from './pages/auth/Login';
+import AuthCallback from './pages/auth/AuthCallback';
 import DoctorLayout from './layouts/DoctorLayout';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
@@ -297,9 +298,10 @@ export default function App() {
           <Route path="/intake" element={<Intake />} />
           <Route path="/plan-dashboard" element={<PlanDashboard />} />
           
-          {/* Login routes */}
+          {/* Auth routes */}
           <Route path="/login" element={<Login />} />
           {ENABLE_DEMO_LOGIN && <Route path="/demo-login" element={<Login />} />}
+          <Route path="/auth/callback" element={<AuthCallback />} />
           
           {/* Patient portal */}
           <Route 

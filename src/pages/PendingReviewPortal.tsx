@@ -22,7 +22,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { getPortalSession, createPortalSession, hasValidPortalSession } from '@/lib/portalSession';
-import { startEmailVerification, handleVerifyCallback } from '@/lib/verification';
+import { startEmailVerification } from '@/lib/verification';
 import { fetchPortalData, type PortalData } from '@/lib/portalApi';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
@@ -100,28 +100,11 @@ export default function PendingReviewPortal() {
     }
   }, [cooldownSeconds]);
 
-  // Handle verification callback from URL (PKCE flow)
+  // Check if verification was just completed (redirected from /auth/callback)
   useEffect(() => {
     const session = getPortalSession();
-    if (session && session.case_id && session.portal_token && window.location.hash.includes('code=')) {
-      setIsLoading(true);
-      handleVerifyCallback(session.case_id, session.portal_token).then((result) => {
-        if (result.success) {
-          setIsVerified(true);
-          const updatedSession = getPortalSession();
-          if (updatedSession) setSession(updatedSession);
-          // Reload portal data to get updated email_verified_at
-          fetchPortalData().then((dataResult) => {
-            if (dataResult.success && dataResult.data) {
-              setPortalData(dataResult.data);
-            }
-          });
-          trackEvent({ type: 'verification_completed', case_id: session.case_id });
-        } else {
-          setError(result.error || 'Verification failed');
-        }
-        setIsLoading(false);
-      });
+    if (session?.email_verified) {
+      setIsVerified(true);
     }
   }, []);
 
