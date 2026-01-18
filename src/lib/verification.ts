@@ -23,26 +23,32 @@ export async function startEmailVerification(email: string, case_id?: string, po
       return { success: false, error: 'window is not available' };
     }
     
-    // Build redirect URL with case_id and portal_token query params (if available)
+    // ✅ CRITICAL: Build redirect URL with case_id and portal_token query params
     // This ensures the callback can verify even if localStorage is empty (different browser/context)
+    // ALWAYS include query params - fallback to portal session if not provided
+    let finalCaseId = case_id;
+    let finalPortalToken = portal_token;
+    
+    if (!finalCaseId || !finalPortalToken) {
+      // Fallback: try to get from portal session
+      const session = getPortalSession();
+      finalCaseId = finalCaseId || session?.case_id || '';
+      finalPortalToken = finalPortalToken || session?.portal_token || '';
+    }
+    
+    // ✅ ENSURE: redirectTo ALWAYS has query params (or fail if missing)
     let redirectTo = `${window.location.origin}/auth/callback`;
     
-    if (case_id && portal_token) {
+    if (finalCaseId && finalPortalToken) {
       const params = new URLSearchParams({
-        case_id: case_id,
-        portal_token: portal_token,
+        case_id: finalCaseId,
+        portal_token: finalPortalToken,
       });
       redirectTo = `${redirectTo}?${params.toString()}`;
     } else {
-      // Fallback: try to get from portal session
-      const session = getPortalSession();
-      if (session?.case_id && session?.portal_token) {
-        const params = new URLSearchParams({
-          case_id: session.case_id,
-          portal_token: session.portal_token,
-        });
-        redirectTo = `${redirectTo}?${params.toString()}`;
-      }
+      // If we can't get case_id/portal_token, this is an error
+      console.error('[startEmailVerification] Missing case_id or portal_token');
+      return { success: false, error: 'Missing case information. Please refresh the page and try again.' };
     }
     
     // Validate URL is safe (no localhost in production)

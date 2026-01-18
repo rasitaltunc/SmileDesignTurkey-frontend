@@ -300,16 +300,14 @@ export default function AuthCallback() {
           }
 
           // STEP 7: Clean URL hash/query to avoid React 306 crashes and redirect to portal
-          // Clean URL immediately (replace hash and query params)
+          // ✅ CRITICAL: Clean URL immediately (replace hash and query params) - no token in history
           window.history.replaceState({}, '', '/portal');
 
           setStatus('success');
           setMessage('Email verified! Redirecting to your portal...');
 
-          // Redirect to portal after brief delay
-          setTimeout(() => {
-            navigate('/portal', { replace: true });
-          }, 1500);
+          // ✅ CRITICAL: Redirect to portal immediately with replace (no history entry for auth callback)
+          navigate('/portal', { replace: true });
         } catch (verifyError) {
           console.error('[AuthCallback] Error during verification:', verifyError);
           setStatus('error');

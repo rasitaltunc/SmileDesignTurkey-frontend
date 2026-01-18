@@ -279,8 +279,8 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
             )}
 
             {/* Account - her zaman görünür */}
-            {/* Patient portal users (no Supabase auth) show Portal link, not Login/Logout */}
-            {!isAuthenticated && hasValidPortalSession() ? (
+            {/* ✅ PRIORITY: Patient portal session ALWAYS shows Portal (even if Supabase auth exists) */}
+            {hasValidPortalSession() ? (
               <Link
                 to="/portal"
                 className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"

@@ -2,6 +2,7 @@ import { useState, useEffect, ReactNode, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
+import { hasValidPortalSession } from './lib/portalSession';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
 import { getHomePath } from './lib/roleHome';
 import { NavigationContext } from './lib/navigationContext';
@@ -188,6 +189,26 @@ export default function App() {
       return cleanup;
     }
   }, []);
+  
+  // ✅ CRITICAL: Clean up Supabase auth session if patient portal session exists
+  // Patient users should NOT stay logged in as employee/admin
+  useEffect(() => {
+    if (hasValidPortalSession()) {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        // Check if there's an active Supabase session
+        supabase.auth.getSession().then(({ data: sessionData }) => {
+          if (sessionData?.session) {
+            // Patient portal session exists but Supabase auth also exists - sign out Supabase
+            console.log('[App] Patient portal session detected - cleaning up Supabase auth session');
+            supabase.auth.signOut().catch((err) => {
+              console.warn('[App] Failed to sign out Supabase session:', err);
+            });
+          }
+        });
+      }
+    }
+  }, []); // Run once on mount
   
   // Initialize auth session on mount
   useEffect(() => {
@@ -392,7 +413,7 @@ export default function App() {
             } 
           />
           
-          {/* Employee routes - Protected: redirect to /portal if not employee/admin */}
+          {/* ✅ CRITICAL: Employee routes - STRICT guard: NEVER render if not employee/admin */}
           <Route path="/employee" element={<Navigate to="/employee/leads" replace />} />
           <Route 
             path="/employee/leads" 
@@ -401,6 +422,15 @@ export default function App() {
                 <Suspense fallback={<PageLoader />}>
                   <AdminLeads />
                 </Suspense>
+              </RequireRole>
+            }
+          />
+          {/* Catch-all for /employee/* - redirect to portal if not employee/admin */}
+          <Route 
+            path="/employee/*" 
+            element={
+              <RequireRole roles={['employee', 'admin']} navigate={syncNavigate} isLoading={isLoading}>
+                <Navigate to="/portal" replace />
               </RequireRole>
             }
           />
