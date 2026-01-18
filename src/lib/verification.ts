@@ -18,12 +18,38 @@ export async function startEmailVerification(email: string): Promise<{ success: 
       return { success: false, error: 'Supabase not configured' };
     }
 
-    const redirectTo = `${getPublicSiteUrl()}/auth/callback`;
+    // Get exact redirect URL (production-safe, never localhost in prod)
+    const baseUrl = getPublicSiteUrl();
+    const redirectTo = `${baseUrl}/auth/callback`;
+    
+    // Validate URL is safe (no wildcards, properly formed, no localhost in production)
+    try {
+      const url = new URL(redirectTo);
+      
+      // Reject wildcards
+      if (url.hostname.includes('*')) {
+        return { success: false, error: 'Invalid redirect URL: wildcards not allowed' };
+      }
+      
+      // Reject localhost in production (security)
+      if (import.meta.env.PROD && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
+        return { success: false, error: 'Invalid redirect URL: localhost not allowed in production' };
+      }
+      
+      // Ensure exact path (no wildcards in path either)
+      if (url.pathname.includes('*')) {
+        return { success: false, error: 'Invalid redirect URL: wildcards in path not allowed' };
+      }
+    } catch (urlError) {
+      return { success: false, error: `Invalid redirect URL format: ${urlError instanceof Error ? urlError.message : 'unknown error'}` };
+    }
 
     // Send OTP magic link via Supabase Auth
+    // Note: Supabase handles URL encoding internally, but we ensure exact URL
     const { error } = await supabase.auth.signInWithOtp({
       email: email.toLowerCase().trim(),
       options: {
+        // Use exact URL - do NOT use wildcard or relative paths
         emailRedirectTo: redirectTo,
         shouldCreateUser: false, // Only verify existing email, don't create user
       },
