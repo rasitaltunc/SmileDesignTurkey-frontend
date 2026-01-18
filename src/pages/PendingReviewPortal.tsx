@@ -157,7 +157,12 @@ export default function PendingReviewPortal() {
     if (!verificationEmail || cooldownSeconds > 0) return;
 
     setIsSendingVerification(true);
-    const result = await startEmailVerification(verificationEmail);
+    // Pass case_id and portal_token so the magic link includes them in query params
+    const result = await startEmailVerification(
+      verificationEmail,
+      session?.case_id || portalData?.case_id,
+      session?.portal_token
+    );
     setIsSendingVerification(false);
 
     if (result.success) {

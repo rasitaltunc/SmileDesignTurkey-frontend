@@ -8,10 +8,10 @@ import { getPortalSession, createPortalSession } from './portalSession';
 
 /**
  * Send magic link verification email using Supabase Auth OTP
- * The email will contain a link to /auth/callback with PKCE code
+ * The email will contain a link to /auth/callback with PKCE code + case_id/portal_token query params
  * ALWAYS uses window.location.origin (never localhost in production)
  */
-export async function startEmailVerification(email: string): Promise<{ success: boolean; error?: string }> {
+export async function startEmailVerification(email: string, case_id?: string, portal_token?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = getSupabaseClient();
     if (!supabase) {
@@ -23,7 +23,27 @@ export async function startEmailVerification(email: string): Promise<{ success: 
       return { success: false, error: 'window is not available' };
     }
     
-    const redirectTo = `${window.location.origin}/auth/callback`;
+    // Build redirect URL with case_id and portal_token query params (if available)
+    // This ensures the callback can verify even if localStorage is empty (different browser/context)
+    let redirectTo = `${window.location.origin}/auth/callback`;
+    
+    if (case_id && portal_token) {
+      const params = new URLSearchParams({
+        case_id: case_id,
+        portal_token: portal_token,
+      });
+      redirectTo = `${redirectTo}?${params.toString()}`;
+    } else {
+      // Fallback: try to get from portal session
+      const session = getPortalSession();
+      if (session?.case_id && session?.portal_token) {
+        const params = new URLSearchParams({
+          case_id: session.case_id,
+          portal_token: session.portal_token,
+        });
+        redirectTo = `${redirectTo}?${params.toString()}`;
+      }
+    }
     
     // Validate URL is safe (no localhost in production)
     try {
@@ -43,7 +63,7 @@ export async function startEmailVerification(email: string): Promise<{ success: 
     const { error } = await supabase.auth.signInWithOtp({
       email: email.toLowerCase().trim(),
       options: {
-        // Use exact URL - do NOT use wildcard or relative paths
+        // Use exact URL with query params - Supabase will append PKCE code to this
         emailRedirectTo: redirectTo,
         shouldCreateUser: false, // Only verify existing email, don't create user
       },

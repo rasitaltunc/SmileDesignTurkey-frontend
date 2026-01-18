@@ -8,6 +8,7 @@ import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { useAuthStore } from '../store/authStore';
 import { getHomePath, getHomeLabel } from '../lib/roleHome';
+import { hasValidPortalSession } from '../lib/portalSession';
 
 interface NavbarProps {
   minimal?: boolean;
@@ -278,7 +279,15 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
             )}
 
             {/* Account - her zaman görünür */}
-            {!isAuthenticated ? (
+            {/* Patient portal users (no Supabase auth) show Portal link, not Login/Logout */}
+            {!isAuthenticated && hasValidPortalSession() ? (
+              <Link
+                to="/portal"
+                className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
+              >
+                Portal
+              </Link>
+            ) : !isAuthenticated ? (
               <button
                 onClick={openAuth}
                 className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
@@ -288,18 +297,22 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                {roleLabel && role ? (
+                {/* Only show role-based link if user is employee/admin/doctor (not patient) */}
+                {roleLabel && role && role !== 'patient' ? (
                   <PrefetchLink
                     to={getHomePath(role)}
-                    prefetch={role === 'admin' || role === 'employee' ? 'admin' : role === 'doctor' ? 'doctor' : role === 'patient' ? 'patient' : undefined}
+                    prefetch={role === 'admin' || role === 'employee' ? 'admin' : role === 'doctor' ? 'doctor' : undefined}
                     className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
                   >
                     {roleLabel}
                   </PrefetchLink>
-                ) : roleLabel ? (
-                  <span className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-500 whitespace-nowrap shrink-0">
-                    {roleLabel}
-                  </span>
+                ) : roleLabel === 'My Portal' ? (
+                  <Link
+                    to="/portal"
+                    className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    Portal
+                  </Link>
                 ) : null}
                 <button
                   onClick={handleLogout}

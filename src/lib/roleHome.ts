@@ -14,7 +14,7 @@ export function getHomePath(role: string | null | undefined): string {
     case "doctor":
       return "/doctor";
     case "patient":
-      return "/patient/portal";
+      return "/portal";
     default:
       return "/";
   }

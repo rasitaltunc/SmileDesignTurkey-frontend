@@ -12,6 +12,7 @@ import PlanDashboard from './pages/PlanDashboard';
 import Intake from './pages/Intake';
 import Login from './pages/auth/Login';
 import AuthCallback from './pages/auth/AuthCallback';
+const SetPassword = lazy(() => import('./pages/auth/SetPassword'));
 import DoctorLayout from './layouts/DoctorLayout';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
@@ -302,6 +303,14 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           {ENABLE_DEMO_LOGIN && <Route path="/demo-login" element={<Login />} />}
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route 
+            path="/set-password" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <SetPassword />
+              </Suspense>
+            } 
+          />
           
           {/* Patient portal */}
           <Route 
@@ -383,7 +392,7 @@ export default function App() {
             } 
           />
           
-          {/* Employee routes */}
+          {/* Employee routes - Protected: redirect to /portal if not employee/admin */}
           <Route path="/employee" element={<Navigate to="/employee/leads" replace />} />
           <Route 
             path="/employee/leads" 
@@ -393,7 +402,7 @@ export default function App() {
                   <AdminLeads />
                 </Suspense>
               </RequireRole>
-            } 
+            }
           />
           
           {/* Catch-all: 404 Not Found */}

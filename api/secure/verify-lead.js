@@ -65,17 +65,29 @@ module.exports = async function handler(req, res) {
       return res.status(403).json({ ok: false, error: "Email mismatch" });
     }
 
-    // Update email_verified_at (idempotent: safe to call multiple times)
-    const { error: updateError } = await db
+    // Update email_verified_at and optionally portal_status (idempotent: safe to call multiple times)
+    const now = new Date().toISOString();
+    const updateData = { email_verified_at: now };
+    
+    // Optionally update portal_status to 'active' if it's still 'pending_review' or null
+    if (!lead.portal_status || lead.portal_status === 'pending_review') {
+      updateData.portal_status = 'active';
+    }
+    
+    const { data: updatedLead, error: updateError } = await db
       .from("leads")
-      .update({ email_verified_at: new Date().toISOString() })
-      .eq("id", lead.id);
+      .update(updateData)
+      .eq("id", lead.id)
+      .select("id, email_verified_at, portal_status")
+      .single();
 
     if (updateError) {
+      console.error("[api/secure/verify-lead] Update error:", updateError);
       return res.status(500).json({ ok: false, error: "Failed to update verification status" });
     }
 
-    return res.status(200).json({ ok: true, email_verified_at: new Date().toISOString() });
+    console.log("[api/secure/verify-lead] Successfully updated lead:", lead.id, "email_verified_at:", now);
+    return res.status(200).json({ ok: true, email_verified_at: now, portal_status: updatedLead?.portal_status });
   } catch (e) {
     console.error("[api/secure/verify-lead] Error:", e);
     return res.status(500).json({ ok: false, error: "Server error" });

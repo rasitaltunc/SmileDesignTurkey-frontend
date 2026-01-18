@@ -1,7 +1,11 @@
 /**
  * Auth Callback Page
  * Handles Supabase magic link verification callback
- * Supports both PKCE flow (code in hash) and token flow (token in query params)
+ * - Reads case_id + portal_token from URL query params (if localStorage is empty)
+ * - Verifies email via Supabase Auth (PKCE/token flow)
+ * - Updates leads.email_verified_at via /api/secure/verify-lead
+ * - Signs out of Supabase auth (patient shouldn't stay logged in as employee/admin)
+ * - Cleans URL hash/query and redirects to /portal
  */
 
 import { useEffect, useState } from 'react';
@@ -19,6 +23,8 @@ export default function AuthCallback() {
   const [message, setMessage] = useState('Verifying your email...');
   const [showResend, setShowResend] = useState(false);
   const [resendEmail, setResendEmail] = useState<string>('');
+  const [resendCaseId, setResendCaseId] = useState<string>('');
+  const [resendPortalToken, setResendPortalToken] = useState<string>('');
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -31,7 +37,43 @@ export default function AuthCallback() {
           return;
         }
 
-        // Extract error from hash or query params first
+        // STEP 1: Get case_id and portal_token from URL query params FIRST (critical for cross-browser/context)
+        // This ensures we can verify even if localStorage is empty (different browser/incognito/device)
+        const urlCaseId = searchParams.get('case_id');
+        const urlPortalToken = searchParams.get('portal_token');
+        
+        // Fallback to localStorage session if query params missing
+        let case_id = urlCaseId;
+        let portal_token = urlPortalToken;
+        let email = '';
+        
+        if (!case_id || !portal_token) {
+          const session = getPortalSession();
+          case_id = case_id || session?.case_id || '';
+          portal_token = portal_token || session?.portal_token || '';
+          email = session?.email || '';
+        }
+
+        // If we still don't have case_id/portal_token, show error with resend option
+        if (!case_id || !portal_token) {
+          setStatus('error');
+          setMessage('Missing case information. Please request a new verification link from your portal.');
+          setShowResend(true);
+          // Try to get email from portal session for resend
+          const session = getPortalSession();
+          if (session?.email) {
+            setResendEmail(session.email);
+            setResendCaseId(session.case_id || '');
+            setResendPortalToken(session.portal_token || '');
+          }
+          return;
+        }
+
+        // Store for resend functionality
+        setResendCaseId(case_id);
+        setResendPortalToken(portal_token);
+
+        // STEP 2: Extract error from hash or query params
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const hashError = hashParams.get('error');
         const hashErrorDescription = hashParams.get('error_description');
@@ -67,153 +109,214 @@ export default function AuthCallback() {
           return;
         }
 
+        // STEP 3: Verify Supabase auth session (PKCE or token flow)
+        let verifiedEmail: string | null = null;
+
         // Check if we already have a session (implicit flow: #access_token=...)
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.user?.email) {
-          // Session already exists - verification succeeded
-          await completeVerification(sessionData.session.user.email);
+        const { data: existingSession } = await supabase.auth.getSession();
+        if (existingSession?.session?.user?.email) {
+          verifiedEmail = existingSession.session.user.email.toLowerCase().trim();
+        } else {
+          // Try PKCE flow (code in hash or query: ?code=... or #code=...)
+          const hashCode = hashParams.get('code');
+          const queryCode = searchParams.get('code');
+          const code = hashCode || queryCode;
+          
+          if (code) {
+            // PKCE flow: exchange code for session
+            try {
+              const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(window.location.href);
+              
+              if (exchangeError || !data?.session?.user?.email) {
+                if (exchangeError?.message?.toLowerCase().includes('expired') || 
+                    exchangeError?.message?.toLowerCase().includes('invalid') ||
+                    exchangeError?.message?.toLowerCase().includes('requested path is invalid')) {
+                  setStatus('error');
+                  setMessage('This verification link has expired. Please request a new one.');
+                  setShowResend(true);
+                  const session = getPortalSession();
+                  if (session?.email) {
+                    setResendEmail(session.email);
+                  }
+                  return;
+                }
+                
+                setStatus('error');
+                setMessage(exchangeError?.message || 'Failed to verify email');
+                setShowResend(true);
+                const session = getPortalSession();
+                if (session?.email) {
+                  setResendEmail(session.email);
+                }
+                return;
+              }
+              
+              verifiedEmail = data.session.user.email.toLowerCase().trim();
+            } catch (exchangeErr) {
+              console.error('[AuthCallback] PKCE exchange error:', exchangeErr);
+              setStatus('error');
+              setMessage('Failed to verify email. Please request a new verification link.');
+              setShowResend(true);
+              const session = getPortalSession();
+              if (session?.email) {
+                setResendEmail(session.email);
+              }
+              return;
+            }
+          } else {
+            // Try token flow (token in query params: ?token=...&type=magiclink)
+            const token = searchParams.get('token');
+            const type = searchParams.get('type');
+
+            if (token && type === 'magiclink') {
+              try {
+                const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+                  type: 'magiclink',
+                  token_hash: token,
+                });
+
+                if (verifyError || !verifyData?.user?.email) {
+                  if (verifyError?.message?.toLowerCase().includes('expired') || 
+                      verifyError?.message?.toLowerCase().includes('invalid') ||
+                      verifyError?.message?.toLowerCase().includes('requested path is invalid')) {
+                    setStatus('error');
+                    setMessage('This verification link has expired. Please request a new one.');
+                    setShowResend(true);
+                    const session = getPortalSession();
+                    if (session?.email) {
+                      setResendEmail(session.email);
+                    }
+                    return;
+                  }
+                  
+                  setStatus('error');
+                  setMessage(verifyError?.message || 'Failed to verify email');
+                  setShowResend(true);
+                  const session = getPortalSession();
+                  if (session?.email) {
+                    setResendEmail(session.email);
+                  }
+                  return;
+                }
+                
+                verifiedEmail = verifyData.user.email.toLowerCase().trim();
+              } catch (verifyErr) {
+                console.error('[AuthCallback] Token verification error:', verifyErr);
+                setStatus('error');
+                setMessage('Invalid verification link format. Please request a new verification email.');
+                setShowResend(true);
+                const session = getPortalSession();
+                if (session?.email) {
+                  setResendEmail(session.email);
+                }
+                return;
+              }
+            } else {
+              // No code or token found
+              setStatus('error');
+              setMessage('No verification code found in the link');
+              setShowResend(true);
+              const session = getPortalSession();
+              if (session?.email) {
+                setResendEmail(session.email);
+              }
+              return;
+            }
+          }
+        }
+
+        if (!verifiedEmail) {
+          setStatus('error');
+          setMessage('Could not verify email from authentication session');
+          setShowResend(true);
           return;
         }
 
-        // Try PKCE flow (code in hash or query: ?code=... or #code=...)
-        const hashCode = hashParams.get('code');
-        const queryCode = searchParams.get('code');
-        const code = hashCode || queryCode;
-        
-        if (code) {
-          // PKCE flow: prefer exchangeCodeForSession with full URL (supabase-js v2 best practice)
-          // This handles both hash and query param formats
-          try {
-            // Use full URL for exchange (more robust in supabase-js v2)
-            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(window.location.href);
-            
-            if (exchangeError || !data?.session?.user?.email) {
-              // Check for expired/invalid errors
-              if (exchangeError?.message?.toLowerCase().includes('expired') || 
-                  exchangeError?.message?.toLowerCase().includes('invalid') ||
-                  exchangeError?.message?.toLowerCase().includes('requested path is invalid')) {
-                setStatus('error');
-                setMessage('This verification link has expired. Please request a new one.');
-                setShowResend(true);
-                const session = getPortalSession();
-                if (session?.email) {
-                  setResendEmail(session.email);
-                }
-                return;
-              }
-              
-              setStatus('error');
-              setMessage(exchangeError?.message || 'Failed to verify email');
-              setShowResend(true);
-              const session = getPortalSession();
-              if (session?.email) {
-                setResendEmail(session.email);
-              }
-              return;
-            }
-            
-            // Confirm session exists after exchange
-            const { data: sessionCheck, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError || !sessionCheck?.session?.user?.email) {
-              setStatus('error');
-              setMessage('Session verification failed. Please try again.');
-              setShowResend(true);
-              const session = getPortalSession();
-              if (session?.email) {
-                setResendEmail(session.email);
-              }
-              return;
-            }
+        // STEP 4: Call backend endpoint to update leads.email_verified_at
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData?.session?.access_token;
 
-            await completeVerification(sessionCheck.session.user.email);
-            return;
-          } catch (exchangeErr) {
-            console.error('[AuthCallback] PKCE exchange error:', exchangeErr);
-            setStatus('error');
-            setMessage('Failed to verify email. Please request a new verification link.');
-            setShowResend(true);
-            const session = getPortalSession();
-            if (session?.email) {
-              setResendEmail(session.email);
-            }
-            return;
+          if (!accessToken) {
+            throw new Error('No access token available');
           }
-        }
 
-        // Try token flow (token in query params: ?token=...&type=magiclink)
-        const token = searchParams.get('token');
-        const type = searchParams.get('type');
+          const verifyResponse = await fetch('/api/secure/verify-lead', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              case_id,
+              portal_token,
+            }),
+          });
 
-        if (token && type === 'magiclink') {
-          // Token flow: verify OTP token
-          // Supabase v2 uses verifyOtp for magic link tokens
-          try {
-            // Token flow: verify OTP using verifyOtp (supabase-js v2)
-            // Note: Supabase magic link tokens can be verified via verifyOtp
-            const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-              type: 'magiclink',
-              token_hash: token,
-            });
-
-            if (verifyError || !verifyData?.user?.email) {
-              if (verifyError?.message?.toLowerCase().includes('expired') || 
-                  verifyError?.message?.toLowerCase().includes('invalid') ||
-                  verifyError?.message?.toLowerCase().includes('requested path is invalid')) {
-                setStatus('error');
-                setMessage('This verification link has expired. Please request a new one.');
-                setShowResend(true);
-                const session = getPortalSession();
-                if (session?.email) {
-                  setResendEmail(session.email);
-                }
-                return;
-              }
-              
-              setStatus('error');
-              setMessage(verifyError?.message || 'Failed to verify email');
-              setShowResend(true);
-              const session = getPortalSession();
-              if (session?.email) {
-                setResendEmail(session.email);
-              }
-              return;
-            }
-            
-            // Confirm session exists after OTP verification
-            const { data: sessionCheck, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError || !sessionCheck?.session?.user?.email) {
-              setStatus('error');
-              setMessage('Session verification failed. Please try again.');
-              setShowResend(true);
-              const session = getPortalSession();
-              if (session?.email) {
-                setResendEmail(session.email);
-              }
-              return;
-            }
-
-            await completeVerification(sessionCheck.session.user.email);
-            return;
-          } catch (verifyErr) {
-            console.error('[AuthCallback] Token verification error:', verifyErr);
-            setStatus('error');
-            setMessage('Invalid verification link format. Please request a new verification email.');
-            setShowResend(true);
-            const session = getPortalSession();
-            if (session?.email) {
-              setResendEmail(session.email);
-            }
-            return;
+          const verifyResult = await verifyResponse.json().catch(() => ({}));
+          if (!verifyResponse.ok || !verifyResult.ok) {
+            console.error('[AuthCallback] Verify-lead endpoint failed:', verifyResponse.status, verifyResult);
+            throw new Error(verifyResult.error || 'Failed to update verification status');
           }
-        }
 
-        // No code or token found
-        setStatus('error');
-        setMessage('No verification code found in the link');
-        setShowResend(true);
-        const session = getPortalSession();
-        if (session?.email) {
-          setResendEmail(session.email);
+          console.log('[AuthCallback] Lead verified successfully:', case_id);
+
+          // STEP 5: Update portal session with verified status
+          const session = getPortalSession();
+          if (session && session.case_id === case_id) {
+            createPortalSession(
+              case_id,
+              portal_token,
+              verifiedEmail,
+              session.phone,
+              true
+            );
+          } else {
+            // Create new session if it doesn't exist (cross-browser case)
+            createPortalSession(
+              case_id,
+              portal_token,
+              verifiedEmail,
+              null,
+              true
+            );
+          }
+
+          // Refresh portal data to get updated email_verified_at
+          try {
+            await fetchPortalData();
+          } catch (refreshError) {
+            console.warn('[AuthCallback] Failed to refresh portal data:', refreshError);
+            // Continue anyway
+          }
+
+          // STEP 6: Sign out of Supabase auth (patient shouldn't stay logged in as employee/admin)
+          // This ensures patient portal users don't see Leads/Logout in navbar
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutError) {
+            console.warn('[AuthCallback] Failed to sign out:', signOutError);
+            // Continue anyway - redirect will still work
+          }
+
+          // STEP 7: Clean URL hash/query to avoid React 306 crashes and redirect to portal
+          // Clean URL immediately (replace hash and query params)
+          window.history.replaceState({}, '', '/portal');
+
+          setStatus('success');
+          setMessage('Email verified! Redirecting to your portal...');
+
+          // Redirect to portal after brief delay
+          setTimeout(() => {
+            navigate('/portal', { replace: true });
+          }, 1500);
+        } catch (verifyError) {
+          console.error('[AuthCallback] Error during verification:', verifyError);
+          setStatus('error');
+          setMessage(verifyError instanceof Error ? verifyError.message : 'Failed to complete verification');
+          setShowResend(true);
+          // Store email for resend
+          setResendEmail(verifiedEmail);
         }
       } catch (error) {
         console.error('[AuthCallback] Error:', error);
@@ -223,112 +326,40 @@ export default function AuthCallback() {
         const session = getPortalSession();
         if (session?.email) {
           setResendEmail(session.email);
+          setResendCaseId(session.case_id || '');
+          setResendPortalToken(session.portal_token || '');
         }
-      }
-    };
-
-    const completeVerification = async (verifiedEmail: string) => {
-      try {
-        const session = getPortalSession();
-        
-        if (session && session.case_id && session.portal_token) {
-          // Call server endpoint to mark lead as verified
-          const { data: sessionData } = await supabase.auth.getSession();
-          const accessToken = sessionData?.session?.access_token;
-          
-          if (accessToken) {
-            const verifyResponse = await fetch('/api/secure/verify-lead', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({
-                case_id: session.case_id,
-                portal_token: session.portal_token,
-              }),
-            });
-
-            const verifyResult = await verifyResponse.json().catch(() => ({}));
-            if (verifyResponse.ok && verifyResult.ok) {
-              // Update portal session with verified status
-              createPortalSession(
-                session.case_id,
-                session.portal_token,
-                verifiedEmail,
-                session.phone,
-                true
-              );
-              
-              // Refresh portal data to get updated email_verified_at
-              try {
-                await fetchPortalData();
-              } catch (refreshError) {
-                console.warn('[AuthCallback] Failed to refresh portal data:', refreshError);
-                // Continue anyway
-              }
-            }
-          }
-
-          // Redirect to portal after 1-2s
-          setStatus('success');
-          setMessage('Email verified! Redirecting to your portal...');
-          setTimeout(() => {
-            navigate('/portal', { replace: true });
-          }, 1500);
-          return;
-        }
-
-        // No portal session - redirect to home with success message
-        setStatus('success');
-        setMessage('Email verified successfully!');
-        setTimeout(() => {
-          navigate('/?verified=true', { replace: true });
-        }, 1500);
-      } catch (error) {
-        console.error('[AuthCallback] Verification completion error:', error);
-        // Even if verification update fails, redirect to portal if session exists
-        const session = getPortalSession();
-        if (session?.case_id) {
-          setStatus('success');
-          setMessage('Redirecting to your portal...');
-          setTimeout(() => {
-            navigate('/portal', { replace: true });
-          }, 1500);
-        } else {
-          setStatus('success');
-          setMessage('Email verified! Redirecting...');
-          setTimeout(() => {
-            navigate('/?verified=true', { replace: true });
-          }, 1500);
-        }
-      }
-    };
-    
-    const handleResendVerification = async () => {
-      if (!resendEmail) return;
-      
-      setStatus('loading');
-      setMessage('Sending new verification link...');
-      setShowResend(false);
-      
-      const result = await startEmailVerification(resendEmail);
-      
-      if (result.success) {
-        setStatus('success');
-        setMessage('New verification link sent! Check your email.');
-        setTimeout(() => {
-          navigate('/portal', { replace: true });
-        }, 2000);
-      } else {
-        setStatus('error');
-        setMessage(result.error || 'Failed to send verification link');
-        setShowResend(true);
       }
     };
 
     handleCallback();
   }, [navigate, searchParams]);
+    
+  const handleResendVerification = async () => {
+    if (!resendEmail) return;
+    
+    setStatus('loading');
+    setMessage('Sending new verification link...');
+    setShowResend(false);
+    
+    const result = await startEmailVerification(
+      resendEmail,
+      resendCaseId || undefined,
+      resendPortalToken || undefined
+    );
+    
+    if (result.success) {
+      setStatus('success');
+      setMessage('New verification link sent! Check your email.');
+      setTimeout(() => {
+        navigate('/portal', { replace: true });
+      }, 2000);
+    } else {
+      setStatus('error');
+      setMessage(result.error || 'Failed to send verification link');
+      setShowResend(true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -386,4 +417,3 @@ export default function AuthCallback() {
     </div>
   );
 }
-

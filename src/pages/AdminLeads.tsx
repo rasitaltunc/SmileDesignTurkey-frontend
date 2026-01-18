@@ -1252,21 +1252,9 @@ export default function AdminLeads() {
       loadIntakes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isAuthenticated, tableRows]);
+  }, [isAdmin, isAuthenticated]);
 
-  // Set activeLeadId to first lead when leads load or tab changes
-  useEffect(() => {
-    if (tableRows.length > 0) {
-      const currentActiveExists = tableRows.some(row => row.id === activeLeadId);
-      if (!currentActiveExists) {
-        setActiveLeadId(tableRows[0].id);
-      }
-    } else {
-      setActiveLeadId(null);
-    }
-  }, [leads, tab]);
-
-  // Compute rows for LeadsTable (using hook)
+  // Compute rows for LeadsTable (using hook) - MUST be defined before useEffects that use it
   const tableRows = useLeadTableRows({
     leads,
     tab,
