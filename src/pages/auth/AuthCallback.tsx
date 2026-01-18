@@ -75,18 +75,35 @@ export default function AuthCallback() {
           return;
         }
 
-        // Try PKCE flow (code in hash)
-        const code = hashParams.get('code');
+        // Try PKCE flow (code in hash or query: ?code=... or #code=...)
+        const hashCode = hashParams.get('code');
+        const queryCode = searchParams.get('code');
+        const code = hashCode || queryCode;
+        
         if (code) {
-          // PKCE flow: exchange code for session
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          
-          if (exchangeError || !data?.session?.user?.email) {
-            // Check for expired/invalid errors
-            if (exchangeError?.message?.toLowerCase().includes('expired') || 
-                exchangeError?.message?.toLowerCase().includes('invalid')) {
+          // PKCE flow: prefer exchangeCodeForSession with full URL (supabase-js v2 best practice)
+          // This handles both hash and query param formats
+          try {
+            // Use full URL for exchange (more robust in supabase-js v2)
+            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(window.location.href);
+            
+            if (exchangeError || !data?.session?.user?.email) {
+              // Check for expired/invalid errors
+              if (exchangeError?.message?.toLowerCase().includes('expired') || 
+                  exchangeError?.message?.toLowerCase().includes('invalid') ||
+                  exchangeError?.message?.toLowerCase().includes('requested path is invalid')) {
+                setStatus('error');
+                setMessage('This verification link has expired. Please request a new one.');
+                setShowResend(true);
+                const session = getPortalSession();
+                if (session?.email) {
+                  setResendEmail(session.email);
+                }
+                return;
+              }
+              
               setStatus('error');
-              setMessage('This verification link has expired. Please request a new one.');
+              setMessage(exchangeError?.message || 'Failed to verify email');
               setShowResend(true);
               const session = getPortalSession();
               if (session?.email) {
@@ -95,8 +112,25 @@ export default function AuthCallback() {
               return;
             }
             
+            // Confirm session exists after exchange
+            const { data: sessionCheck, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !sessionCheck?.session?.user?.email) {
+              setStatus('error');
+              setMessage('Session verification failed. Please try again.');
+              setShowResend(true);
+              const session = getPortalSession();
+              if (session?.email) {
+                setResendEmail(session.email);
+              }
+              return;
+            }
+
+            await completeVerification(sessionCheck.session.user.email);
+            return;
+          } catch (exchangeErr) {
+            console.error('[AuthCallback] PKCE exchange error:', exchangeErr);
             setStatus('error');
-            setMessage(exchangeError?.message || 'Failed to verify email');
+            setMessage('Failed to verify email. Please request a new verification link.');
             setShowResend(true);
             const session = getPortalSession();
             if (session?.email) {
@@ -104,9 +138,6 @@ export default function AuthCallback() {
             }
             return;
           }
-
-          await completeVerification(data.session.user.email);
-          return;
         }
 
         // Try token flow (token in query params: ?token=...&type=magiclink)
@@ -117,6 +148,8 @@ export default function AuthCallback() {
           // Token flow: verify OTP token
           // Supabase v2 uses verifyOtp for magic link tokens
           try {
+            // Token flow: verify OTP using verifyOtp (supabase-js v2)
+            // Note: Supabase magic link tokens can be verified via verifyOtp
             const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
               type: 'magiclink',
               token_hash: token,
@@ -124,7 +157,8 @@ export default function AuthCallback() {
 
             if (verifyError || !verifyData?.user?.email) {
               if (verifyError?.message?.toLowerCase().includes('expired') || 
-                  verifyError?.message?.toLowerCase().includes('invalid')) {
+                  verifyError?.message?.toLowerCase().includes('invalid') ||
+                  verifyError?.message?.toLowerCase().includes('requested path is invalid')) {
                 setStatus('error');
                 setMessage('This verification link has expired. Please request a new one.');
                 setShowResend(true);
@@ -144,8 +178,21 @@ export default function AuthCallback() {
               }
               return;
             }
+            
+            // Confirm session exists after OTP verification
+            const { data: sessionCheck, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !sessionCheck?.session?.user?.email) {
+              setStatus('error');
+              setMessage('Session verification failed. Please try again.');
+              setShowResend(true);
+              const session = getPortalSession();
+              if (session?.email) {
+                setResendEmail(session.email);
+              }
+              return;
+            }
 
-            await completeVerification(verifyData.user.email);
+            await completeVerification(sessionCheck.session.user.email);
             return;
           } catch (verifyErr) {
             console.error('[AuthCallback] Token verification error:', verifyErr);

@@ -25,10 +25,22 @@ export default function UploadCenter() {
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const [returnTo, setReturnTo] = useState<string>('/onboarding');
 
-  // Determine return destination on mount
+  // Determine return destination on mount (always check portal session)
   useEffect(() => {
-    const destination = getReturnToFromQuery(searchParams, hasValidPortalSession, '/portal');
-    setReturnTo(destination);
+    // Consistent routing rule: portal session exists => /portal, else /onboarding
+    const hasSession = hasValidPortalSession();
+    const explicitReturnTo = searchParams.get('returnTo');
+    
+    if (explicitReturnTo && explicitReturnTo.trim().length > 0) {
+      // Explicit returnTo takes precedence
+      setReturnTo(explicitReturnTo.trim());
+    } else if (hasSession) {
+      // Portal session exists => always go to /portal
+      setReturnTo('/portal');
+    } else {
+      // No portal session => onboarding
+      setReturnTo('/onboarding');
+    }
   }, [searchParams]);
 
   const handleDragOver = (e: React.DragEvent) => {

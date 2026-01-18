@@ -5,11 +5,11 @@
 
 import { getSupabaseClient } from './supabaseClient';
 import { getPortalSession, createPortalSession } from './portalSession';
-import { getPublicSiteUrl } from './utils';
 
 /**
  * Send magic link verification email using Supabase Auth OTP
  * The email will contain a link to /auth/callback with PKCE code
+ * ALWAYS uses window.location.origin (never localhost in production)
  */
 export async function startEmailVerification(email: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -18,27 +18,21 @@ export async function startEmailVerification(email: string): Promise<{ success: 
       return { success: false, error: 'Supabase not configured' };
     }
 
-    // Get exact redirect URL (production-safe, never localhost in prod)
-    const baseUrl = getPublicSiteUrl();
-    const redirectTo = `${baseUrl}/auth/callback`;
+    // ALWAYS use window.location.origin (production-safe, never hardcode localhost)
+    if (typeof window === 'undefined') {
+      return { success: false, error: 'window is not available' };
+    }
     
-    // Validate URL is safe (no wildcards, properly formed, no localhost in production)
+    const redirectTo = `${window.location.origin}/auth/callback`;
+    
+    // Validate URL is safe (no localhost in production)
     try {
       const url = new URL(redirectTo);
       
-      // Reject wildcards
-      if (url.hostname.includes('*')) {
-        return { success: false, error: 'Invalid redirect URL: wildcards not allowed' };
-      }
-      
       // Reject localhost in production (security)
       if (import.meta.env.PROD && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
+        console.error('[startEmailVerification] localhost detected in production - this should never happen');
         return { success: false, error: 'Invalid redirect URL: localhost not allowed in production' };
-      }
-      
-      // Ensure exact path (no wildcards in path either)
-      if (url.pathname.includes('*')) {
-        return { success: false, error: 'Invalid redirect URL: wildcards in path not allowed' };
       }
     } catch (urlError) {
       return { success: false, error: `Invalid redirect URL format: ${urlError instanceof Error ? urlError.message : 'unknown error'}` };

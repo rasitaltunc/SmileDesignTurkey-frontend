@@ -226,7 +226,7 @@ export default function PendingReviewPortal() {
         </div>
 
         {/* Verification Banner (if not verified) */}
-        {!isVerified && (
+        {!isVerified ? (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
             <div className="flex items-start gap-4">
               <AlertCircle className="w-5 h-5 text-blue-700 flex-shrink-0 mt-0.5" />
@@ -272,6 +272,18 @@ export default function PendingReviewPortal() {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
+            <div className="flex items-start gap-4">
+              <CheckCircle className="w-5 h-5 text-green-700 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-900 mb-2">✓ Email Verified</h3>
+                <p className="text-sm text-green-800">
+                  Your email is verified. Full portal access unlocked.
+                </p>
               </div>
             </div>
           </div>
