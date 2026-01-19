@@ -60,14 +60,17 @@ module.exports = async function handler(req, res) {
     // Update verification record
     await db.from("lead_email_verifications").update({ verified_at: now }).eq("id", row.id);
     
-    // Update lead email_verified_at and optionally portal_status
+    // ✅ Update lead: email = token's email (final truth) + email_verified_at + portal_status
     const { data: lead } = await db
       .from("leads")
       .select("portal_status")
       .eq("id", row.lead_id)
       .single();
 
-    const updateData = { email_verified_at: now };
+    const updateData = {
+      email: row.email, // Token's email is the final verified email
+      email_verified_at: now,
+    };
     
     // Optionally update portal_status to 'active' if it's still 'pending_review' or null
     if (!lead?.portal_status || lead.portal_status === 'pending_review') {

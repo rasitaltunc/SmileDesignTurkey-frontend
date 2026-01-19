@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
     }
 
     let lead_id = providedLeadId;
-    let leadEmail = null;
+    let leadData = null;
 
     // If lead_id not provided, find lead by case_id
     if (!lead_id) {
@@ -47,9 +47,10 @@ module.exports = async function handler(req, res) {
       }
 
       // Find lead by case_id to get lead_id (id column)
+      // Also get email_verified_at and portal_status for validation
       const { data: lead, error: leadError } = await db
         .from("leads")
-        .select("id, email")
+        .select("id, email, email_verified_at, portal_status")
         .eq("case_id", case_id)
         .single();
 
@@ -59,32 +60,45 @@ module.exports = async function handler(req, res) {
       }
 
       lead_id = lead.id;
-      leadEmail = lead.email;
+      leadData = lead;
     } else {
-      // If lead_id provided, fetch lead email for validation (optional security check)
+      // If lead_id provided, fetch lead data including email_verified_at
       const { data: lead } = await db
         .from("leads")
-        .select("email")
+        .select("id, email, email_verified_at, portal_status")
         .eq("id", lead_id)
         .single();
       
-      if (lead) {
-        leadEmail = lead.email;
+      if (!lead) {
+        return res.status(404).json({ ok: false, error: "Lead not found" });
       }
+      
+      leadData = lead;
     }
 
     const requestEmail = String(email || "").toLowerCase().trim();
-    const normalizedLeadEmail = String(leadEmail || "").toLowerCase().trim();
+    const leadEmail = String(leadData.email || "").toLowerCase().trim();
 
-    // Lead email varsa ve request email ile eslesmiyorsa: 403
-    if (normalizedLeadEmail && normalizedLeadEmail !== requestEmail) {
-      console.warn("[api/secure/send-verification] Email mismatch:", {
-        leadEmail: normalizedLeadEmail,
-        requestEmail,
-        lead_id,
-        case_id,
-      });
-      return res.status(403).json({ ok: false, error: "Email mismatch" });
+    // ✅ NEW RULE:
+    // - If lead is NOT verified yet, allow changing the email to whatever user typed
+    // - If lead IS already verified, block email changes (security)
+    if (leadData.email_verified_at) {
+      // Lead already verified - don't allow email changes
+      if (leadEmail && leadEmail !== requestEmail) {
+        return res.status(403).json({ ok: false, error: "Email already verified; cannot change email" });
+      }
+    } else {
+      // Lead not verified yet: update email to user's input
+      if (!leadEmail || leadEmail !== requestEmail) {
+        await db.from("leads").update({ email: requestEmail }).eq("id", lead_id);
+      }
+
+      // Clear old pending tokens for this lead (only one active token per lead)
+      await db
+        .from("lead_email_verifications")
+        .delete()
+        .eq("lead_id", lead_id)
+        .is("verified_at", null);
     }
 
     // 2) Generate secure token
@@ -92,15 +106,8 @@ module.exports = async function handler(req, res) {
     const token_hash = sha256(token);
     const expires_at = new Date(Date.now() + 1000 * 60 * 30).toISOString(); // 30 minutes
 
-    // 3) Insert into database (delete old unverified tokens for this lead/email)
-    // This ensures only one active verification token per lead
-    await db
-      .from("lead_email_verifications")
-      .delete()
-      .eq("lead_id", lead_id)
-      .eq("email", requestEmail)
-      .is("verified_at", null);
-
+    // 3) Insert into database
+    // Note: Old pending tokens are already deleted above if lead is not verified
     const { error: insErr } = await db
       .from("lead_email_verifications")
       .insert({
