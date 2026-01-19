@@ -73,13 +73,18 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const requestEmail = email.toLowerCase().trim();
+    const requestEmail = String(email || "").toLowerCase().trim();
+    const normalizedLeadEmail = String(leadEmail || "").toLowerCase().trim();
 
-    // Verify email matches lead email (optional security check)
+    // Lead email varsa ve request email ile eslesmiyorsa: 403
     if (normalizedLeadEmail && normalizedLeadEmail !== requestEmail) {
-      console.warn("[api/secure/send-verification] Email mismatch:", { leadEmail: normalizedLeadEmail, requestEmail });
-      // Still allow verification if lead email is null/empty (new lead)
-      return res.status(403).json({ ok: false, error: "Email does not match case" });
+      console.warn("[api/secure/send-verification] Email mismatch:", {
+        leadEmail: normalizedLeadEmail,
+        requestEmail,
+        lead_id,
+        case_id,
+      });
+      return res.status(403).json({ ok: false, error: "Email mismatch" });
     }
 
     // 2) Generate secure token
