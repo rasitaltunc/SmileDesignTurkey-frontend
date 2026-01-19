@@ -5,6 +5,7 @@
 
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
+const { Resend } = require("resend");
 
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -124,34 +125,39 @@ module.exports = async function handler(req, res) {
 
     // 4) Build verification URL (use PUBLIC_SITE_URL or VITE_PUBLIC_SITE_URL from env)
     const origin = process.env.PUBLIC_SITE_URL || process.env.VITE_PUBLIC_SITE_URL || "http://localhost:5173";
-    const verifyUrl = `${origin}/verify-email?token=${token}&case_id=${encodeURIComponent(case_id)}`;
+    const verifyUrl = `${origin}/verify-email?token=${token}&case_id=${encodeURIComponent(case_id || '')}`;
 
-    // 5) TODO: Send email via your email provider (Resend, Postmark, SMTP, etc.)
-    // For now, return the verifyUrl for testing
-    // In production, you'll send the email and return { ok: true }
-    // Example:
-    // await sendEmail({
-    //   to: requestEmail,
-    //   subject: "Verify your email",
-    //   html: `<a href="${verifyUrl}">Click here to verify</a>`
-    // });
+    // 5) Send email via Resend
+    const resend = new Resend(process.env.RESEND_API_KEY);
 
-    console.log("[api/secure/send-verification] Verification link generated:", {
-      lead_id,
-      case_id,
-      email: requestEmail,
-      expires_at,
-    });
+    try {
+      await resend.emails.send({
+        from: process.env.MAIL_FROM,
+        to: requestEmail,
+        subject: "Verify your email for your treatment plan",
+        html: `
+          <p>Click the button below to verify your email:</p>
+          <p><a href="${verifyUrl}" target="_blank">Verify Email</a></p>
+          <p>If you didn't request this, ignore this email.</p>
+        `,
+      });
 
-    // In production, don't return verifyUrl (email is sent by backend)
-    // In dev/test, return verifyUrl for manual testing
-    const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
-    
-    return res.status(200).json({ 
-      ok: true, 
-      verifyUrl: isProd ? undefined : verifyUrl, // Only return in dev/test
-      expiresAt: expires_at,
-    });
+      console.log("[api/secure/send-verification] Verification email sent:", {
+        lead_id,
+        case_id,
+        email: requestEmail,
+        expires_at,
+      });
+    } catch (emailError) {
+      // Log email error but don't fail the request (token is already saved)
+      console.error("[api/secure/send-verification] Email send error:", emailError);
+      // In development, still return verifyUrl for manual testing
+      if (process.env.NODE_ENV !== 'production' && process.env.VERCEL_ENV !== 'production') {
+        console.warn("[api/secure/send-verification] Email failed, returning verifyUrl for testing:", verifyUrl);
+      }
+    }
+
+    return res.status(200).json({ ok: true });
 
   } catch (e) {
     console.error("[api/secure/send-verification] Error:", e);
