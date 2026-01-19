@@ -28,15 +28,29 @@ export async function submitOnboardingCard(payload: {
     });
 
     const json = await res.json().catch(() => ({}));
+    
     if (!res.ok || !json.ok) {
-      return { success: false, error: json.error || "Failed to submit" };
+      const errorMsg = json.error || "Failed to submit";
+      if (import.meta.env.DEV) {
+        console.error("[onboardingApi] submitOnboardingCard error:", {
+          status: res.status,
+          error: errorMsg,
+          details: json.details,
+          response: json,
+        });
+      }
+      return { success: false, error: errorMsg };
     }
 
     return { success: true, data: json };
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to submit card";
+    if (import.meta.env.DEV) {
+      console.error("[onboardingApi] submitOnboardingCard exception:", error);
+    }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to submit card",
+      error: errorMsg,
     };
   }
 }
@@ -70,6 +84,7 @@ export async function submitOnboardingCardWithSession(
 
 /**
  * Fetch onboarding state using current portal session
+ * Uses GET method with query params for better caching/debugging
  */
 export async function fetchOnboardingStateWithSession() {
   const session = getPortalSession();
@@ -77,15 +92,27 @@ export async function fetchOnboardingStateWithSession() {
     throw new Error("Missing portal session");
   }
 
-  const res = await fetch("/api/public/onboarding-state", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ case_id: session.case_id, portal_token: session.portal_token }),
+  // Use GET with query params (supports browser caching, easier debugging)
+  const url = new URL("/api/public/onboarding-state", window.location.origin);
+  url.searchParams.set("case_id", session.case_id);
+  url.searchParams.set("portal_token", session.portal_token);
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
   });
 
   const json = await res.json().catch(() => ({}));
+  
   if (!res.ok || !json.ok) {
-    throw new Error(json.error || "Failed to load onboarding state");
+    const errorMsg = json.error || "Failed to load onboarding state";
+    if (import.meta.env.DEV) {
+      console.error("[onboardingApi] fetchOnboardingStateWithSession error:", {
+        status: res.status,
+        error: errorMsg,
+        response: json,
+      });
+    }
+    throw new Error(errorMsg);
   }
   
   return json as {
