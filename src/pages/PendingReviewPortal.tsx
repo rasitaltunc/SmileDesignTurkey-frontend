@@ -28,6 +28,7 @@ import { fetchPortalData, type PortalData } from '@/lib/portalApi';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
 import { trackEvent } from '@/lib/analytics';
+import OnboardingFlow from '@/components/OnboardingFlow';
 
 interface TimelineStep {
   id: string;
