@@ -6,6 +6,7 @@
 import { getPortalSession } from './portalSession';
 
 export interface PortalData {
+  id: string; // lead_id for send-verification endpoint
   case_id: string;
   created_at: string;
   name: string | null;

@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { getPortalSession, createPortalSession, hasValidPortalSession } from '@/lib/portalSession';
 import { CheckCircle } from 'lucide-react';
-import { startEmailVerification } from '@/lib/verification';
+import { startCustomEmailVerification } from '@/lib/verification';
 import { fetchPortalData, type PortalData } from '@/lib/portalApi';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
@@ -74,16 +74,19 @@ export default function PendingReviewPortal() {
 
       const result = await fetchPortalData();
       if (result.success && result.data) {
-        setPortalData(result.data);
+        const portalData = result.data;
+        console.log("portalData keys", Object.keys(portalData || {}));
+        console.log("portalData sample", portalData);
+        setPortalData(portalData);
         // Use email_verified_at from portal data (authoritative)
-        const verified = !!(result.data.email_verified_at || session.email_verified);
+        const verified = !!(portalData.email_verified_at || session.email_verified);
         setIsVerified(verified);
         setSession(session);
         // Auto-fill email from lead data if available
-        if (result.data.email) {
-          setVerificationEmail(result.data.email);
+        if (portalData.email) {
+          setVerificationEmail(portalData.email);
         }
-        trackEvent({ type: 'portal_viewed', case_id: result.data.case_id, is_verified: verified });
+        trackEvent({ type: 'portal_viewed', case_id: portalData.case_id, is_verified: verified });
       } else {
         setError(result.error || 'Failed to load portal data');
       }
@@ -156,19 +159,31 @@ export default function PendingReviewPortal() {
   const handleVerifyEmail = async () => {
     if (!verificationEmail || cooldownSeconds > 0) return;
 
+    const activeCaseId = session?.case_id || portalData?.case_id;
+    if (!activeCaseId) {
+      setError('Missing case information. Please refresh the page and try again.');
+      return;
+    }
+
     setIsSendingVerification(true);
-    // Pass case_id and portal_token so the magic link includes them in query params
-    const result = await startEmailVerification(
+    // Use custom token-based verification (session-independent)
+    // Pass lead_id from portalData if available (backend optimization)
+    const result = await startCustomEmailVerification(
+      activeCaseId,
       verificationEmail,
-      session?.case_id || portalData?.case_id,
-      session?.portal_token
+      portalData?.id // lead_id from portalData (skip case_id lookup in backend)
     );
     setIsSendingVerification(false);
 
     if (result.success) {
       setShowVerificationSuccess(true);
       setCooldownSeconds(30); // 30 second cooldown
-      trackEvent({ type: 'verification_started', case_id: session?.case_id || '', method: 'email' });
+      trackEvent({ type: 'verification_started', case_id: activeCaseId, method: 'email' });
+      
+      // Log verifyUrl in dev mode only (for testing)
+      if (import.meta.env.DEV && result.verifyUrl) {
+        console.log('[PendingReviewPortal] Verification link (dev only):', result.verifyUrl);
+      }
     } else {
       setError(result.error || 'Failed to send verification email');
     }

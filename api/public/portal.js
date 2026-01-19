@@ -45,6 +45,7 @@ module.exports = async function handler(req, res) {
 
     // Return safe payload (no internal notes, scoring, admin fields)
     const safePayload = {
+      id: lead.id, // lead_id for send-verification endpoint
       case_id: lead.case_id,
       created_at: lead.created_at,
       name: lead.name,
