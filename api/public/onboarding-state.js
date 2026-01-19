@@ -1,96 +1,123 @@
 // api/public/onboarding-state.js
 // Public endpoint to fetch onboarding state and answers
 // Validates portal access via case_id + portal_token
+// Supports both GET and POST methods
 
 const { createClient } = require("@supabase/supabase-js");
 
-const url = process.env.SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function getDb() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY;
 
-const db = createClient(url, serviceKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+  if (!url || !key) {
+    throw new Error("Missing Supabase env vars (SUPABASE_URL / SERVICE_ROLE_KEY)");
+  }
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 
 module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
-
-  if (!url || !serviceKey) {
-    return res.status(500).json({ ok: false, error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" });
-  }
-
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-    const { case_id, portal_token } = body;
+    // CORS headers
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    // Handle preflight
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+
+    // GET veya POST kabul et
+    const bodyRaw = req.body;
+    const body =
+      typeof bodyRaw === "string"
+        ? JSON.parse(bodyRaw || "{}")
+        : (bodyRaw || {});
+
+    // Query params'dan veya body'den al
+    const case_id = body.case_id || req.query?.case_id;
+    const portal_token = body.portal_token || req.query?.portal_token;
 
     if (!case_id || !portal_token) {
       return res.status(400).json({ ok: false, error: "case_id + portal_token required" });
     }
 
-    // 1) Lead doğrula
+    const db = getDb();
+
+    // Lead doğrula (case_id + portal_token)
     const { data: lead, error: leadErr } = await db
       .from("leads")
       .select("id, case_id, portal_token, email_verified_at, portal_status")
       .eq("case_id", case_id)
-      .eq("portal_token", portal_token)
-      .single();
+      .maybeSingle();
 
-    if (leadErr || !lead) {
-      return res.status(403).json({ ok: false, error: "Invalid portal access" });
+    if (leadErr) {
+      console.error("[onboarding-state] Lead fetch error:", leadErr);
+      throw leadErr;
     }
 
-    const lead_id = lead.id;
+    if (!lead || lead.portal_token !== portal_token) {
+      return res.status(401).json({ ok: false, error: "Unauthorized" });
+    }
 
-    // 2) State al (yoksa default)
-    const { data: state } = await db
+    // State al (yoksa default)
+    const { data: state, error: stateErr } = await db
       .from("lead_onboarding_state")
-      .select("completed_card_ids, progress_percent, updated_at")
-      .eq("lead_id", lead_id)
-      .single()
-      .catch(() => ({ data: null }));
+      .select("lead_id, completed_card_ids, progress_percent, updated_at")
+      .eq("lead_id", lead.id)
+      .maybeSingle();
 
-    // 3) Answers al (son 50 yeter)
-    const { data: answersRows, error: ansErr } = await db
+    if (stateErr) {
+      console.error("[onboarding-state] State fetch error:", stateErr);
+      throw stateErr;
+    }
+
+    // Latest answers per card (tek seferde çekip map'le)
+    const { data: rows, error: ansErr } = await db
       .from("lead_onboarding_answers")
       .select("card_id, answers, created_at")
-      .eq("lead_id", lead_id)
+      .eq("lead_id", lead.id)
       .order("created_at", { ascending: false })
       .limit(50);
 
     if (ansErr) {
-      console.error("[api/public/onboarding-state] Answers fetch error:", ansErr);
-      return res.status(500).json({ ok: false, error: ansErr.message });
+      console.error("[onboarding-state] Answers fetch error:", ansErr);
+      throw ansErr;
     }
 
     // frontende kolaylık: latest answers per card map
-    const latestByCard = {};
-    for (const row of (answersRows || [])) {
-      if (!latestByCard[row.card_id]) {
-        latestByCard[row.card_id] = row.answers;
+    const latest_answers = {};
+    for (const r of rows || []) {
+      if (!latest_answers[r.card_id]) {
+        latest_answers[r.card_id] = r.answers;
       }
     }
 
     return res.status(200).json({
       ok: true,
       lead: {
-        id: lead_id,
+        id: lead.id,
         case_id: lead.case_id,
         portal_status: lead.portal_status,
         email_verified: !!lead.email_verified_at,
       },
-      state: {
-        completed_card_ids: state?.completed_card_ids || [],
-        progress_percent: state?.progress_percent || 0,
-        updated_at: state?.updated_at || null,
+      state: state || {
+        lead_id: lead.id,
+        completed_card_ids: [],
+        progress_percent: 0,
+        updated_at: null,
       },
-      latest_answers: latestByCard,
+      latest_answers,
     });
   } catch (e) {
-    console.error("[api/public/onboarding-state] Error:", e);
-    return res.status(500).json({ ok: false, error: "Server error" });
+    console.error("[onboarding-state] error:", e);
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "Server error",
+    });
   }
 };
-
