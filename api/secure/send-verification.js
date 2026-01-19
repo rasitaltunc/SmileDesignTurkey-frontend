@@ -128,32 +128,41 @@ module.exports = async function handler(req, res) {
     const verifyUrl = `${origin}/verify-email?token=${token}&case_id=${encodeURIComponent(case_id || '')}`;
 
     // 5) Send email via Resend
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resendApiKey = process.env.RESEND_API_KEY;
+    const resendFrom = process.env.RESEND_FROM || "Smile Design TR <onboarding@resend.dev>";
 
-    try {
-      await resend.emails.send({
-        from: process.env.MAIL_FROM,
-        to: requestEmail,
-        subject: "Verify your email for your treatment plan",
-        html: `
-          <p>Click the button below to verify your email:</p>
-          <p><a href="${verifyUrl}" target="_blank">Verify Email</a></p>
-          <p>If you didn't request this, ignore this email.</p>
-        `,
-      });
+    if (!resendApiKey) {
+      console.error("[api/secure/send-verification] Missing RESEND_API_KEY");
+      // Don't fail the request, token is saved - user can manually use link in dev
+    } else {
+      const resend = new Resend(resendApiKey);
 
-      console.log("[api/secure/send-verification] Verification email sent:", {
-        lead_id,
-        case_id,
-        email: requestEmail,
-        expires_at,
-      });
-    } catch (emailError) {
-      // Log email error but don't fail the request (token is already saved)
-      console.error("[api/secure/send-verification] Email send error:", emailError);
-      // In development, still return verifyUrl for manual testing
-      if (process.env.NODE_ENV !== 'production' && process.env.VERCEL_ENV !== 'production') {
-        console.warn("[api/secure/send-verification] Email failed, returning verifyUrl for testing:", verifyUrl);
+      try {
+        await resend.emails.send({
+          from: resendFrom,
+          to: requestEmail,
+          subject: "Verify your email for your treatment plan",
+          html: `
+            <p>Click the button below to verify your email:</p>
+            <p><a href="${verifyUrl}" target="_blank">Verify Email</a></p>
+            <p>If you didn't request this, ignore this email.</p>
+          `,
+        });
+
+        console.log("[api/secure/send-verification] Verification email sent:", {
+          lead_id,
+          case_id,
+          email: requestEmail,
+          from: resendFrom,
+          expires_at,
+        });
+      } catch (emailError) {
+        // Log email error but don't fail the request (token is already saved)
+        console.error("[api/secure/send-verification] Email send error:", emailError);
+        // In development, still return verifyUrl for manual testing
+        if (process.env.NODE_ENV !== 'production' && process.env.VERCEL_ENV !== 'production') {
+          console.warn("[api/secure/send-verification] Email failed, returning verifyUrl for testing:", verifyUrl);
+        }
       }
     }
 

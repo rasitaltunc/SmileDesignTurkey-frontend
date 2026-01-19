@@ -12,8 +12,11 @@ function isCardVisible(card: CardDef, form: Record<string, any>) {
 export default function OnboardingFlow() {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
-  const [completed, setCompleted] = useState<string[]>([]);
-  const [latestAnswers, setLatestAnswers] = useState<Record<string, any>>({});
+  const [state, setState] = useState<{
+    completed_card_ids: string[];
+    progress_percent: number;
+    latest_answers: Record<string, any>;
+  } | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +30,13 @@ export default function OnboardingFlow() {
       try {
         setLoading(true);
         const data = await fetchOnboardingStateWithSession();
-        setProgress(data.state.progress_percent);
-        setCompleted(data.state.completed_card_ids);
-        setLatestAnswers(data.latest_answers || {});
+        const newState = {
+          completed_card_ids: data.state.completed_card_ids || [],
+          progress_percent: data.state.progress_percent || 0,
+          latest_answers: data.latest_answers || {},
+        };
+        setState(newState);
+        setProgress(newState.progress_percent);
       } catch (e: any) {
         setError(e?.message || "Failed to load onboarding");
       } finally {
@@ -40,21 +47,17 @@ export default function OnboardingFlow() {
 
   // A) State gelince activeCard'ı seç: ilk incomplete kartı aç
   useEffect(() => {
-    if (completed.length === 0 && cards.length > 0) {
-      // Still loading or no completed cards, wait
-      return;
-    }
-    const completedSet = new Set(completed);
-    const next = cards.find(c => !completedSet.has(c.id));
-    setActiveCardId(next?.id ?? cards[0]?.id ?? null);
-  }, [completed, cards]);
+    if (!state || cards.length === 0) return;
 
-  // B) activeCard değişince önceki cevabı form'a bas (refresh sonrası çok kritik)
-  useEffect(() => {
-    if (!activeCardId) return;
-    const saved = latestAnswers[activeCardId] || {};
+    const completed = new Set(state.completed_card_ids || []);
+    const next = cards.find((c) => !completed.has(c.id)) || cards[0];
+
+    setActiveCardId(next.id);
+
+    // Prefill answers (kaldığın kartın cevapları)
+    const saved = state.latest_answers?.[next.id] || {};
     setForm(saved);
-  }, [activeCardId, latestAnswers]);
+  }, [state, cards]);
 
   const activeCard = cards.find(c => c.id === activeCardId) || null;
 
@@ -81,21 +84,21 @@ export default function OnboardingFlow() {
     try {
       setSaving(true);
       setError(null);
-      // C) Continue sonrası: response'dan state + latest_answers al
+      
+      // Submit and get fresh state from server
       const result = await submitOnboardingCardWithSession(activeCard.id, form);
 
-      // Update state with fresh data from server
-      setProgress(result.state.progress_percent);
-      setCompleted(result.state.completed_card_ids);
-      setLatestAnswers(result.latest_answers);
-
-      // Find next incomplete card
-      const completedSet = new Set(result.state.completed_card_ids || []);
-      const next = cards.find(c => !completedSet.has(c.id));
-      if (next) {
-        setActiveCardId(next.id);
-        // Form will be auto-filled by useEffect when activeCardId changes
-      }
+      // Update state with fresh data from server - this will trigger useEffect to select next card
+      const newState = {
+        completed_card_ids: result.state.completed_card_ids || [],
+        progress_percent: result.state.progress_percent || 0,
+        latest_answers: result.latest_answers || {},
+      };
+      
+      setState(newState);
+      setProgress(newState.progress_percent);
+      
+      // Next card selection happens automatically via useEffect when state updates
     } catch (e: any) {
       setError(e?.message || "Submit failed");
     } finally {
@@ -162,9 +165,9 @@ export default function OnboardingFlow() {
           }
 
           if (q.type === "yesno") {
-            const base = "px-3 py-2 rounded-lg border transition-colors";
-            const selected = "bg-emerald-600 text-white border-emerald-600";
-            const unselected = "bg-white text-slate-900 border-slate-200 hover:bg-slate-50";
+            const base = "border rounded-lg px-3 py-2 transition-colors";
+            const active = "bg-slate-900 text-white border-slate-900";
+            const inactive = "bg-white text-slate-900 border-slate-200 hover:bg-slate-50";
             return (
               <div key={q.id}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{q.label}{q.required ? " *" : ""}</label>
@@ -172,12 +175,12 @@ export default function OnboardingFlow() {
                   <button
                     type="button"
                     onClick={() => setValue(q.id, true)}
-                    className={`${base} ${value === true ? selected : unselected}`}
+                    className={`${base} ${value === true ? active : inactive}`}
                   >Yes</button>
                   <button
                     type="button"
                     onClick={() => setValue(q.id, false)}
-                    className={`${base} ${value === false ? selected : unselected}`}
+                    className={`${base} ${value === false ? active : inactive}`}
                   >No</button>
                 </div>
               </div>
@@ -187,9 +190,9 @@ export default function OnboardingFlow() {
           // multiselect
           if (q.type === "multiselect") {
             const arr: string[] = Array.isArray(value) ? value : [];
-            const base = "px-3 py-2 rounded-lg border transition-colors";
-            const selected = "bg-emerald-600 text-white border-emerald-600";
-            const unselected = "bg-white text-slate-900 border-slate-200 hover:bg-slate-50";
+            const base = "border rounded-lg px-3 py-2 transition-colors";
+            const active = "bg-slate-900 text-white border-slate-900";
+            const inactive = "bg-white text-slate-900 border-slate-200 hover:bg-slate-50";
             return (
               <div key={q.id}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{q.label}{q.required ? " *" : ""}</label>
@@ -201,7 +204,7 @@ export default function OnboardingFlow() {
                         key={opt}
                         type="button"
                         onClick={() => setValue(q.id, on ? arr.filter(x => x !== opt) : [...arr, opt])}
-                        className={`${base} ${on ? selected : unselected}`}
+                        className={`${base} ${on ? active : inactive}`}
                       >
                         {opt}
                       </button>
@@ -225,7 +228,7 @@ export default function OnboardingFlow() {
         <button
           onClick={submit}
           disabled={saving}
-          className="px-4 py-2 rounded-lg bg-black text-white disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? "Saving..." : "Continue"}
         </button>
