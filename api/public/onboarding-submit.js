@@ -209,18 +209,43 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // After saving answers + updating lead_onboarding_state, fetch fresh state + latest answers
+    const { data: stateRow } = await db
+      .from("lead_onboarding_state")
+      .select("lead_id, completed_card_ids, progress_percent, updated_at")
+      .eq("lead_id", lead_id)
+      .maybeSingle();
+
+    const { data: ansRows } = await db
+      .from("lead_onboarding_answers")
+      .select("card_id, answers, created_at")
+      .eq("lead_id", lead_id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    const latest_answers = {};
+    for (const r of ansRows || []) {
+      if (!latest_answers[r.card_id]) {
+        latest_answers[r.card_id] = r.answers;
+      }
+    }
+
     console.log("[onboarding-submit] Card submitted:", {
       lead_id,
       case_id,
       card_id,
-      progress_percent,
+      progress_percent: stateRow?.progress_percent || progress_percent,
     });
 
     return res.status(200).json({
       ok: true,
-      lead_id,
-      progress_percent,
-      completed_card_ids: completed,
+      state: stateRow || {
+        lead_id,
+        completed_card_ids: completed,
+        progress_percent,
+        updated_at: new Date().toISOString(),
+      },
+      latest_answers,
     });
   } catch (e) {
     console.error("[onboarding-submit] Error:", e);

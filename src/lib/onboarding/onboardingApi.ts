@@ -9,6 +9,17 @@ export interface OnboardingState {
   lead_id: string;
   progress_percent: number;
   completed_card_ids: string[];
+  updated_at: string | null;
+}
+
+export interface OnboardingStateResponse {
+  state: {
+    lead_id: string;
+    completed_card_ids: string[];
+    progress_percent: number;
+    updated_at: string | null;
+  };
+  latest_answers: Record<string, any>;
 }
 
 /**
@@ -58,11 +69,12 @@ export async function submitOnboardingCard(payload: {
 /**
  * Submit card using current portal session
  * Convenience wrapper that automatically gets case_id and portal_token
+ * Returns updated state and latest_answers
  */
 export async function submitOnboardingCardWithSession(
   card_id: string,
   answers: Record<string, any>
-): Promise<OnboardingState> {
+): Promise<OnboardingStateResponse> {
   const session = getPortalSession();
   if (!session?.case_id || !session?.portal_token) {
     throw new Error("No valid portal session");
@@ -79,7 +91,8 @@ export async function submitOnboardingCardWithSession(
     throw new Error(result.error || "Failed to submit card");
   }
 
-  return result.data;
+  // result.data now includes { state, latest_answers }
+  return result.data as OnboardingStateResponse;
 }
 
 /**

@@ -56,6 +56,8 @@ module.exports = async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    // Disable caching (especially important for GET requests)
+    res.setHeader("Cache-Control", "no-store");
 
     // Handle preflight - return 204 as per spec
     if (req.method === "OPTIONS") {
