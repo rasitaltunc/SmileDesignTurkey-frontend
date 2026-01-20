@@ -30,10 +30,11 @@ export default function OnboardingFlow() {
       try {
         setLoading(true);
         const data = await fetchOnboardingStateWithSession();
+        // State is already normalized from API
         const newState = {
           completed_card_ids: data.state.completed_card_ids || [],
           progress_percent: data.state.progress_percent || 0,
-          latest_answers: data.latest_answers || {},
+          latest_answers: data.state.latest_answers || {},
         };
         setState(newState);
         setProgress(newState.progress_percent);
@@ -65,7 +66,7 @@ export default function OnboardingFlow() {
 
       setActiveCardId(nextCard.id);
 
-      // Prefill answers (kaldığın kartın cevapları)
+      // Prefill answers (kaldığın kartın cevapları) - state.latest_answers is normalized
       const saved = state.latest_answers?.[nextCard.id] || {};
       setForm(saved);
     }

@@ -91,8 +91,15 @@ export async function submitOnboardingCardWithSession(
     throw new Error(result.error || "Failed to submit card");
   }
 
-  // result.data now includes { state, latest_answers }
-  return result.data as OnboardingStateResponse;
+  // ✅ Normalize submit response for UI
+  const normalizedState = {
+    ...(result.data.state || {}),
+    latest_answers: result.data.latest_answers || {},
+  };
+
+  return {
+    state: normalizedState,
+  } as OnboardingStateResponse;
 }
 
 /**
@@ -128,11 +135,25 @@ export async function fetchOnboardingStateWithSession() {
     throw new Error(errorMsg);
   }
   
-  return json as {
-    ok: true;
+  // ✅ Normalize shape for UI
+  const normalizedState = {
+    ...(json.state || {}),
+    latest_answers: json.latest_answers || {},
+  };
+  
+  return {
+    success: true,
+    lead: json.lead,
+    state: normalizedState,
+  } as {
+    success: true;
     lead: { id: string; case_id: string; portal_status: string | null; email_verified: boolean };
-    state: { completed_card_ids: string[]; progress_percent: number; updated_at: string | null };
-    latest_answers: Record<string, any>;
+    state: {
+      completed_card_ids: string[];
+      progress_percent: number;
+      updated_at: string | null;
+      latest_answers: Record<string, any>;
+    };
   };
 }
 
