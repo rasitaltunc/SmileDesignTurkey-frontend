@@ -322,7 +322,7 @@ export default function PendingReviewPortal() {
         </div>
 
         {/* Timeline */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div id="journey" className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">Your Journey</h2>
           <div className="space-y-4">
             {TIMELINE_STEPS.map((step, idx) => (
