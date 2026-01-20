@@ -21,6 +21,7 @@ export default function OnboardingFlow() {
   const [form, setForm] = useState<FormState>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
 
   const cards = useMemo(() => ONBOARDING_CARDS, []);
 
@@ -55,9 +56,17 @@ export default function OnboardingFlow() {
     console.log("STATE", state);
 
     const completed = new Set(state.completed_card_ids || []);
-    const nextCard = ONBOARDING_CARDS.find((c) => !completed.has(c.id)) || ONBOARDING_CARDS[0];
+    const nextCard = ONBOARDING_CARDS.find((c) => !completed.has(c.id));
 
-    if (nextCard && nextCard.id !== activeCardId) {
+    // ✅ Eğer next yoksa: onboarding bitti
+    if (!nextCard) {
+      setIsComplete(true);
+      return;
+    }
+
+    setIsComplete(false);
+
+    if (nextCard.id !== activeCardId) {
       if (import.meta.env.DEV) {
         console.log("[OnboardingFlow] Selecting card:", {
           cardId: nextCard.id,
@@ -123,12 +132,67 @@ export default function OnboardingFlow() {
 
   if (loading) return <div className="p-6">Loading onboarding...</div>;
   if (error && !activeCard) return <div className="p-6 text-red-600">{error}</div>;
+  
+  // ✅ 2) Render — Complete ekranı göster
+  if (isComplete) {
+    const displayProgress = 100;
+    return (
+      <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
+        <div className="mb-4">
+          <div className="w-full h-2 bg-gray-100 rounded-full mb-3">
+            <div className="h-2 rounded-full bg-emerald-600 transition-all" style={{ width: `${displayProgress}%` }} />
+          </div>
+          <div className="text-sm text-gray-600 text-right">{displayProgress}%</div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-full bg-emerald-600/10 flex items-center justify-center flex-shrink-0">
+            <span className="text-xl">✅</span>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-emerald-900">
+              All set!
+            </h3>
+            <p className="text-emerald-800 mt-1">
+              We've received your preferences and initial details. Your coordinator will review your case soon.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+                onClick={() => {
+                  // Scroll to journey/timeline section
+                  document.getElementById("journey")?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                Go to my timeline
+              </button>
+
+              <button
+                className="px-4 py-2 rounded-lg bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 transition-colors"
+                onClick={() => {
+                  // Navigate to upload center
+                  window.location.href = "/upload-center?returnTo=/portal";
+                }}
+              >
+                Upload photos / X-rays
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!activeCard) return <div className="p-6">No onboarding cards.</div>;
 
   // showIf support (v1)
   if (!isCardVisible(activeCard, form)) {
     return <div className="p-6">This step is skipped.</div>;
   }
+
+  // ✅ 3) Progress bar - use isComplete to show 100% when done
+  const displayProgress = isComplete ? 100 : (state?.progress_percent ?? progress ?? 0);
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -138,11 +202,11 @@ export default function OnboardingFlow() {
           <div className="text-lg font-semibold">{activeCard.title}</div>
           {activeCard.description && <div className="text-sm text-gray-600">{activeCard.description}</div>}
         </div>
-        <div className="text-sm text-gray-600">{progress}%</div>
+        <div className="text-sm text-gray-600">{displayProgress}%</div>
       </div>
 
       <div className="w-full h-2 bg-gray-100 rounded-full mb-5">
-        <div className="h-2 rounded-full bg-black" style={{ width: `${progress}%` }} />
+        <div className="h-2 rounded-full bg-black transition-all" style={{ width: `${displayProgress}%` }} />
       </div>
 
       <div className="space-y-4">
