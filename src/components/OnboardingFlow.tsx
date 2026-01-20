@@ -98,16 +98,14 @@ export default function OnboardingFlow() {
       setSaving(true);
       setError(null);
       
-      // Submit card
-      await submitOnboardingCardWithSession(activeCard.id, form);
+      // Submit card - response is already normalized
+      const result = await submitOnboardingCardWithSession(activeCard.id, form);
 
-      // 🔥 Critical: Refetch fresh state from server
-      // This ensures we have the latest completed_card_ids and latest_answers
-      const fresh = await fetchOnboardingStateWithSession();
+      // Update state with fresh normalized data from server
       const newState = {
-        completed_card_ids: fresh.state.completed_card_ids || [],
-        progress_percent: fresh.state.progress_percent || 0,
-        latest_answers: fresh.latest_answers || {},
+        completed_card_ids: result.state.completed_card_ids || [],
+        progress_percent: result.state.progress_percent || 0,
+        latest_answers: result.state.latest_answers || {},
       };
       
       setState(newState);
