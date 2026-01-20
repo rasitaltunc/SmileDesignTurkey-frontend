@@ -181,7 +181,7 @@ export default function OnboardingFlow() {
           if (q.type === "yesno") {
             const optionClass = (selected: boolean) =>
               [
-                "w-full border rounded-lg px-4 py-3 text-left transition",
+                "border rounded-lg px-4 py-3 transition-colors",
                 selected
                   ? "bg-slate-900 text-white border-slate-900"
                   : "bg-white text-slate-900 border-slate-200 hover:bg-slate-50",
@@ -211,7 +211,7 @@ export default function OnboardingFlow() {
             const arr: string[] = Array.isArray(value) ? value : [];
             const optionClass = (selected: boolean) =>
               [
-                "border rounded-lg px-4 py-3 text-left transition",
+                "border rounded-lg px-4 py-3 transition-colors",
                 selected
                   ? "bg-slate-900 text-white border-slate-900"
                   : "bg-white text-slate-900 border-slate-200 hover:bg-slate-50",
