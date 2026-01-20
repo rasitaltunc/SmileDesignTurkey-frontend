@@ -210,7 +210,7 @@ module.exports = async function handler(req, res) {
     }
 
     // After saving answers + updating lead_onboarding_state, fetch fresh state + latest answers
-    const { data: stateRow } = await db
+    const { data: updatedStateRow } = await db
       .from("lead_onboarding_state")
       .select("lead_id, completed_card_ids, progress_percent, updated_at")
       .eq("lead_id", lead_id)
@@ -234,12 +234,12 @@ module.exports = async function handler(req, res) {
       lead_id,
       case_id,
       card_id,
-      progress_percent: stateRow?.progress_percent || progress_percent,
+      progress_percent: updatedStateRow?.progress_percent || progress_percent,
     });
 
     return res.status(200).json({
       ok: true,
-      state: stateRow || {
+      state: updatedStateRow || {
         lead_id,
         completed_card_ids: completed,
         progress_percent,
