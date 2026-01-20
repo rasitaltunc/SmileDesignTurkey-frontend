@@ -46,18 +46,21 @@ export default function OnboardingFlow() {
   }, []);
 
   // A) State gelince activeCard'ı seç: ilk incomplete kartı aç
+  // This ensures refresh → %43 shows the correct incomplete card
   useEffect(() => {
-    if (!state || cards.length === 0) return;
+    if (!state) return;
 
     const completed = new Set(state.completed_card_ids || []);
-    const next = cards.find((c) => !completed.has(c.id)) || cards[0];
+    const nextCard = ONBOARDING_CARDS.find((c) => !completed.has(c.id)) || ONBOARDING_CARDS[0];
 
-    setActiveCardId(next.id);
+    if (nextCard) {
+      setActiveCardId(nextCard.id);
 
-    // Prefill answers (kaldığın kartın cevapları)
-    const saved = state.latest_answers?.[next.id] || {};
-    setForm(saved);
-  }, [state, cards]);
+      // Prefill answers (kaldığın kartın cevapları)
+      const saved = state.latest_answers?.[nextCard.id] || {};
+      setForm(saved);
+    }
+  }, [state]);
 
   const activeCard = cards.find(c => c.id === activeCardId) || null;
 
@@ -85,14 +88,16 @@ export default function OnboardingFlow() {
       setSaving(true);
       setError(null);
       
-      // Submit and get fresh state from server
-      const result = await submitOnboardingCardWithSession(activeCard.id, form);
+      // Submit card
+      await submitOnboardingCardWithSession(activeCard.id, form);
 
-      // Update state with fresh data from server - this will trigger useEffect to select next card
+      // 🔥 Critical: Refetch fresh state from server
+      // This ensures we have the latest completed_card_ids and latest_answers
+      const fresh = await fetchOnboardingStateWithSession();
       const newState = {
-        completed_card_ids: result.state.completed_card_ids || [],
-        progress_percent: result.state.progress_percent || 0,
-        latest_answers: result.latest_answers || {},
+        completed_card_ids: fresh.state.completed_card_ids || [],
+        progress_percent: fresh.state.progress_percent || 0,
+        latest_answers: fresh.latest_answers || {},
       };
       
       setState(newState);
@@ -165,9 +170,14 @@ export default function OnboardingFlow() {
           }
 
           if (q.type === "yesno") {
-            const base = "border rounded-lg px-3 py-2 transition-colors";
-            const active = "bg-slate-900 text-white border-slate-900";
-            const inactive = "bg-white text-slate-900 border-slate-200 hover:bg-slate-50";
+            const optionClass = (selected: boolean) =>
+              [
+                "w-full border rounded-lg px-4 py-3 text-left transition",
+                selected
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-900 border-slate-200 hover:bg-slate-50",
+              ].join(" ");
+            
             return (
               <div key={q.id}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{q.label}{q.required ? " *" : ""}</label>
@@ -175,12 +185,12 @@ export default function OnboardingFlow() {
                   <button
                     type="button"
                     onClick={() => setValue(q.id, true)}
-                    className={`${base} ${value === true ? active : inactive}`}
+                    className={optionClass(value === true)}
                   >Yes</button>
                   <button
                     type="button"
                     onClick={() => setValue(q.id, false)}
-                    className={`${base} ${value === false ? active : inactive}`}
+                    className={optionClass(value === false)}
                   >No</button>
                 </div>
               </div>
@@ -190,9 +200,14 @@ export default function OnboardingFlow() {
           // multiselect
           if (q.type === "multiselect") {
             const arr: string[] = Array.isArray(value) ? value : [];
-            const base = "border rounded-lg px-3 py-2 transition-colors";
-            const active = "bg-slate-900 text-white border-slate-900";
-            const inactive = "bg-white text-slate-900 border-slate-200 hover:bg-slate-50";
+            const optionClass = (selected: boolean) =>
+              [
+                "border rounded-lg px-4 py-3 text-left transition",
+                selected
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-900 border-slate-200 hover:bg-slate-50",
+              ].join(" ");
+            
             return (
               <div key={q.id}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{q.label}{q.required ? " *" : ""}</label>
@@ -204,7 +219,7 @@ export default function OnboardingFlow() {
                         key={opt}
                         type="button"
                         onClick={() => setValue(q.id, on ? arr.filter(x => x !== opt) : [...arr, opt])}
-                        className={`${base} ${on ? active : inactive}`}
+                        className={optionClass(on)}
                       >
                         {opt}
                       </button>
