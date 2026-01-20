@@ -53,7 +53,13 @@ export async function submitOnboardingCard(payload: {
       return { success: false, error: errorMsg };
     }
 
-    return { success: true, data: json };
+    // ✅ Normalize: latest_answers top-level → state içine koy
+    const normalizedState = {
+      ...(json.state || {}),
+      latest_answers: json.latest_answers || {},
+    };
+
+    return { success: true, data: { state: normalizedState, latest_answers: json.latest_answers } };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Failed to submit card";
     if (import.meta.env.DEV) {
@@ -91,14 +97,9 @@ export async function submitOnboardingCardWithSession(
     throw new Error(result.error || "Failed to submit card");
   }
 
-  // ✅ Normalize submit response for UI
-  const normalizedState = {
-    ...(result.data.state || {}),
-    latest_answers: result.data.latest_answers || {},
-  };
-
+  // result.data already has normalized state from submitOnboardingCard
   return {
-    state: normalizedState,
+    state: result.data.state,
   } as OnboardingStateResponse;
 }
 
@@ -135,7 +136,7 @@ export async function fetchOnboardingStateWithSession() {
     throw new Error(errorMsg);
   }
   
-  // ✅ Normalize shape for UI
+  // ✅ Normalize: latest_answers top-level → state içine koy
   const normalizedState = {
     ...(json.state || {}),
     latest_answers: json.latest_answers || {},

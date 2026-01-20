@@ -237,15 +237,21 @@ module.exports = async function handler(req, res) {
       progress_percent: updatedStateRow?.progress_percent || progress_percent,
     });
 
-    return res.status(200).json({
-      ok: true,
-      state: updatedStateRow || {
+    // ✅ Backward compat: latest_answers hem top-level hem state içinde
+    const stateWithAnswers = {
+      ...(updatedStateRow || {
         lead_id,
         completed_card_ids: completed,
         progress_percent,
         updated_at: new Date().toISOString(),
-      },
+      }),
       latest_answers,
+    };
+
+    return res.status(200).json({
+      ok: true,
+      state: stateWithAnswers,
+      latest_answers, // Top-level for backward compat
     });
   } catch (e) {
     console.error("[onboarding-submit] Error:", e);

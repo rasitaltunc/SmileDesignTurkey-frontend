@@ -136,6 +136,17 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // ✅ Backward compat: latest_answers hem top-level hem state içinde
+    const stateWithAnswers = {
+      ...(state || {
+        lead_id: lead.id,
+        completed_card_ids: [],
+        progress_percent: 0,
+        updated_at: null,
+      }),
+      latest_answers,
+    };
+
     return res.status(200).json({
       ok: true,
       lead: {
@@ -144,13 +155,8 @@ module.exports = async function handler(req, res) {
         portal_status: lead.portal_status,
         email_verified: !!lead.email_verified_at,
       },
-      state: state || {
-        lead_id: lead.id,
-        completed_card_ids: [],
-        progress_percent: 0,
-        updated_at: null,
-      },
-      latest_answers,
+      state: stateWithAnswers,
+      latest_answers, // Top-level for backward compat
     });
   } catch (e) {
     console.error("[onboarding-state] error:", e);
