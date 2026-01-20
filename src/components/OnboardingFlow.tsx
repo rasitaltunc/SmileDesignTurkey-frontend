@@ -99,8 +99,6 @@ export default function OnboardingFlow() {
     }
   }, [state, loading, activeCardId]);
 
-  const activeCard = cards.find(c => c.id === activeCardId) || null;
-
   function setValue(qid: string, value: any) {
     setForm(prev => ({ ...prev, [qid]: value }));
   }
@@ -146,22 +144,31 @@ export default function OnboardingFlow() {
     }
   }
 
-  if (loading) return <div className="p-6">Loading onboarding...</div>;
-  if (error && !activeCard) return <div className="p-6 text-red-600">{error}</div>;
-  
-  // ✅ Progress hesaplama: UI'da kendimiz hesaplayalım (frontend-only, override backend)
+  // ✅ Calculate derived values BEFORE any early returns (for early return checks)
+  const activeCard = cards.find(c => c.id === activeCardId) || null;
   const total = ONBOARDING_CARDS.length;
   const done = state?.completed_card_ids?.length ?? 0;
   const displayProgress = isComplete ? 100 : Math.round((done / total) * 100);
-  
+
   // Update progress state for consistency
   useEffect(() => {
     if (state) {
       setProgress(displayProgress);
     }
   }, [state, displayProgress]);
-  
-  // ✅ 2) Render — Complete ekranı göster
+
+  // ✅ NO EARLY RETURNS - All hooks must run before any returns
+  // Loading state
+  if (loading) {
+    return <div className="p-6">Loading onboarding...</div>;
+  }
+
+  // Error state (only if no active card)
+  if (error && !activeCard && !isComplete) {
+    return <div className="p-6 text-red-600">{error}</div>;
+  }
+
+  // Complete screen
   if (isComplete) {
     return (
       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
@@ -252,13 +259,17 @@ export default function OnboardingFlow() {
     );
   }
 
-  if (!activeCard) return <div className="p-6">No onboarding cards.</div>;
+  // No active card
+  if (!activeCard) {
+    return <div className="p-6">No onboarding cards.</div>;
+  }
 
   // showIf support (v1)
   if (!isCardVisible(activeCard, form)) {
     return <div className="p-6">This step is skipped.</div>;
   }
 
+  // Active card form
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between mb-3">
