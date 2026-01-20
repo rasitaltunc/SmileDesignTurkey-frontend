@@ -56,35 +56,100 @@ module.exports = async function handler(req, res) {
     }
 
     const now = new Date().toISOString();
+    const verifiedEmail = String(row.email || "").toLowerCase().trim();
 
     // Update verification record
     await db.from("lead_email_verifications").update({ verified_at: now }).eq("id", row.id);
     
-    // ✅ Update lead: email = token's email (final truth) + email_verified_at + portal_status
-    const { data: lead } = await db
+    // ✅ B) Resolve Canonical Lead: "1 Email = 1 Canonical Lead"
+    // Find the canonical (oldest active) lead for this email
+    const { data: allLeads } = await db
       .from("leads")
-      .select("portal_status")
-      .eq("id", row.lead_id)
+      .select("id, case_id, portal_token, portal_status, status, created_at")
+      .eq("email", verifiedEmail)
+      .neq("status", "closed")
+      .order("created_at", { ascending: true }) // Oldest first = canonical
+      .limit(10);
+
+    if (!allLeads || allLeads.length === 0) {
+      console.error("[api/secure/confirm-lead-verification] No lead found for verified email:", verifiedEmail);
+      return res.status(400).json({ ok: false, error: "Lead not found" });
+    }
+
+    const canonicalLead = allLeads[0]; // Oldest = canonical
+    const verifiedLeadId = row.lead_id;
+
+    // Update verified lead: email = token's email (final truth) + email_verified_at + portal_status
+    const { data: verifiedLead } = await db
+      .from("leads")
+      .select("portal_status, case_id, portal_token")
+      .eq("id", verifiedLeadId)
       .single();
 
     const updateData = {
-      email: row.email, // Token's email is the final verified email
+      email: verifiedEmail, // Normalized email
       email_verified_at: now,
     };
     
     // Optionally update portal_status to 'active' if it's still 'pending_review' or null
-    if (!lead?.portal_status || lead.portal_status === 'pending_review') {
+    if (!verifiedLead?.portal_status || verifiedLead.portal_status === 'pending_review') {
       updateData.portal_status = 'active';
     }
 
-    await db.from("leads").update(updateData).eq("id", row.lead_id);
+    await db.from("leads").update(updateData).eq("id", verifiedLeadId);
+
+    // If verified lead is NOT the canonical lead, merge it
+    let shouldRedirect = false;
+    if (verifiedLeadId !== canonicalLead.id) {
+      console.log("[api/secure/confirm-lead-verification] Merging duplicate lead:", {
+        verified_lead_id: verifiedLeadId,
+        verified_case_id: verifiedLead?.case_id,
+        canonical_lead_id: canonicalLead.id,
+        canonical_case_id: canonicalLead.case_id,
+        email: verifiedEmail,
+      });
+
+      // Soft delete: mark verified lead as merged (status = 'merged')
+      await db
+        .from("leads")
+        .update({
+          status: "merged",
+          meta: {
+            merged_into: canonicalLead.id,
+            merged_at: now,
+            merged_reason: "email_verification_duplicate",
+          },
+        })
+        .eq("id", verifiedLeadId);
+
+      // Ensure canonical lead has verified email set
+      await db
+        .from("leads")
+        .update({
+          email: verifiedEmail,
+          email_verified_at: now,
+          portal_status: "active",
+        })
+        .eq("id", canonicalLead.id);
+
+      shouldRedirect = true;
+    }
 
     console.log("[api/secure/confirm-lead-verification] Email verified successfully:", {
-      lead_id: row.lead_id,
-      email: row.email,
+      lead_id: canonicalLead.id,
+      case_id: canonicalLead.case_id,
+      email: verifiedEmail,
+      was_merged: shouldRedirect,
     });
 
-    return res.status(200).json({ ok: true });
+    // Return canonical lead info if merge happened (frontend will redirect)
+    return res.status(200).json({
+      ok: true,
+      lead_id: canonicalLead.id,
+      case_id: canonicalLead.case_id,
+      portal_token: canonicalLead.portal_token,
+      redirect_to_canonical: shouldRedirect,
+    });
   } catch (e) {
     console.error("[api/secure/confirm-lead-verification] Error:", e);
     return res.status(500).json({ ok: false, error: "server error" });

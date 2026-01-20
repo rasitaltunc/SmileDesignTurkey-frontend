@@ -61,7 +61,31 @@ export default function VerifyEmail() {
         setStatus('success');
         setMessage('Verified ✅');
 
-        // Update portal session if exists
+        // ✅ Canonical Lead Merge: If redirect_to_canonical, update session to canonical lead
+        if (verifyResult.redirect_to_canonical && verifyResult.case_id && verifyResult.portal_token) {
+          console.log('[VerifyEmail] Redirecting to canonical lead:', {
+            canonical_case_id: verifyResult.case_id,
+            was_merged: true,
+          });
+
+          // Create new portal session with canonical lead credentials
+          createPortalSession(
+            verifyResult.case_id,
+            verifyResult.portal_token,
+            verifyResult.email || undefined,
+            undefined, // phone not provided by backend
+            true // verified
+          );
+
+          // Clean URL and redirect to canonical portal
+          window.history.replaceState({}, '', '/portal');
+          setTimeout(() => {
+            navigate('/portal', { replace: true });
+          }, 1500);
+          return;
+        }
+
+        // Normal flow: Update portal session if exists
         const session = getPortalSession();
         if (session) {
           createPortalSession(
