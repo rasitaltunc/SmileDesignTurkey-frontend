@@ -52,6 +52,8 @@ export default function OnboardingFlow() {
     // Wait for loading to finish and state to be available
     if (loading || !state || ONBOARDING_CARDS.length === 0) return;
 
+    console.log("STATE", state);
+
     const completed = new Set(state.completed_card_ids || []);
     const nextCard = ONBOARDING_CARDS.find((c) => !completed.has(c.id)) || ONBOARDING_CARDS[0];
 
