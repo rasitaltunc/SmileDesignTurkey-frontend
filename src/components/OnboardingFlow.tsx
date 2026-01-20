@@ -133,9 +133,13 @@ export default function OnboardingFlow() {
   if (loading) return <div className="p-6">Loading onboarding...</div>;
   if (error && !activeCard) return <div className="p-6 text-red-600">{error}</div>;
   
+  // ✅ Progress hesaplama: UI'da kendimiz hesaplayalım
+  const total = ONBOARDING_CARDS.length;
+  const done = state?.completed_card_ids?.length ?? 0;
+  const displayProgress = isComplete ? 100 : Math.round((done / total) * 100);
+  
   // ✅ 2) Render — Complete ekranı göster
   if (isComplete) {
-    const displayProgress = 100;
     return (
       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
         <div className="mb-4">
@@ -190,9 +194,6 @@ export default function OnboardingFlow() {
   if (!isCardVisible(activeCard, form)) {
     return <div className="p-6">This step is skipped.</div>;
   }
-
-  // ✅ 3) Progress bar - use isComplete to show 100% when done
-  const displayProgress = isComplete ? 100 : (state?.progress_percent ?? progress ?? 0);
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
