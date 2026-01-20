@@ -29,6 +29,7 @@ import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
 import { trackEvent } from '@/lib/analytics';
 import OnboardingFlow from '@/components/OnboardingFlow';
+import { CreatePasswordMiniModal } from '@/components/portal/CreatePasswordMiniModal';
 
 interface TimelineStep {
   id: string;
@@ -62,6 +63,7 @@ export default function PendingReviewPortal() {
   const [isSendingVerification, setIsSendingVerification] = useState(false);
   const [showVerificationSuccess, setShowVerificationSuccess] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   // Fetch portal data on mount and when verified
   useEffect(() => {
@@ -238,11 +240,19 @@ export default function PendingReviewPortal() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-sm text-gray-600">
+          <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
             <div className="flex items-center gap-2">
               <Mail className="w-4 h-4" />
               <span>Assigned Coordinator: <span className="font-medium">{portalData?.coordinator_email || 'Pending assignment'}</span></span>
             </div>
+            {!portalData?.has_password && (
+              <button
+                onClick={() => navigate('/portal/login')}
+                className="ml-auto px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Login with password
+              </button>
+            )}
           </div>
         </div>
 
@@ -360,6 +370,40 @@ export default function PendingReviewPortal() {
           </div>
         </div>
 
+        {/* Security Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Shield className="w-5 h-5 text-gray-700" />
+            Security
+          </h2>
+          {portalData?.has_password ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-sm text-gray-700">Password set ✅</span>
+              </div>
+              <button
+                onClick={() => setPasswordModalOpen(true)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Change password
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Set a password to access your portal anytime.
+              </p>
+              <button
+                onClick={() => navigate('/portal/login')}
+                className="px-4 py-2 text-sm rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+              >
+                Set a password
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Next Best Action */}
         <div className="bg-gradient-to-br from-teal-50 to-blue-50 rounded-xl border-2 border-teal-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Next Step</h2>
@@ -474,6 +518,20 @@ export default function PendingReviewPortal() {
           </div>
         </div>
       </div>
+
+      {/* Password Modal */}
+      <CreatePasswordMiniModal
+        open={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+        mode={portalData?.has_password ? 'change' : 'create'}
+        onSuccess={async () => {
+          // Refetch portal data to update has_password
+          const result = await fetchPortalData();
+          if (result.success && result.data) {
+            setPortalData(result.data);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -5,10 +5,12 @@ export function CreatePasswordMiniModal({
   open,
   onClose,
   onSuccess,
+  mode = 'create',
 }: {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  mode?: 'create' | 'change';
 }) {
   const [pwd, setPwd] = useState("");
   const [pwd2, setPwd2] = useState("");
@@ -40,7 +42,7 @@ export function CreatePasswordMiniModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-slate-900">Create a password</h3>
+          <h3 className="font-semibold text-slate-900">{mode === 'change' ? 'Change password' : 'Create a password'}</h3>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-900">✕</button>
         </div>
 

@@ -38,6 +38,7 @@ const Contact = lazy(() => import('./pages/Contact'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const PendingReviewPortal = lazy(() => import('./pages/PendingReviewPortal'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const PortalLogin = lazy(() => import('./pages/PortalLogin'));
 
 // Loading fallback component
 function PageLoader() {
@@ -295,6 +296,14 @@ export default function App() {
             } 
           />
           <Route 
+            path="/portal/login" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <PortalLogin />
+              </Suspense>
+            }
+          />
+          <Route
             path="/portal" 
             element={
               <Suspense fallback={<PageLoader />}>

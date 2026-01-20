@@ -25,6 +25,7 @@ export default function OnboardingFlow() {
   const [saving, setSaving] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [pwSuccess, setPwSuccess] = useState(false);
   const [portalData, setPortalData] = useState<{ has_password?: boolean } | null>(null);
 
   const cards = useMemo(() => ONBOARDING_CARDS, []);
@@ -148,10 +149,17 @@ export default function OnboardingFlow() {
   if (loading) return <div className="p-6">Loading onboarding...</div>;
   if (error && !activeCard) return <div className="p-6 text-red-600">{error}</div>;
   
-  // ✅ Progress hesaplama: UI'da kendimiz hesaplayalım
+  // ✅ Progress hesaplama: UI'da kendimiz hesaplayalım (frontend-only, override backend)
   const total = ONBOARDING_CARDS.length;
   const done = state?.completed_card_ids?.length ?? 0;
   const displayProgress = isComplete ? 100 : Math.round((done / total) * 100);
+  
+  // Update progress state for consistency
+  useEffect(() => {
+    if (state) {
+      setProgress(displayProgress);
+    }
+  }, [state, displayProgress]);
   
   // ✅ 2) Render — Complete ekranı göster
   if (isComplete) {
@@ -197,15 +205,22 @@ export default function OnboardingFlow() {
                 Upload photos / X-rays
               </button>
 
-              {!portalData?.has_password ? (
+              {!portalData?.has_password && !pwSuccess ? (
                 <button
                   className="px-4 py-2 rounded-lg bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 transition-colors"
                   onClick={() => setPwOpen(true)}
                 >
-                  Create password
+                  Create a password
                 </button>
               ) : (
-                <span className="px-4 py-2 text-sm text-green-700">Password created ✅</span>
+                <div className="flex flex-col gap-1">
+                  <span className="px-4 py-2 text-sm text-green-700">Password created ✅</span>
+                  {pwSuccess && (
+                    <p className="text-xs text-gray-600 px-4">
+                      Next time you can login with email + password.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -213,13 +228,20 @@ export default function OnboardingFlow() {
 
         <CreatePasswordMiniModal
           open={pwOpen}
-          onClose={() => setPwOpen(false)}
+          onClose={() => {
+            setPwOpen(false);
+            // Reset success message when modal closes (unless password was just created)
+            if (!portalData?.has_password) {
+              setPwSuccess(false);
+            }
+          }}
           onSuccess={async () => {
             // Refetch portal data to update has_password
             try {
               const portalResult = await fetchPortalData();
               if (portalResult.success && portalResult.data) {
                 setPortalData(portalResult.data);
+                setPwSuccess(true);
               }
             } catch (portalErr) {
               console.warn("[OnboardingFlow] Failed to refresh portal data:", portalErr);
