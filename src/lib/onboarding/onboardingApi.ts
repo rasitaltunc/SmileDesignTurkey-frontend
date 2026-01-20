@@ -158,3 +158,30 @@ export async function fetchOnboardingStateWithSession() {
   };
 }
 
+/**
+ * Set portal password (requires active portal session)
+ */
+export async function setPortalPassword(password: string): Promise<{ ok: true; has_password: true }> {
+  const session = getPortalSession();
+  if (!session?.case_id || !session?.portal_token) {
+    throw new Error("No valid portal session");
+  }
+
+  const res = await fetch("/api/public/portal-set-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      case_id: session.case_id,
+      portal_token: session.portal_token,
+      password,
+    }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.ok) {
+    throw new Error(json.error || "Failed to set password");
+  }
+  
+  return json as { ok: true; has_password: true };
+}
+

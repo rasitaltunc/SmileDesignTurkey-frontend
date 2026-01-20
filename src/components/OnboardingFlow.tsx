@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ONBOARDING_CARDS, CardDef } from "@/lib/onboarding/cards";
 import { fetchOnboardingStateWithSession, submitOnboardingCardWithSession } from "@/lib/onboarding/onboardingApi";
+import { fetchPortalData } from "@/lib/portalApi";
+import { CreatePasswordMiniModal } from "@/components/portal/CreatePasswordMiniModal";
 
 type FormState = Record<string, any>;
 
@@ -22,6 +24,8 @@ export default function OnboardingFlow() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [portalData, setPortalData] = useState<{ has_password?: boolean } | null>(null);
 
   const cards = useMemo(() => ONBOARDING_CARDS, []);
 
@@ -39,6 +43,17 @@ export default function OnboardingFlow() {
         };
         setState(newState);
         setProgress(newState.progress_percent);
+
+        // Also fetch portal data to check has_password
+        try {
+          const portalResult = await fetchPortalData();
+          if (portalResult.success && portalResult.data) {
+            setPortalData(portalResult.data);
+          }
+        } catch (portalErr) {
+          // Non-fatal: continue without portal data
+          console.warn("[OnboardingFlow] Failed to fetch portal data:", portalErr);
+        }
       } catch (e: any) {
         setError(e?.message || "Failed to load onboarding");
       } finally {
@@ -181,9 +196,36 @@ export default function OnboardingFlow() {
               >
                 Upload photos / X-rays
               </button>
+
+              {!portalData?.has_password ? (
+                <button
+                  className="px-4 py-2 rounded-lg bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 transition-colors"
+                  onClick={() => setPwOpen(true)}
+                >
+                  Create password
+                </button>
+              ) : (
+                <span className="px-4 py-2 text-sm text-green-700">Password created ✅</span>
+              )}
             </div>
           </div>
         </div>
+
+        <CreatePasswordMiniModal
+          open={pwOpen}
+          onClose={() => setPwOpen(false)}
+          onSuccess={async () => {
+            // Refetch portal data to update has_password
+            try {
+              const portalResult = await fetchPortalData();
+              if (portalResult.success && portalResult.data) {
+                setPortalData(portalResult.data);
+              }
+            } catch (portalErr) {
+              console.warn("[OnboardingFlow] Failed to refresh portal data:", portalErr);
+            }
+          }}
+        />
       </div>
     );
   }

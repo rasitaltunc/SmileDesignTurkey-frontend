@@ -18,6 +18,7 @@ export interface PortalData {
   portal_status: string;
   email_verified_at: string | null;
   coordinator_email: string | null;
+  has_password?: boolean;
   next_step: 'verify' | 'upload';
 }
 
