@@ -48,19 +48,28 @@ export default function OnboardingFlow() {
   // A) State gelince activeCard'ı seç: ilk incomplete kartı aç
   // This ensures refresh → %43 shows the correct incomplete card
   useEffect(() => {
-    if (!state) return;
+    // Wait for loading to finish and state to be available
+    if (loading || !state || ONBOARDING_CARDS.length === 0) return;
 
     const completed = new Set(state.completed_card_ids || []);
     const nextCard = ONBOARDING_CARDS.find((c) => !completed.has(c.id)) || ONBOARDING_CARDS[0];
 
-    if (nextCard) {
+    if (nextCard && nextCard.id !== activeCardId) {
+      if (import.meta.env.DEV) {
+        console.log("[OnboardingFlow] Selecting card:", {
+          cardId: nextCard.id,
+          completed: Array.from(completed),
+          progress: state.progress_percent,
+        });
+      }
+
       setActiveCardId(nextCard.id);
 
       // Prefill answers (kaldığın kartın cevapları)
       const saved = state.latest_answers?.[nextCard.id] || {};
       setForm(saved);
     }
-  }, [state]);
+  }, [state, loading, activeCardId]);
 
   const activeCard = cards.find(c => c.id === activeCardId) || null;
 
