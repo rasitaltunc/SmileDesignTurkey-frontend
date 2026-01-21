@@ -37,30 +37,58 @@ module.exports = async function handler(req, res) {
     }
 
     // Lead'i resolve et
-    const { data: lead, error: leadErr } = await db
+    const { data: sessionLead, error: leadErr } = await db
       .from("leads")
       .select("id, email, case_id, portal_token, status")
       .eq("case_id", case_id)
       .eq("portal_token", portal_token)
       .maybeSingle();
 
-    if (leadErr || !lead) {
+    if (leadErr || !sessionLead) {
       return res.status(404).json({ ok: false, error: "Lead not found" });
     }
 
-    if (!lead.email) {
+    if (!sessionLead.email) {
       return res.status(400).json({ ok: false, error: "Missing email" });
     }
 
-    const email = String(lead.email).toLowerCase().trim();
+    const email = String(sessionLead.email).toLowerCase().trim();
+    
+    // ✅ Find target lead: if email has auth, use that lead; otherwise use session lead
+    const { data: allEmailLeads } = await db
+      .from("leads")
+      .select("id")
+      .eq("email", email)
+      .neq("status", "closed")
+      .neq("status", "merged");
+
+    let targetLeadId = sessionLead.id; // Default: use session lead
+
+    // Check if any lead for this email already has auth
+    if (allEmailLeads?.length) {
+      for (const emailLead of allEmailLeads) {
+        const { data: existingAuth } = await db
+          .from("lead_portal_auth")
+          .select("lead_id")
+          .eq("lead_id", emailLead.id)
+          .maybeSingle();
+        
+        if (existingAuth) {
+          // Found lead with auth - use that one
+          targetLeadId = emailLead.id;
+          break;
+        }
+      }
+    }
+
     const hash = await bcrypt.hash(pwd, 10);
 
-    // Upsert auth
+    // Upsert auth to target lead
     const { error: upErr } = await db
       .from("lead_portal_auth")
       .upsert(
         {
-          lead_id: lead.id,
+          lead_id: targetLeadId,
           email,
           password_hash: hash,
         },
@@ -72,7 +100,7 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ ok: false, error: "Failed to save password" });
     }
 
-    console.log("[portal-set-password] Password set for lead:", { lead_id: lead.id, email });
+    console.log("[portal-set-password] Password set for lead:", { lead_id: targetLeadId, email, session_lead_id: sessionLead.id });
 
     return res.status(200).json({ ok: true, has_password: true });
   } catch (e) {

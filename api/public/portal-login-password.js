@@ -81,40 +81,67 @@ module.exports = async function handler(req, res) {
       return res.status(429).json({ ok: false, error: "Too many attempts, try again later" });
     }
 
-    // Canonical lead bul: en eski active lead (merge mantığına uyum)
-    const { data: leads, error: leadErr } = await db
+    // ✅ Find lead WITH password: prioritize lead that has auth
+    // Get all active leads for this email
+    const { data: allLeads, error: leadErr } = await db
       .from("leads")
       .select("id, case_id, portal_token, status, email")
       .eq("email", email)
       .neq("status", "closed")
-      .order("created_at", { ascending: true })
-      .limit(1);
+      .neq("status", "merged")
+      .order("created_at", { ascending: false }); // Newest first as fallback
 
-    if (leadErr || !leads?.length) {
+    if (leadErr || !allLeads?.length) {
       // Always return generic error (don't reveal if email exists)
       recordFailedAttempt(rateLimitKey);
       return res.status(401).json({ ok: false, error: "Invalid credentials" });
     }
 
-    const lead = leads[0];
-
-    const { data: authRow } = await db
-      .from("lead_portal_auth")
-      .select("password_hash")
-      .eq("lead_id", lead.id)
-      .maybeSingle();
-
-    if (!authRow?.password_hash) {
-      // Always return generic error
-      recordFailedAttempt(rateLimitKey);
-      return res.status(401).json({ ok: false, error: "Invalid credentials" });
+    // Check which lead(s) have password auth
+    const leadsWithAuth = [];
+    for (const lead of allLeads) {
+      const { data: authRow } = await db
+        .from("lead_portal_auth")
+        .select("password_hash, lead_id")
+        .eq("lead_id", lead.id)
+        .maybeSingle();
+      
+      if (authRow?.password_hash) {
+        leadsWithAuth.push({ lead, authRow });
+      }
     }
 
-    const ok = await bcrypt.compare(password, authRow.password_hash);
-    if (!ok) {
-      // Record failed attempt
+    // ✅ Prioritize lead that has auth (has_auth DESC, created_at DESC)
+    // Sort: has auth first, then by created_at DESC
+    const sortedLeads = [...allLeads].sort((a, b) => {
+      const aHasAuth = leadsWithAuth.some(l => l.lead.id === a.id);
+      const bHasAuth = leadsWithAuth.some(l => l.lead.id === b.id);
+      
+      if (aHasAuth && !bHasAuth) return -1;
+      if (!aHasAuth && bHasAuth) return 1;
+      // Both have auth or both don't - sort by created_at DESC
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+
+    // Try to find password match starting with leads that have auth
+    let matchedLead = null;
+    let matchedAuth = null;
+
+    for (const lead of sortedLeads) {
+      const authEntry = leadsWithAuth.find(l => l.lead.id === lead.id);
+      if (!authEntry) continue; // Skip leads without auth
+
+      const ok = await bcrypt.compare(password, authEntry.authRow.password_hash);
+      if (ok) {
+        matchedLead = lead;
+        matchedAuth = authEntry.authRow;
+        break;
+      }
+    }
+
+    if (!matchedLead) {
+      // No password match found
       recordFailedAttempt(rateLimitKey);
-      // Always return generic error
       return res.status(401).json({ ok: false, error: "Invalid credentials" });
     }
 
@@ -124,8 +151,8 @@ module.exports = async function handler(req, res) {
     // Return session credentials (frontend will create portal session)
     return res.status(200).json({
       ok: true,
-      case_id: lead.case_id,
-      portal_token: lead.portal_token,
+      case_id: matchedLead.case_id,
+      portal_token: matchedLead.portal_token,
     });
   } catch (e) {
     console.error("[portal-login-password] Error:", e);
