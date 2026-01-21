@@ -301,14 +301,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                 {portalLabel}
               </button>
             ) : (
-              <button
-                onClick={openAuth}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
-              >
-                <User className="w-4 h-4" />
-                Login
-              </button>
-            ) : (
+              /* Authenticated but no portal session - show employee/admin UI */
               <div className="flex items-center gap-2">
                 {/* Only show role-based link if user is employee/admin/doctor (not patient) */}
                 {roleLabel && role && role !== 'patient' ? (
