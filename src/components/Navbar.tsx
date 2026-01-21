@@ -1,4 +1,4 @@
-import { Link } from './Link';
+import { Link, useNavigate } from 'react-router-dom';
 import { PrefetchLink } from './PrefetchLink';
 import { Menu, X, MessageCircle, Globe, User, LogOut } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -23,6 +23,7 @@ function pushRoute(path: string) {
 }
 
 export default function Navbar({ minimal = false, variant = 'public' }: NavbarProps) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const { lang, setLang, content } = useLanguage();
 
@@ -52,6 +53,16 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     if (!role) return null;
     return getHomeLabel(role);
   }, [role]);
+
+  // ✅ Smart Portal button handler
+  const handlePortalClick = () => {
+    if (hasValidPortalSession()) {
+      navigate("/portal");
+    } else {
+      navigate("/portal/login");
+    }
+  };
+  const portalLabel = hasValidPortalSession() ? "Dashboard" : "Login";
 
   const handleWhatsAppClick = () => {
     trackEvent({
@@ -281,14 +292,15 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
             {/* Account - her zaman görünür */}
             {/* ✅ CRITICAL HARD GUARD: Patient portal session ALWAYS shows Portal, NEVER shows Leads */}
             {/* hasValidPortalSession() takes absolute priority over Supabase auth state */}
-            {hasValidPortalSession() ? (
-              <Link
-                to="/portal"
+            {/* ✅ Smart Portal button: session varsa /portal, yoksa /portal/login */}
+            {hasValidPortalSession() || !isAuthenticated ? (
+              <button
+                onClick={handlePortalClick}
                 className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
               >
-                Portal
-              </Link>
-            ) : !isAuthenticated ? (
+                {portalLabel}
+              </button>
+            ) : (
               <button
                 onClick={openAuth}
                 className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"

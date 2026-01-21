@@ -157,7 +157,7 @@ export default function OnboardingFlow() {
     }
   }, [state, displayProgress]);
 
-  // ✅ NO EARLY RETURNS - All hooks must run before any returns
+  // ✅ NO EARLY RETURNS - Single return with conditional rendering
   // Loading state
   if (loading) {
     return <div className="p-6">Loading onboarding...</div>;
@@ -171,46 +171,47 @@ export default function OnboardingFlow() {
   // Complete screen
   if (isComplete) {
     return (
-      <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
-        <div className="mb-4">
-          <div className="w-full h-2 bg-gray-100 rounded-full mb-3">
-            <div className="h-2 rounded-full bg-emerald-600 transition-all" style={{ width: `${displayProgress}%` }} />
+      <>
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
+          <div className="mb-4">
+            <div className="w-full h-2 bg-gray-100 rounded-full mb-3">
+              <div className="h-2 rounded-full bg-emerald-600 transition-all" style={{ width: `${displayProgress}%` }} />
+            </div>
+            <div className="text-sm text-gray-600 text-right">{displayProgress}%</div>
           </div>
-          <div className="text-sm text-gray-600 text-right">{displayProgress}%</div>
-        </div>
 
-        <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-full bg-emerald-600/10 flex items-center justify-center flex-shrink-0">
-            <span className="text-xl">✅</span>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-emerald-900">
-              All set!
-            </h3>
-            <p className="text-emerald-800 mt-1">
-              We've received your preferences and initial details. Your coordinator will review your case soon.
-            </p>
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-emerald-600/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-xl">✅</span>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-emerald-900">
+                All set!
+              </h3>
+              <p className="text-emerald-800 mt-1">
+                We've received your preferences and initial details. Your coordinator will review your case soon.
+              </p>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
-                onClick={() => {
-                  // Scroll to journey/timeline section
-                  document.getElementById("journey")?.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                Go to my timeline
-              </button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+                  onClick={() => {
+                    // Scroll to journey/timeline section
+                    document.getElementById("journey")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  Go to my timeline
+                </button>
 
-              <button
-                className="px-4 py-2 rounded-lg bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 transition-colors"
-                onClick={() => {
-                  // Navigate to upload center
-                  window.location.href = "/upload-center?returnTo=/portal";
-                }}
-              >
-                Upload photos / X-rays
-              </button>
+                <button
+                  className="px-4 py-2 rounded-lg bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 transition-colors"
+                  onClick={() => {
+                    // Navigate to upload center
+                    window.location.href = "/upload-center?returnTo=/portal";
+                  }}
+                >
+                  Upload photos / X-rays
+                </button>
 
               {!portalData?.has_password && !pwSuccess ? (
                 <button
@@ -229,6 +230,23 @@ export default function OnboardingFlow() {
                   )}
                 </div>
               )}
+            </div>
+
+            <div className="mt-2 text-sm text-slate-600">
+              <button
+                onClick={() => window.location.assign("/portal")}
+                className="underline hover:text-slate-900"
+              >
+                Go to dashboard
+              </button>
+              <span className="mx-2">·</span>
+              <button
+                onClick={() => window.location.assign("/portal/login")}
+                className="underline hover:text-slate-900"
+              >
+                Login
+              </button>
+            </div>
             </div>
           </div>
         </div>
@@ -255,7 +273,7 @@ export default function OnboardingFlow() {
             }
           }}
         />
-      </div>
+      </>
     );
   }
 
