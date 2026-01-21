@@ -55,6 +55,8 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
   }, [role]);
 
   // ✅ Patient Portal handler (smart: Dashboard if session, Patient Portal if not)
+  const portalLabel = hasValidPortalSession() ? "Dashboard" : "Patient Portal";
+  
   const handlePatientPortal = () => {
     navigate(hasValidPortalSession() ? "/portal" : "/portal/login");
   };
@@ -296,7 +298,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                   onClick={handlePatientPortal}
                   className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors whitespace-nowrap shrink-0"
                 >
-                  {hasValidPortalSession() ? "Dashboard" : "Patient Portal"}
+                  {portalLabel}
                 </button>
 
                 <button
