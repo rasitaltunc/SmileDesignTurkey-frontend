@@ -865,10 +865,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // B2: Generate AI Brief
   const handleGenerateBrief = async () => {
-    // ✅ Use lead.id (TEXT) instead of leadId prop
-    const activeLeadId = lead?.id ?? null;
+    // ✅ Use resolvedLeadIdText first (canonical source), then fallback to lead?.id or leadId
+    const activeLeadId = resolvedLeadIdText || lead?.id || leadId || null;
     if (!activeLeadId) {
-      toast.error("Lead ID missing (API /api/leads must return id)");
+      toast.error("Missing leadId (lead not loaded yet). Refresh and try again.");
       return;
     }
 
@@ -920,10 +920,10 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // B3: Normalize Notes
   const handleNormalizeNotes = async () => {
-    // ✅ Use lead.id (TEXT) instead of leadId prop
-    const activeLeadId = lead?.id ?? null;
+    // ✅ Use resolvedLeadIdText first (canonical source), then fallback to lead?.id or leadId
+    const activeLeadId = resolvedLeadIdText || lead?.id || leadId || null;
     if (!activeLeadId) {
-      toast.error("Lead ID missing (API /api/leads must return id)");
+      toast.error("Missing leadId (lead not loaded yet). Refresh and try again.");
       return;
     }
     if (!isAuthenticated) return;

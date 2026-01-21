@@ -35,6 +35,11 @@ export interface BriefResponse {
 }
 
 export async function briefLead(leadId: string): Promise<BriefResponse> {
+  // ✅ Guard: prevent empty leadId calls
+  if (!leadId || !String(leadId).trim()) {
+    throw new Error("Missing leadId");
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error("Supabase client not configured");
