@@ -54,15 +54,15 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     return getHomeLabel(role);
   }, [role]);
 
-  // ✅ Smart Portal button handler
-  const handlePortalClick = () => {
-    if (hasValidPortalSession()) {
-      navigate("/portal");
-    } else {
-      navigate("/portal/login");
-    }
+  // ✅ Patient Portal handler (smart: Dashboard if session, Patient Portal if not)
+  const handlePatientPortal = () => {
+    navigate(hasValidPortalSession() ? "/portal" : "/portal/login");
   };
-  const portalLabel = hasValidPortalSession() ? "Dashboard" : "Login";
+
+  // ✅ Staff Login handler (employee/admin/doctor)
+  const handleStaffLogin = () => {
+    navigate("/login");
+  };
 
   const handleWhatsAppClick = () => {
     trackEvent({
@@ -289,19 +289,27 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               </>
             )}
 
-            {/* Account - her zaman görünür */}
-            {/* ✅ CRITICAL HARD GUARD: Patient portal session ALWAYS shows Portal, NEVER shows Leads */}
-            {/* hasValidPortalSession() takes absolute priority over Supabase auth state */}
-            {/* ✅ Smart Portal button: session varsa /portal, yoksa /portal/login */}
-            {hasValidPortalSession() || !isAuthenticated ? (
-              <button
-                onClick={handlePortalClick}
-                className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
-              >
-                {portalLabel}
-              </button>
-            ) : (
-              /* Authenticated but no portal session - show employee/admin UI */
+            {/* Public navbar: Patient Portal + Staff Login */}
+            {variant !== 'admin' && !isDoctorMode && !isAuthenticated && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePatientPortal}
+                  className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors whitespace-nowrap shrink-0"
+                >
+                  {hasValidPortalSession() ? "Dashboard" : "Patient Portal"}
+                </button>
+
+                <button
+                  onClick={handleStaffLogin}
+                  className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
+                >
+                  Staff Login
+                </button>
+              </div>
+            )}
+
+            {/* Authenticated user UI (employee/admin/doctor) */}
+            {isAuthenticated && (
               <div className="flex items-center gap-2">
                 {/* Only show role-based link if user is employee/admin/doctor (not patient) */}
                 {roleLabel && role && role !== 'patient' ? (
