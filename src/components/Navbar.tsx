@@ -272,7 +272,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                   className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors whitespace-nowrap shrink-0"
                   onClick={() => trackEvent({ type: 'cta_click', where: 'navbar', cta: 'free_consultation', lang })}
                 >
-                  {content.cta.primary}
+                  {content?.cta?.primary || "Get Started"}
                 </PrefetchLink>
               </>
             )}
@@ -370,7 +370,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                       trackEvent({ type: 'cta_click', where: 'navbar_mobile', cta: 'free_consultation', lang });
                     }}
                   >
-                    {content.cta.primary}
+                    {content?.cta?.primary || "Get Started"}
                   </PrefetchLink>
                 </>
               )}

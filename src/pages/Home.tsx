@@ -229,14 +229,14 @@ export default function Home() {
         <section className="py-20 bg-white">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16 max-w-3xl mx-auto">
-              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy.whyUs.title}</h2>
+              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy?.whyUs?.title}</h2>
               <p className="text-text-secondary text-lg">
-                {copy.whyUs.subtitle}
+                {copy?.whyUs?.subtitle}
               </p>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {copy.whyUs.points.map((point, idx) => {
+              {copy?.whyUs?.points?.map((point, idx) => {
                 const PointIcon = trustIconMap[point.icon] || iconMap[point.icon] || Shield;
                 return (
                   <div key={idx} className="bg-bg-secondary rounded-lg p-6 border border-gray-100 hover:shadow-md transition-shadow">
@@ -258,14 +258,14 @@ export default function Home() {
         <section className="py-20 bg-white">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-12">
-              <h2 className="text-text-primary mb-4 text-3xl font-semibold">{copy.packages.title}</h2>
+              <h2 className="text-text-primary mb-4 text-3xl font-semibold">{copy?.packages?.title}</h2>
               <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-                {copy.packages.subtitle}
+                {copy?.packages?.subtitle}
               </p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 mb-8">
-              {copy.packages.items.map((pkg, idx) => (
+              {copy?.packages?.items?.map((pkg, idx) => (
                 <div
                   key={idx}
                   className={`bg-white rounded-lg p-8 border-2 ${pkg.popular ? 'border-accent-primary shadow-lg' : 'border-gray-200'} hover:shadow-xl transition-all`}
@@ -304,7 +304,7 @@ export default function Home() {
 
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
               <p className="text-sm text-text-secondary text-center">
-                <strong className="text-text-primary">{copy.packages.disclaimer}</strong>
+                <strong className="text-text-primary">{copy?.packages?.disclaimer}</strong>
               </p>
             </div>
           </div>
@@ -324,7 +324,7 @@ export default function Home() {
 
             <div className="max-w-5xl mx-auto">
               <div className="grid md:grid-cols-3 gap-6 mb-8">
-                {copy.testimonials.map((testimonial, index) => (
+                {copy?.testimonials?.map((testimonial, index) => (
                   <div key={index} className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-1 mb-3">
                       {[...Array(testimonial.rating)].map((_, i) => (
@@ -366,7 +366,7 @@ export default function Home() {
             </div>
 
             <div className="space-y-4 mb-12">
-              {copy.faq.slice(0, 6).map((faq, index) => (
+              {copy?.faq?.slice(0, 6).map((faq, index) => (
                 <div
                   key={index}
                   className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
@@ -419,12 +419,12 @@ export default function Home() {
       {/* FinalCTA */}
       <section className="py-24 bg-gradient-to-br from-accent-primary to-accent-hover">
         <div className="max-w-4xl mx-auto px-8 text-center">
-          <h2 className="text-white mb-6 text-4xl font-bold">{copy.cta.final.title}</h2>
+          <h2 className="text-white mb-6 text-4xl font-bold">{copy?.cta?.final?.title}</h2>
           <p className="text-white/90 text-lg mb-6 max-w-2xl mx-auto leading-relaxed">
-            {copy.cta.final.subtitle}
+            {copy?.cta?.final?.subtitle}
           </p>
           <p className="text-white/70 text-sm mb-10">
-            {copy.disclaimer.medical}
+            {copy?.disclaimer?.medical}
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
@@ -438,7 +438,7 @@ export default function Home() {
               className="px-8 py-4 bg-white text-accent-primary hover:bg-white/95 shadow-lg font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
               aria-label={copy?.hero?.ctaPrimary || "Get Started"}
             >
-              {copy.hero.ctaPrimary}
+              {copy?.hero?.ctaPrimary || "Get Started"}
               <ChevronRight className="w-5 h-5" />
             </ProfessionalCTA>
             <button
@@ -447,7 +447,7 @@ export default function Home() {
               aria-label={copy?.whatsapp?.ctaText || "WhatsApp"}
             >
               <MessageCircle className="w-5 h-5" />
-              {copy.whatsapp.ctaText}
+              {copy?.whatsapp?.ctaText || "WhatsApp"}
             </button>
           </div>
 
