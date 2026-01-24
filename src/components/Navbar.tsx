@@ -260,7 +260,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                 <button
                   onClick={handleWhatsAppClick}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-teal-600 border border-teal-600 hover:bg-teal-50 transition-colors whitespace-nowrap shrink-0"
-                  aria-label={content.whatsapp.ctaText}
+                  aria-label={content?.whatsapp?.ctaText || "WhatsApp"}
                 >
                   <MessageCircle className="w-4 h-4" />
                   {content?.whatsapp?.ctaText || "WhatsApp"}
@@ -355,7 +355,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                       handleWhatsAppClick();
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-2 text-teal-600 border border-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
-                    aria-label={content.whatsapp.ctaText}
+                    aria-label={content?.whatsapp?.ctaText || "WhatsApp"}
                   >
                     <MessageCircle className="w-4 h-4" />
                     {content?.whatsapp?.ctaText || "WhatsApp"}

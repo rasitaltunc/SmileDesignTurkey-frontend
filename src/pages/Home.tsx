@@ -145,7 +145,7 @@ export default function Home() {
                   onClick={handleGetStartedClick}
                   onNavigate={handleNavigateToOnboarding}
                   className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-                  aria-label={copy.hero.ctaPrimary}
+                  aria-label={copy?.hero?.ctaPrimary || "Get Started"}
                 >
                   {copy?.hero?.ctaPrimary || "Get Started"}
                   <ChevronRight className="w-5 h-5" />
@@ -153,7 +153,7 @@ export default function Home() {
                 <button
                   onClick={() => handleWhatsAppClick('hero_cta')}
                   className="px-6 py-3 bg-white border-2 border-accent-primary text-accent-primary rounded-lg hover:bg-accent-soft transition-colors font-semibold w-full sm:w-auto"
-                  aria-label={copy.whatsapp.ctaText}
+                  aria-label={copy?.whatsapp?.ctaText || "WhatsApp"}
                 >
                   <MessageCircle className="w-5 h-5 inline mr-2" />
                   {copy?.whatsapp?.ctaText || "WhatsApp"}
@@ -436,7 +436,7 @@ export default function Home() {
               }}
               onNavigate={() => navigate('/onboarding')}
               className="px-8 py-4 bg-white text-accent-primary hover:bg-white/95 shadow-lg font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-              aria-label={copy.hero.ctaPrimary}
+              aria-label={copy?.hero?.ctaPrimary || "Get Started"}
             >
               {copy.hero.ctaPrimary}
               <ChevronRight className="w-5 h-5" />
@@ -444,7 +444,7 @@ export default function Home() {
             <button
               onClick={() => handleWhatsAppClick('final_cta')}
               className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg hover:bg-white/10 transition-colors font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-              aria-label={copy.whatsapp.ctaText}
+              aria-label={copy?.whatsapp?.ctaText || "WhatsApp"}
             >
               <MessageCircle className="w-5 h-5" />
               {copy.whatsapp.ctaText}
