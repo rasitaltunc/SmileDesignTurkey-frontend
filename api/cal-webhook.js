@@ -294,7 +294,7 @@ module.exports = async function handler(req, res) {
       )
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
     
     if (leadByContact?.id) {
       existingLead = leadByContact;
