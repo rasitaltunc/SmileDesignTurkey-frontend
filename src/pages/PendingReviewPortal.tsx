@@ -50,7 +50,7 @@ export default function PendingReviewPortal() {
   const navigate = useNavigate();
   const case_id = searchParams.get('case_id') || '';
   const verificationToken = searchParams.get('token');
-  
+
   const [session, setSession] = useState(getPortalSession());
   const [portalData, setPortalData] = useState<PortalData | null>(null);
   const [isVerified, setIsVerified] = useState(false);
@@ -102,6 +102,11 @@ export default function PendingReviewPortal() {
             }
           });
           trackEvent({ type: 'verification_completed', case_id: session.case_id });
+
+          // Force redirect to patient portal to refresh role/session context
+          setTimeout(() => {
+            window.location.assign('/patient/portal');
+          }, 1500);
         } else {
           setError(result.error || 'Verification failed');
         }
@@ -130,7 +135,7 @@ export default function PendingReviewPortal() {
     const activeCaseId = portalData?.case_id || session?.case_id || '';
     const message = `Hi, I submitted a request with case ID ${activeCaseId}. I'd like to follow up.`;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
-    
+
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
       trackEvent({ type: 'whatsapp_clicked', where: 'pending_portal', case_id: activeCaseId });
@@ -226,13 +231,12 @@ export default function PendingReviewPortal() {
             {TIMELINE_STEPS.map((step, idx) => (
               <div key={step.id} className="flex items-center gap-4">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    step.status === 'completed'
+                  className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${step.status === 'completed'
                       ? 'bg-green-100 text-green-700'
                       : step.status === 'current'
-                      ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                      : 'bg-gray-100 text-gray-400'
-                  }`}
+                        ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
                 >
                   {step.status === 'completed' ? (
                     <CheckCircle2 className="w-5 h-5" />
@@ -242,13 +246,12 @@ export default function PendingReviewPortal() {
                 </div>
                 <div className="flex-1">
                   <p
-                    className={`font-medium ${
-                      step.status === 'completed'
+                    className={`font-medium ${step.status === 'completed'
                         ? 'text-green-900'
                         : step.status === 'current'
-                        ? 'text-blue-900'
-                        : 'text-gray-500'
-                    }`}
+                          ? 'text-blue-900'
+                          : 'text-gray-500'
+                      }`}
                   >
                     {step.label}
                   </p>
