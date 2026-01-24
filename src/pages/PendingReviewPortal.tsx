@@ -99,6 +99,23 @@ export default function PendingReviewPortal() {
   // Handle verification callback from URL (PKCE flow)
   useEffect(() => {
     const session = getPortalSession();
+    
+    // ✅ Check for expired/invalid magic link
+    if (window.location.hash.includes('error=')) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const error = hashParams.get('error');
+      const errorDescription = hashParams.get('error_description');
+      
+      if (error === 'otp_expired' || error === 'access_denied') {
+        setError('This verification link has expired or is invalid. Please request a new one below.');
+        setShowVerificationSuccess(false); // Show input + button again
+        // Clear hash from URL
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        trackEvent({ type: 'verification_link_expired', case_id: session?.case_id || '' });
+      }
+      return;
+    }
+    
     if (session && session.case_id && session.portal_token && window.location.hash.includes('code=')) {
       setIsLoading(true);
       handleVerifyCallback(session.case_id, session.portal_token).then((result) => {
@@ -288,8 +305,30 @@ export default function PendingReviewPortal() {
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className={`${error.includes('expired') || error.includes('invalid') 
+            ? 'bg-yellow-50 border-yellow-300' 
+            : 'bg-red-50 border-red-200'} border rounded-lg p-4 mb-6`}>
+            <div className="flex items-start gap-3">
+              <AlertCircle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${error.includes('expired') || error.includes('invalid')
+                ? 'text-yellow-700'
+                : 'text-red-700'}`} />
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${error.includes('expired') || error.includes('invalid')
+                  ? 'text-yellow-900'
+                  : 'text-red-700'}`}>{error}</p>
+                {(error.includes('expired') || error.includes('invalid')) && verificationEmail && (
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      handleVerifyEmail();
+                    }}
+                    className="mt-3 px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 font-medium"
+                  >
+                    Send New Link
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
