@@ -34,7 +34,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     logout,
     clearError,
   } = useAuthStore();
-  
+
   // ✅ Doctor mode: Hide marketing buttons when path starts with /doctor
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const isDoctorRoute = currentPath.startsWith('/doctor');
@@ -58,7 +58,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
       where: 'navbar',
       lang
     });
-    const message = content.whatsapp.defaultMessage;
+    const message = content?.whatsapp?.defaultMessage || "Hello";
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -104,7 +104,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     clearError();
     try {
       const result = await login(email.trim(), password);
-      
+
       // ÖNEMLİ: role yoksa redirect yok, modal açık kalır
       const role = result?.role;
       if (!role) return;
@@ -235,7 +235,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               </PrefetchLink>
             </div>
           )}
-          
+
           {/* ✅ Doctor mode: Show "Doctor Inbox" title instead of navigation */}
           {isDoctorMode && (
             <div className="hidden md:flex items-center">
@@ -263,7 +263,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                   aria-label={content.whatsapp.ctaText}
                 >
                   <MessageCircle className="w-4 h-4" />
-                  {content.whatsapp.ctaText}
+                  {content?.whatsapp?.ctaText || "WhatsApp"}
                 </button>
 
                 <PrefetchLink
@@ -358,7 +358,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                     aria-label={content.whatsapp.ctaText}
                   >
                     <MessageCircle className="w-4 h-4" />
-                    {content.whatsapp.ctaText}
+                    {content?.whatsapp?.ctaText || "WhatsApp"}
                   </button>
 
                   <PrefetchLink
@@ -374,7 +374,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                   </PrefetchLink>
                 </>
               )}
-              
+
               {/* ✅ Doctor mode: Show "Doctor Inbox" title in mobile menu */}
               {isDoctorMode && (
                 <div className="py-2">
@@ -509,9 +509,8 @@ function AuthModal(props: {
                 setView('portal');
                 setSelectedPortal('patient');
               }}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                view === 'portal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'portal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                }`}
             >
               Patient/Doctor
             </button>
@@ -521,9 +520,8 @@ function AuthModal(props: {
                 setView('staff');
                 setSelectedPortal('admin');
               }}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                view === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                }`}
             >
               Staff
             </button>
@@ -597,9 +595,8 @@ function RolePick(props: { label: string; active: boolean; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-        active ? 'border-teal-300 bg-teal-50 text-teal-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-      }`}
+      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${active ? 'border-teal-300 bg-teal-50 text-teal-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+        }`}
     >
       {label}
     </button>

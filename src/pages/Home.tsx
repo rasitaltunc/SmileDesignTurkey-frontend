@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from '../components/Link';
 import { NavigationContext } from '../lib/navigationContext';
-import { 
-  Button, 
-  GuidedPanel, 
-  TrustStage, 
-  ChoiceCard, 
+import {
+  Button,
+  GuidedPanel,
+  TrustStage,
+  ChoiceCard,
   ProcessCard,
   ReviewCard,
   TrustBadge
 } from '../components/design-system';
 import Footer from '../components/Footer';
-import { 
-  Smile, 
-  Anchor, 
-  Layers, 
-  Crown, 
-  Sun, 
+import {
+  Smile,
+  Anchor,
+  Layers,
+  Crown,
+  Sun,
   FileCheck,
   MessageCircle,
   ChevronRight,
@@ -58,15 +58,15 @@ export default function Home() {
   // SEO handled by <SEO> component below
 
   const handleWhatsAppClick = (location: string) => {
-    trackEvent({ 
-      type: 'whatsapp_click', 
+    trackEvent({
+      type: 'whatsapp_click',
       where: location,
-      lang 
+      lang
     });
-    
+
     const message = copy.whatsapp.templates?.consultation || copy.whatsapp.ctaText || 'Hi, I want a free consultation.';
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
-    
+
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
@@ -77,16 +77,16 @@ export default function Home() {
   const handleGetStartedClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Fire analytics events (funnel: hero_cta_click -> start_onboarding -> submit_lead)
-    trackEvent({ 
+    trackEvent({
       type: 'hero_cta_click',
-      lang 
+      lang
     });
-    trackEvent({ 
-      type: 'start_onboarding', 
+    trackEvent({
+      type: 'start_onboarding',
       entry: 'home',
-      lang 
+      lang
     });
     trackEvent({ type: 'cta_click', where: 'home', cta: 'get_started', lang });
   };
@@ -123,9 +123,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-bg-primary">
-      <SEO 
-        title={copy.seo.home.title} 
-        description={copy.seo.home.description}
+      <SEO
+        title={copy?.seo?.home?.title || "GuideHealth"}
+        description={copy?.seo?.home?.description || "Premium Dental Care"}
         url="/"
       />
 
@@ -136,8 +136,8 @@ export default function Home() {
             {/* Left: Guided Panel */}
             <GuidedPanel
               showStepper={false}
-              headline={copy.hero.headline}
-              subheadline={copy.hero.subheadline}
+              headline={copy?.hero?.headline}
+              subheadline={copy?.hero?.subheadline}
               showTrustLine={true}
             >
               <div className="flex flex-col sm:flex-row gap-4">
@@ -147,7 +147,7 @@ export default function Home() {
                   className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
                   aria-label={copy.hero.ctaPrimary}
                 >
-                  {copy.hero.ctaPrimary}
+                  {copy?.hero?.ctaPrimary || "Get Started"}
                   <ChevronRight className="w-5 h-5" />
                 </ProfessionalCTA>
                 <button
@@ -156,11 +156,11 @@ export default function Home() {
                   aria-label={copy.whatsapp.ctaText}
                 >
                   <MessageCircle className="w-5 h-5 inline mr-2" />
-                  {copy.whatsapp.ctaText}
+                  {copy?.whatsapp?.ctaText || "WhatsApp"}
                 </button>
               </div>
               <p className="text-xs text-text-tertiary mt-3">
-                {copy.disclaimer.medical}
+                {copy?.disclaimer?.medical}
               </p>
             </GuidedPanel>
 
@@ -189,14 +189,14 @@ export default function Home() {
         <section className="py-20 bg-bg-secondary">
           <div className="max-w-[1280px] mx-auto px-8">
             <div className="text-center mb-16 max-w-3xl mx-auto">
-              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy.process.title}</h2>
+              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy?.process?.title}</h2>
               <p className="text-text-secondary text-lg">
-                {copy.process.subtitle}
+                {copy?.process?.subtitle}
               </p>
             </div>
 
             <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-8">
-              {copy.process.steps.map((step) => {
+              {copy?.process?.steps?.map((step) => {
                 const StepIcon = iconMap[step.icon] || Heart;
                 return (
                   <ProcessCard
@@ -209,7 +209,7 @@ export default function Home() {
                 );
               })}
             </div>
-            
+
             <div className="text-center mt-12">
               <Link
                 to="/process"
@@ -263,7 +263,7 @@ export default function Home() {
                 {copy.packages.subtitle}
               </p>
             </div>
-            
+
             <div className="grid md:grid-cols-3 gap-6 mb-8">
               {copy.packages.items.map((pkg, idx) => (
                 <div
@@ -301,7 +301,7 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            
+
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
               <p className="text-sm text-text-secondary text-center">
                 <strong className="text-text-primary">{copy.packages.disclaimer}</strong>
@@ -426,7 +426,7 @@ export default function Home() {
           <p className="text-white/70 text-sm mb-10">
             {copy.disclaimer.medical}
           </p>
-          
+
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <ProfessionalCTA
               onClick={(e) => {
@@ -450,7 +450,7 @@ export default function Home() {
               {copy.whatsapp.ctaText}
             </button>
           </div>
-          
+
           <div className="flex flex-wrap justify-center gap-6 text-white/80 text-sm">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
