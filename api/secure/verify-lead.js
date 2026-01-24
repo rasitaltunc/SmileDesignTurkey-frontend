@@ -77,19 +77,37 @@ module.exports = async function handler(req, res) {
 
     // 5. ✅ Create/Ensure 'patient' profile existed for this user
     // This allows them to login as 'patient' role and access /patient/portal
-    const { error: profileError } = await db
-      .from("profiles")
-      .upsert({
-        id: user.id, // Auth User ID
-        email: verifiedEmail,
-        role: "patient",
-        full_name: lead.name || "",
-        created_at: new Date().toISOString(), // Only used on insert
-      }, { onConflict: "id" }); // Update if exists (or ignore if we only want insert)
 
-    if (profileError) {
-      console.error("[api/secure/verify-lead] Failed to create profile:", profileError);
-      // We don't fail the request, but log it. User might need to contact support or re-verify.
+    // Check if profile exists
+    const { data: existingProfile } = await db
+      .from("profiles")
+      .select("id, role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (existingProfile) {
+      console.log(`[api/secure/verify-lead] Updating existing profile ${user.id} to role='patient'`);
+      // Update role to patient
+      const { error: updateProfError } = await db
+        .from("profiles")
+        .update({ role: "patient" })
+        .eq("id", user.id);
+
+      if (updateProfError) console.error("Failed to update profile role:", updateProfError);
+    } else {
+      console.log(`[api/secure/verify-lead] Creating new patient profile for ${user.id}`);
+      // Create new patient profile
+      const { error: insertProfError } = await db
+        .from("profiles")
+        .insert({
+          id: user.id,
+          email: verifiedEmail,
+          role: "patient",
+          full_name: lead.name || "",
+          created_at: new Date().toISOString(),
+        });
+
+      if (insertProfError) console.error("Failed to insert profile:", insertProfError);
     }
 
     return res.status(200).json({ ok: true, email_verified_at: new Date().toISOString() });
