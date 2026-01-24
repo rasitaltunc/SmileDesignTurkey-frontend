@@ -32,77 +32,7 @@ export default defineConfig(({ mode }) => ({
     target: 'esnext',
     outDir: 'dist',
     sourcemap: true, // ✅ Enable sourcemaps for better error debugging
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          if (!id) return;
-
-          // 1) Admin-only: sadece admin ekranları + admin alt yapıları
-          // Bu sayfalar admin chunk'a girmemeli: Home, Onboarding, Navbar, Pricing, Contact, Process, vb.
-          const isAdmin =
-            id.includes('/src/pages/AdminLeads') ||
-            id.includes('/src/pages/AdminPatientProfile') ||
-            id.includes('/src/pages/admin/') ||
-            id.includes('/src/components/admin-leads/') ||
-            id.includes('/src/hooks/admin-leads/') ||
-            id.includes('/src/lib/admin-leads/');
-
-          if (isAdmin) return 'admin';
-
-          // 1.5) Doctor-only: doctor ekranları + doctor alt yapıları
-          // Public sayfalar doctor chunk'a girmemeli
-          const isDoctor =
-            id.includes('/src/pages/Doctor') ||
-            id.includes('/src/pages/doctor/') ||
-            id.includes('/src/components/doctor/') ||
-            id.includes('/src/hooks/doctor/') ||
-            id.includes('/src/lib/doctor/');
-
-          if (isDoctor) return 'doctor';
-
-          // 2) Vendor chunks - daha stabil cache
-          if (id.includes('node_modules')) {
-            // React + React DOM + Router
-            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
-              return 'react-vendor';
-            }
-            // Supabase
-            if (id.includes('node_modules/@supabase')) {
-              return 'supabase-vendor';
-            }
-            // UI components (Radix + Lucide + CMDK)
-            if (id.includes('node_modules/@radix-ui') || id.includes('node_modules/lucide-react') || id.includes('node_modules/cmdk')) {
-              return 'ui-vendor';
-            }
-            // Charts (recharts + dependencies)
-            if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
-              return 'charts-vendor';
-            }
-            // PDF libraries (pdf-lib + dependencies)
-            if (id.includes('node_modules/pdf-lib') || id.includes('node_modules/pdfjs-dist')) {
-              return 'pdf-vendor';
-            }
-            // Forms (react-hook-form + react-day-picker)
-            if (id.includes('node_modules/react-hook-form') || id.includes('node_modules/react-day-picker') || id.includes('node_modules/@hookform')) {
-              return 'forms-vendor';
-            }
-            // Analytics (posthog + dependencies)
-            if (id.includes('node_modules/posthog-js') || id.includes('node_modules/posthog')) {
-              return 'analytics-vendor';
-            }
-            // State management (zustand)
-            if (id.includes('node_modules/zustand') || id.includes('node_modules/immer')) {
-              return 'state-vendor';
-            }
-            // Other node_modules go to vendor
-            return 'vendor';
-          }
-
-          // 3) Shared/common components için ayrı chunk (opsiyonel)
-          // Şu an shared chunk yok, public sayfalar route-level lazy yükleniyor
-        },
-      },
-    },
+    // rollupOptions removed to fix white screen (circular dependency/chunking issue)
   },
   server: {
     port: 3000,
