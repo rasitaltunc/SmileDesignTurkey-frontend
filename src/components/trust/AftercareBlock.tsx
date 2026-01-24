@@ -59,14 +59,14 @@ export function AftercareBlock() {
                   <Heart className="w-6 h-6 text-accent-primary" />
                 </div>
                 <h3 className="text-xl font-semibold text-text-primary">
-                  {copy.aftercareBlock.aftercare.title}
+                  {copy?.aftercareBlock?.aftercare?.title}
                 </h3>
               </div>
               <p className="text-text-secondary mb-4 leading-relaxed">
-                {copy.aftercareBlock.aftercare.description}
+                {copy?.aftercareBlock?.aftercare?.description}
               </p>
               <ul className="space-y-2 text-sm text-text-secondary">
-                {copy.aftercareBlock.aftercare.items.map((item, idx) => (
+                {copy?.aftercareBlock?.aftercare?.items?.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 text-accent-primary mt-0.5 flex-shrink-0" />
                     <span>{item}</span>
@@ -82,14 +82,14 @@ export function AftercareBlock() {
                   <Shield className="w-6 h-6 text-accent-primary" />
                 </div>
                 <h3 className="text-xl font-semibold text-text-primary">
-                  {copy.aftercareBlock.safety.title}
+                  {copy?.aftercareBlock?.safety?.title}
                 </h3>
               </div>
               <p className="text-text-secondary mb-4 leading-relaxed">
-                {copy.aftercareBlock.safety.description}
+                {copy?.aftercareBlock?.safety?.description}
               </p>
               <ul className="space-y-2 text-sm text-text-secondary">
-                {copy.aftercareBlock.safety.items.map((item, idx) => (
+                {copy?.aftercareBlock?.safety?.items?.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 text-accent-primary mt-0.5 flex-shrink-0" />
                     <span>{item}</span>
@@ -111,9 +111,9 @@ export function AftercareBlock() {
               onClick={handleCTAClick}
               onNavigate={handleNavigateToOnboarding}
               className="inline-flex items-center justify-center px-8 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors font-semibold"
-              aria-label={copy.hero.ctaPrimary}
+              aria-label={copy?.hero?.ctaPrimary || "Get Started"}
             >
-              {copy.hero.ctaPrimary}
+              {copy?.hero?.ctaPrimary || "Get Started"}
               <ChevronRight className="w-5 h-5 ml-2" />
             </ProfessionalCTA>
             {copy.disclaimer?.medical && (

@@ -40,29 +40,29 @@ export function ProofStrip() {
       <section className="py-8 bg-accent-soft/30 border-b border-gray-100" aria-label="Trust indicators">
         <div className="max-w-7xl mx-auto px-8">
           <div className="flex flex-wrap items-center justify-center gap-6 md:gap-8 text-sm text-text-secondary">
-          {copy.proofStrip.items.map((item, idx) => {
-            const IconComponent = iconMap[item.icon] || Shield;
-            const handleClick = () => {
-              trackEvent({
-                type: 'proof_strip_click',
-                item_id: `proof_${idx}`,
-                item_text: item.text,
-                page: currentPage,
-                lang,
-              });
-            };
-            return (
-              <button
-                key={idx}
-                onClick={handleClick}
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
-                aria-label={item.text}
-              >
-                <IconComponent className="w-4 h-4 text-accent-primary" aria-hidden="true" />
-                <span>{item.text}</span>
-              </button>
-            );
-          })}
+            {copy?.proofStrip?.items?.map((item, idx) => {
+              const IconComponent = iconMap[item.icon] || Shield;
+              const handleClick = () => {
+                trackEvent({
+                  type: 'proof_strip_click',
+                  item_id: `proof_${idx}`,
+                  item_text: item.text,
+                  page: currentPage,
+                  lang,
+                });
+              };
+              return (
+                <button
+                  key={idx}
+                  onClick={handleClick}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+                  aria-label={item.text}
+                >
+                  <IconComponent className="w-4 h-4 text-accent-primary" aria-hidden="true" />
+                  <span>{item.text}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>

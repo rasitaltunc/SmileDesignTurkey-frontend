@@ -37,15 +37,15 @@ export function TrustPack() {
       <section className="py-16 bg-white border-b border-gray-100" aria-label="Trust pack">
         <div className="max-w-7xl mx-auto px-8">
           <h2 className="text-center text-text-primary mb-4 text-2xl font-semibold">
-            {copy.trustPack.title}
+            {copy?.trustPack?.title}
           </h2>
-          {copy.trustPack.subtitle && (
+          {copy?.trustPack?.subtitle && (
             <p className="text-center text-text-secondary mb-12 max-w-3xl mx-auto text-lg">
-              {copy.trustPack.subtitle}
+              {copy?.trustPack?.subtitle}
             </p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {copy.trustPack.badges.map((badge, idx) => {
+            {copy?.trustPack?.badges?.map((badge, idx) => {
               const IconComponent = iconMap[badge.icon] || Shield;
               const handleClick = () => {
                 trackEvent({

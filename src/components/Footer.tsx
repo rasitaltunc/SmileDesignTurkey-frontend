@@ -7,12 +7,12 @@ import { useLanguage } from '../lib/i18n';
 
 export default function Footer() {
   const { lang, copy } = useLanguage();
-  
+
   const handleWhatsAppClick = () => {
-    trackEvent({ 
-      type: 'whatsapp_click', 
+    trackEvent({
+      type: 'whatsapp_click',
       where: 'footer',
-      lang 
+      lang
     });
     const message = copy.whatsapp.templates.question;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
@@ -102,7 +102,7 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
             <div className="flex flex-col gap-2">
               <p>© 2024 GuideHealth. All rights reserved.</p>
-              <p className="text-xs text-gray-500 italic">{copy.disclaimer.medical}</p>
+              <p className="text-xs text-gray-500 italic">{copy?.disclaimer?.medical}</p>
             </div>
             <div className="flex gap-6">
               <Link to="#" className="hover:text-teal-600 transition-colors">
