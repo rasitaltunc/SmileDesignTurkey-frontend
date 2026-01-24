@@ -18,7 +18,7 @@ export function TrustPack() {
 
   // Track view once per page load
   useEffect(() => {
-    if (!hasTrackedView.current && copy.trustPack?.badges.length) {
+    if (!hasTrackedView.current && copy?.trustPack?.badges?.length) {
       trackEvent({
         type: 'trust_pack_view',
         page: currentPage,

@@ -21,7 +21,7 @@ export function ProofStrip() {
 
   // Track view once per page load
   useEffect(() => {
-    if (!hasTrackedView.current && copy.proofStrip?.items.length) {
+    if (!hasTrackedView.current && copy?.proofStrip?.items?.length) {
       trackEvent({
         type: 'trust_pack_view',
         page: currentPage,
