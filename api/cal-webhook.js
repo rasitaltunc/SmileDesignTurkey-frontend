@@ -276,7 +276,7 @@ module.exports = async function handler(req, res) {
     .from("leads")
     .select("id")
     .eq("cal_booking_uid", calBookingUid)
-    .single();
+    .maybeSingle();
   
   if (leadByUid?.id) {
     existingLead = leadByUid;
