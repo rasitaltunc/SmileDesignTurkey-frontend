@@ -25,7 +25,7 @@ export async function startEmailVerification(email: string): Promise<{ success: 
       email: email.toLowerCase().trim(),
       options: {
         emailRedirectTo: redirectTo,
-        shouldCreateUser: false, // Only verify existing email, don't create user
+        shouldCreateUser: true, // Allow creating user for verification purposes
       },
     });
 
