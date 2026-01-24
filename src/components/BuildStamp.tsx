@@ -1,7 +1,7 @@
 // src/components/BuildStamp.tsx
 // Visible build info to never get lost between deployments
 
-export function BuildStamp() {
+export default function BuildStamp() {
   const sha = __BUILD_SHA__ || 'dev';
   const branch = __BUILD_BRANCH__ || 'local';
   const time = __BUILD_TIME__ || new Date().toISOString();
