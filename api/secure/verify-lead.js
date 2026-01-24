@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
     // Fetch lead and verify email matches
     const { data: lead, error: leadError } = await db
       .from("leads")
-      .select("id, email, email_verified_at")
+      .select("id, email, name, email_verified_at")
       .eq("case_id", case_id)
       .eq("portal_token", portal_token)
       .single();
@@ -65,7 +65,7 @@ module.exports = async function handler(req, res) {
       return res.status(403).json({ ok: false, error: "Email mismatch" });
     }
 
-    // Update email_verified_at (idempotent: safe to call multiple times)
+    // 4. Update email_verified_at
     const { error: updateError } = await db
       .from("leads")
       .update({ email_verified_at: new Date().toISOString() })
@@ -73,6 +73,23 @@ module.exports = async function handler(req, res) {
 
     if (updateError) {
       return res.status(500).json({ ok: false, error: "Failed to update verification status" });
+    }
+
+    // 5. ✅ Create/Ensure 'patient' profile existed for this user
+    // This allows them to login as 'patient' role and access /patient/portal
+    const { error: profileError } = await db
+      .from("profiles")
+      .upsert({
+        id: user.id, // Auth User ID
+        email: verifiedEmail,
+        role: "patient",
+        full_name: lead.name || "",
+        created_at: new Date().toISOString(), // Only used on insert
+      }, { onConflict: "id" }); // Update if exists (or ignore if we only want insert)
+
+    if (profileError) {
+      console.error("[api/secure/verify-lead] Failed to create profile:", profileError);
+      // We don't fail the request, but log it. User might need to contact support or re-verify.
     }
 
     return res.status(200).json({ ok: true, email_verified_at: new Date().toISOString() });
