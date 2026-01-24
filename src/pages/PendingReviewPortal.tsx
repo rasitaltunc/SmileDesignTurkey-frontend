@@ -2,6 +2,8 @@
  * Pending Review Portal (V1)
  * "Soft lead" portal - user lands here after submitting lead
  * Shows timeline, next actions, uploads, and locked modules
+ * 
+ * Cache bust: 2026-01-24-18:10 (force new bundle hash)
  */
 
 import { useState, useEffect, Suspense } from 'react';
