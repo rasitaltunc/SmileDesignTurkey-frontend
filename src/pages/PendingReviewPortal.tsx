@@ -24,6 +24,7 @@ import {
 import { getPortalSession, createPortalSession, hasValidPortalSession } from '@/lib/portalSession';
 import { startEmailVerification, handleVerifyCallback } from '@/lib/verification';
 import { fetchPortalData, type PortalData } from '@/lib/portalApi';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 import { getWhatsAppUrl } from '@/lib/whatsapp';
 import { BRAND } from '@/config';
 import { trackEvent } from '@/lib/analytics';
@@ -59,6 +60,10 @@ export default function PendingReviewPortal() {
   const [verificationEmail, setVerificationEmail] = useState('');
   const [isSendingVerification, setIsSendingVerification] = useState(false);
   const [showVerificationSuccess, setShowVerificationSuccess] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
 
   // Fetch portal data on mount
   useEffect(() => {
@@ -75,6 +80,12 @@ export default function PendingReviewPortal() {
         setPortalData(result.data);
         setIsVerified(!!result.data.email_verified_at);
         setSession(session);
+        
+        // ✅ Auto-fill email from portal data
+        if (result.data.email) {
+          setVerificationEmail(result.data.email);
+        }
+        
         trackEvent({ type: 'portal_viewed', case_id: result.data.case_id, is_verified: !!result.data.email_verified_at });
       } else {
         setError(result.error || 'Failed to load portal data');
@@ -93,6 +104,7 @@ export default function PendingReviewPortal() {
       handleVerifyCallback(session.case_id, session.portal_token).then((result) => {
         if (result.success) {
           setIsVerified(true);
+          setShowPasswordModal(true); // ✅ Show password modal
           const updatedSession = getPortalSession();
           if (updatedSession) setSession(updatedSession);
           // Reload portal data to get updated email_verified_at
@@ -102,11 +114,9 @@ export default function PendingReviewPortal() {
             }
           });
           trackEvent({ type: 'verification_completed', case_id: session.case_id });
-
-          // Force redirect to patient portal to refresh role/session context
-          setTimeout(() => {
-            window.location.assign('/patient/portal');
-          }, 1500);
+          
+          // Clear hash from URL
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
         } else {
           setError(result.error || 'Verification failed');
         }
@@ -140,6 +150,59 @@ export default function PendingReviewPortal() {
       window.open(url, '_blank', 'noopener,noreferrer');
       trackEvent({ type: 'whatsapp_clicked', where: 'pending_portal', case_id: activeCaseId });
     }
+  };
+
+  const handleSetPassword = async () => {
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setIsSettingPassword(true);
+    setError(null);
+
+    try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        setError('Unable to set password');
+        setIsSettingPassword(false);
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password
+      });
+
+      if (updateError) {
+        setError(updateError.message);
+        setIsSettingPassword(false);
+        return;
+      }
+
+      // Success!
+      setShowPasswordModal(false);
+      setPassword('');
+      setConfirmPassword('');
+      trackEvent({ type: 'password_set', case_id: session?.case_id || '' });
+      
+      // Show success message
+      setShowVerificationSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set password');
+    } finally {
+      setIsSettingPassword(false);
+    }
+  };
+
+  const handleSkipPassword = () => {
+    setShowPasswordModal(false);
+    setPassword('');
+    setConfirmPassword('');
   };
 
   if (isLoading) {
@@ -176,6 +239,12 @@ export default function PendingReviewPortal() {
               <Mail className="w-4 h-4" />
               <span>Assigned Coordinator: <span className="font-medium">{portalData?.coordinator_email || 'Pending assignment'}</span></span>
             </div>
+            {isVerified && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircle2 className="w-4 h-4 text-green-700" />
+                <span className="text-sm font-medium text-green-800">✓ Email Verified</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -358,6 +427,69 @@ export default function PendingReviewPortal() {
           </div>
         </div>
       </div>
+
+      {/* Password Setup Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full">
+            <div className="mb-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle2 className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Email Verified!</h3>
+              <p className="text-sm text-gray-600">
+                Set a password to access your portal anytime with just email + password (optional - you can always use magic links).
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSetPassword}
+                disabled={isSettingPassword || !password || !confirmPassword}
+                className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {isSettingPassword ? 'Setting...' : 'Set Password'}
+              </button>
+              <button
+                onClick={handleSkipPassword}
+                disabled={isSettingPassword}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

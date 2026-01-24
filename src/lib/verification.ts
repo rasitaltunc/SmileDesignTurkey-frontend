@@ -18,7 +18,9 @@ export async function startEmailVerification(email: string): Promise<{ success: 
     }
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const redirectTo = `${origin}/portal/verify`;
+    const session = getPortalSession();
+    const caseId = session?.case_id || '';
+    const redirectTo = `${origin}/portal?case_id=${caseId}`;
 
     // Send OTP magic link via Supabase Auth
     const { error } = await supabase.auth.signInWithOtp({

@@ -36,6 +36,29 @@ module.exports = async function handler(req, res) {
     const phone = (body.phone || "").trim();
     if (!email && !phone) return res.status(400).json({ ok: false, error: "email or phone is required" });
 
+    // ✅ Check if lead already exists for this email
+    if (email) {
+      const { data: existingLead } = await db
+        .from("leads")
+        .select("id, case_id, portal_token, email")
+        .eq("email", email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingLead) {
+        // ✅ Return existing lead (prevent duplicate)
+        console.log(`[api/secure/lead] Found existing lead for email: ${email}, returning case_id: ${existingLead.case_id}`);
+        return res.status(200).json({ 
+          ok: true, 
+          id: existingLead.id, 
+          case_id: existingLead.case_id, 
+          portal_token: existingLead.portal_token,
+          existing: true 
+        });
+      }
+    }
+
     const id = `lead_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     
     // Generate case_id: GH-YYYY-XXXX (e.g., GH-2024-1234)
