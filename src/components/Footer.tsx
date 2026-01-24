@@ -4,6 +4,7 @@ import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
+import { BuildStamp } from './BuildStamp';
 
 export default function Footer() {
   const { lang, copy } = useLanguage();
@@ -103,6 +104,7 @@ export default function Footer() {
             <div className="flex flex-col gap-2">
               <p>© 2024 GuideHealth. All rights reserved.</p>
               <p className="text-xs text-gray-500 italic">{copy?.disclaimer?.medical}</p>
+              <BuildStamp />
             </div>
             <div className="flex gap-6">
               <Link to="#" className="hover:text-teal-600 transition-colors">
