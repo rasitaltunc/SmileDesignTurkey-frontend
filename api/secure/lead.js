@@ -32,33 +32,44 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true }); // sessiz geç
     }
 
-    const email = (body.email || "").trim();
+    const email = (body.email || "").trim().toLowerCase();
     const phone = (body.phone || "").trim();
     if (!email && !phone) return res.status(400).json({ ok: false, error: "email or phone is required" });
 
-    // ✅ Check if lead already exists for this email
+    // ✅ A) Canonical Lead Logic: "1 Email = 1 Canonical Lead"
+    // If email exists, find existing active lead (not closed)
+    let existingLead = null;
     if (email) {
-      const { data: existingLead } = await db
+      const { data: leads } = await db
         .from("leads")
-        .select("id, case_id, portal_token, email")
+        .select("id, case_id, portal_token, portal_status, status")
         .eq("email", email)
+        .neq("status", "closed") // Exclude closed leads
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existingLead) {
-        // ✅ Return existing lead (prevent duplicate)
-        console.log(`[api/secure/lead] Found existing lead for email: ${email}, returning case_id: ${existingLead.case_id}`);
-        return res.status(200).json({ 
-          ok: true, 
-          id: existingLead.id, 
-          case_id: existingLead.case_id, 
-          portal_token: existingLead.portal_token,
-          existing: true 
+        .limit(1);
+      
+      if (leads && leads.length > 0) {
+        existingLead = leads[0];
+        console.log("[api/secure/lead] Found existing lead for email:", {
+          email,
+          case_id: existingLead.case_id,
+          lead_id: existingLead.id,
         });
       }
     }
 
+    // If existing lead found, return it (same case_id, same portal_token)
+    if (existingLead) {
+      return res.status(200).json({
+        ok: true,
+        id: existingLead.id,
+        case_id: existingLead.case_id,
+        portal_token: existingLead.portal_token,
+        existing: true, // Flag to indicate this is an existing lead
+      });
+    }
+
+    // Create new lead only if no existing active lead found
     const id = `lead_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
     
     // Generate case_id: GH-YYYY-XXXX (e.g., GH-2024-1234)
@@ -77,7 +88,7 @@ module.exports = async function handler(req, res) {
       portal_status: "pending_review",
       // sende zaten kolonlar var: name/email/phone/utm/message/meta vs.
       name: (body.name || "").trim() || null,
-      email: email || null,
+      email: email || null, // Store normalized (lowercase) email
       phone: phone || null,
       treatment: body.treatment || null,
       timeline: body.timeline || null,

@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
     // Fetch lead and verify email matches
     const { data: lead, error: leadError } = await db
       .from("leads")
-      .select("id, email, name, email_verified_at")
+      .select("id, email, email_verified_at")
       .eq("case_id", case_id)
       .eq("portal_token", portal_token)
       .single();
@@ -65,52 +65,29 @@ module.exports = async function handler(req, res) {
       return res.status(403).json({ ok: false, error: "Email mismatch" });
     }
 
-    // 4. Update email_verified_at
-    const { error: updateError } = await db
+    // Update email_verified_at and optionally portal_status (idempotent: safe to call multiple times)
+    const now = new Date().toISOString();
+    const updateData = { email_verified_at: now };
+    
+    // Optionally update portal_status to 'active' if it's still 'pending_review' or null
+    if (!lead.portal_status || lead.portal_status === 'pending_review') {
+      updateData.portal_status = 'active';
+    }
+    
+    const { data: updatedLead, error: updateError } = await db
       .from("leads")
-      .update({ email_verified_at: new Date().toISOString() })
-      .eq("id", lead.id);
+      .update(updateData)
+      .eq("id", lead.id)
+      .select("id, email_verified_at, portal_status")
+      .single();
 
     if (updateError) {
+      console.error("[api/secure/verify-lead] Update error:", updateError);
       return res.status(500).json({ ok: false, error: "Failed to update verification status" });
     }
 
-    // 5. ✅ Create/Ensure 'patient' profile existed for this user
-    // This allows them to login as 'patient' role and access /patient/portal
-
-    // Check if profile exists
-    const { data: existingProfile } = await db
-      .from("profiles")
-      .select("id, role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (existingProfile) {
-      console.log(`[api/secure/verify-lead] Updating existing profile ${user.id} to role='patient'`);
-      // Update role to patient
-      const { error: updateProfError } = await db
-        .from("profiles")
-        .update({ role: "patient" })
-        .eq("id", user.id);
-
-      if (updateProfError) console.error("Failed to update profile role:", updateProfError);
-    } else {
-      console.log(`[api/secure/verify-lead] Creating new patient profile for ${user.id}`);
-      // Create new patient profile
-      const { error: insertProfError } = await db
-        .from("profiles")
-        .insert({
-          id: user.id,
-          email: verifiedEmail,
-          role: "patient",
-          full_name: lead.name || "",
-          created_at: new Date().toISOString(),
-        });
-
-      if (insertProfError) console.error("Failed to insert profile:", insertProfError);
-    }
-
-    return res.status(200).json({ ok: true, email_verified_at: new Date().toISOString() });
+    console.log("[api/secure/verify-lead] Successfully updated lead:", lead.id, "email_verified_at:", now);
+    return res.status(200).json({ ok: true, email_verified_at: now, portal_status: updatedLead?.portal_status });
   } catch (e) {
     console.error("[api/secure/verify-lead] Error:", e);
     return res.status(500).json({ ok: false, error: "Server error" });

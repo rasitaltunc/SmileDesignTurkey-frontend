@@ -7,6 +7,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 import { NavigationContext } from '../lib/navigationContext';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 import { ClinicalStandards } from '../components/trust/ClinicalStandards';
@@ -22,6 +23,7 @@ export default function Process() {
   const { navigate } = useContext(NavigationContext);
 
   // SEO handled by <SEO> component below
+  const seo = copy?.seo?.process ?? DEFAULT_COPY.seo.process;
   
   const handleGetStartedClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -35,7 +37,7 @@ export default function Process() {
   
   const handleWhatsAppClick = (location: string) => {
     trackEvent({ type: 'whatsapp_click', where: location, lang });
-    const message = copy.whatsapp.templates.question;
+    const message = copy?.whatsapp?.templates?.question || DEFAULT_COPY.whatsapp.templates.question;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -49,11 +51,13 @@ export default function Process() {
     Headphones: Headphones,
   };
 
-  const timeline = copy.process.steps.map((step) => ({
-    step: step.number,
-    title: step.title,
-    description: step.description,
-    icon: iconMap[step.icon] || Heart,
+  // Safe access to process steps with fallback
+  const processSteps = copy?.process?.steps ?? DEFAULT_COPY.process.steps ?? [];
+  const timeline = processSteps.map((step) => ({
+    step: step?.number ?? 0,
+    title: step?.title ?? '',
+    description: step?.description ?? '',
+    icon: iconMap[step?.icon ?? ''] || Heart,
     microcopy: '',
     duration: ''
   }));
@@ -79,17 +83,17 @@ export default function Process() {
   return (
     <div className="min-h-screen bg-white">
       <SEO 
-        title={copy.seo.process.title} 
-        description={copy.seo.process.description}
+        title={seo.title} 
+        description={seo.description}
         url="/process"
       />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{copy.process.title}</h1>
+          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{copy?.process?.title || DEFAULT_COPY.process.title}</h1>
           <p className="text-gray-600 max-w-3xl mx-auto text-lg">
-            {copy.process.subtitle}
+            {copy?.process?.subtitle || DEFAULT_COPY.process.subtitle}
           </p>
         </div>
       </section>
@@ -178,30 +182,30 @@ export default function Process() {
       {/* CTA */}
       <section className="py-12 bg-gradient-to-r from-teal-600 to-teal-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-white mb-4">{copy.cta.final.title}</h2>
+          <h2 className="text-white mb-4">{copy?.cta?.final?.title || DEFAULT_COPY.cta.final.title}</h2>
           <p className="text-teal-100 mb-8 max-w-2xl mx-auto">
-            {copy.cta.final.subtitle}
+            {copy?.cta?.final?.subtitle || DEFAULT_COPY.cta.final.subtitle}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <ProfessionalCTA
               onClick={handleGetStartedClick}
               onNavigate={handleNavigateToOnboarding}
               className="inline-flex items-center justify-center px-8 py-3 bg-white text-teal-600 rounded-lg hover:bg-gray-100 transition-colors font-semibold"
-              aria-label={copy.hero.ctaPrimary}
+              aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             >
-              {copy.hero.ctaPrimary}
+              {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             </ProfessionalCTA>
             <button
               onClick={() => handleWhatsAppClick('process_cta')}
               className="inline-flex items-center justify-center px-8 py-3 border-2 border-white text-white rounded-lg hover:bg-white/10 transition-colors font-semibold"
-              aria-label={copy.whatsapp.ctaText}
+              aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             >
               <MessageCircle className="w-4 h-4 mr-2" />
-              {copy.whatsapp.ctaText}
+              {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             </button>
           </div>
           <p className="text-teal-100 text-sm mt-4">
-            {copy.disclaimer.medical}
+            {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
           </p>
         </div>
       </section>

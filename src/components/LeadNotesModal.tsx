@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MessageSquare, RefreshCw, HelpCircle } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
 
 interface LeadNote {
   id: string;

@@ -7,6 +7,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 import { NavigationContext } from '../lib/navigationContext';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 
@@ -29,15 +30,18 @@ export default function FAQ() {
   
   const handleWhatsAppClick = (location: string) => {
     trackEvent({ type: 'whatsapp_click', where: location, lang });
-    const message = copy.whatsapp.templates.question;
+    const message = copy?.whatsapp?.templates?.question || DEFAULT_COPY.whatsapp.templates.question;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
+  // SEO handled by <SEO> component below
+  const seo = copy?.seo?.faq ?? DEFAULT_COPY.seo.faq;
+
   // Group FAQs by category
-  const faqCategories = copy.faq.reduce((acc, faq) => {
+  const faqCategories = (copy?.faq || []).reduce((acc, faq) => {
     const existing = acc.find(cat => cat.category === faq.category);
     if (existing) {
       existing.questions.push({ id: `${faq.category}-${existing.questions.length + 1}`, question: faq.question, answer: faq.answer });
@@ -50,17 +54,17 @@ export default function FAQ() {
   return (
     <div className="min-h-screen bg-white">
       <SEO 
-        title={copy.seo.faq.title} 
-        description={copy.seo.faq.description}
+        title={seo.title} 
+        description={seo.description}
         url="/faq"
       />
 
       {/* Header */}
       <section className="bg-gradient-to-br from-teal-50 to-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{copy.seo.faq.title.split('|')[0].trim()}</h1>
+          <h1 className="text-gray-900 mb-4 text-4xl font-bold">{seo.title.split('|')[0].trim()}</h1>
           <p className="text-gray-600 max-w-3xl mx-auto mb-6 text-lg">
-            {copy.seo.faq.description}
+            {seo.description}
           </p>
           <Link
             to="/contact"
@@ -129,21 +133,21 @@ export default function FAQ() {
               onClick={handleGetStartedClick}
               onNavigate={handleNavigateToOnboarding}
               className="px-8 py-3 bg-white text-teal-600 rounded-lg hover:bg-gray-100 transition-colors font-semibold"
-              aria-label={copy.hero.ctaPrimary}
+              aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             >
-              {copy.hero.ctaPrimary}
+              {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             </ProfessionalCTA>
             <button
               onClick={() => handleWhatsAppClick('faq_cta')}
               className="px-8 py-3 border-2 border-white text-white rounded-lg hover:bg-white/10 transition-colors font-semibold flex items-center justify-center gap-2"
-              aria-label={copy.whatsapp.ctaText}
+              aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             >
               <MessageCircle className="w-4 h-4" />
-              {copy.whatsapp.ctaText}
+              {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             </button>
           </div>
           <p className="text-teal-100 text-sm mt-4">
-            {copy.disclaimer.medical}
+            {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
           </p>
         </div>
       </section>

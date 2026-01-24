@@ -2,6 +2,89 @@ import { getSupabaseClient } from './supabaseClient';
 import { trackEvent } from './analytics';
 import { submitLead } from './submitLead';
 
+// ============================================
+// STAGED FILES (for onboarding pre-lead upload)
+// ============================================
+let stagedFiles: File[] = [];
+
+/**
+ * Add files to staged upload queue (before lead creation)
+ */
+export function addStagedFiles(files: File[]): void {
+  stagedFiles = [...stagedFiles, ...files];
+}
+
+/**
+ * Get current staged files
+ */
+export function getStagedFiles(): File[] {
+  return [...stagedFiles];
+}
+
+/**
+ * Remove a staged file by index
+ */
+export function removeStagedFile(index: number): void {
+  stagedFiles = stagedFiles.filter((_, i) => i !== index);
+}
+
+/**
+ * Clear all staged files
+ */
+export function clearStagedFiles(): void {
+  stagedFiles = [];
+}
+
+/**
+ * Upload staged files to Supabase storage after lead creation
+ * Returns array of uploaded file paths
+ */
+export async function uploadStagedFiles(caseId: string): Promise<string[]> {
+  if (stagedFiles.length === 0) return [];
+  
+  const client = getSupabaseClient();
+  if (!client) {
+    console.warn('[LeadStore] No Supabase client, cannot upload staged files');
+    return [];
+  }
+
+  const uploadedPaths: string[] = [];
+  
+  for (const file of stagedFiles) {
+    try {
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const path = `cases/${caseId}/uploads/${timestamp}_${safeName}`;
+      
+      const { error } = await client.storage
+        .from('patient-uploads')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+      
+      if (error) {
+        console.warn('[LeadStore] Failed to upload file:', file.name, error);
+      } else {
+        uploadedPaths.push(path);
+        trackEvent({
+          type: 'file_uploaded',
+          source: 'onboarding_staged',
+          fileType: file.type,
+          fileSize: file.size,
+        });
+      }
+    } catch (err) {
+      console.warn('[LeadStore] Upload error for file:', file.name, err);
+    }
+  }
+  
+  // Clear staged files after upload attempt
+  clearStagedFiles();
+  
+  return uploadedPaths;
+}
+
 export type Lead = {
   id: string;
   createdAt: string;

@@ -43,8 +43,18 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ ok: false, error: "Case not found or invalid token" });
     }
 
+    // Check if password is set
+    const { data: auth } = await db
+      .from("lead_portal_auth")
+      .select("lead_id")
+      .eq("lead_id", lead.id)
+      .maybeSingle();
+
+    const has_password = !!auth?.lead_id;
+
     // Return safe payload (no internal notes, scoring, admin fields)
     const safePayload = {
+      id: lead.id, // lead_id for send-verification endpoint
       case_id: lead.case_id,
       created_at: lead.created_at,
       name: lead.name,
@@ -56,6 +66,7 @@ module.exports = async function handler(req, res) {
       portal_status: lead.portal_status || "pending_review",
       email_verified_at: lead.email_verified_at,
       coordinator_email: lead.coordinator_email,
+      has_password,
       // Computed next_step suggestion
       next_step: lead.email_verified_at ? "upload" : "verify",
     };

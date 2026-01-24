@@ -7,11 +7,15 @@ import { BRAND } from '../config';
 import { getWhatsAppUrl } from '../lib/whatsapp';
 import { SEO } from '../lib/seo';
 import { useLanguage } from '../lib/i18n';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 
 export default function PlanDashboard() {
   const { copy } = useLanguage();
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const [onboardingData, setOnboardingData] = useState<any>(null);
+
+  // SEO handled by <SEO> component below
+  const seo = copy?.seo?.planDashboard ?? DEFAULT_COPY.seo.planDashboard;
 
   useEffect(() => {
     // Load onboarding data from localStorage
@@ -151,8 +155,8 @@ export default function PlanDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <SEO 
-        title={copy.seo.planDashboard.title} 
-        description={copy.seo.planDashboard.description}
+        title={seo.title} 
+        description={seo.description}
         url="/plan-dashboard"
       />
 

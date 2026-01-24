@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from '../components/Link';
 import { NavigationContext } from '../lib/navigationContext';
-import {
-  Button,
-  GuidedPanel,
-  TrustStage,
-  ChoiceCard,
+import { 
+  Button, 
+  GuidedPanel, 
+  TrustStage, 
+  ChoiceCard, 
   ProcessCard,
   ReviewCard,
   TrustBadge
 } from '../components/design-system';
 import Footer from '../components/Footer';
-import {
-  Smile,
-  Anchor,
-  Layers,
-  Crown,
-  Sun,
+import { 
+  Smile, 
+  Anchor, 
+  Layers, 
+  Crown, 
+  Sun, 
   FileCheck,
   MessageCircle,
   ChevronRight,
@@ -43,6 +43,7 @@ import { getWhatsAppUrl } from '../lib/whatsapp';
 import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { SEO } from '../lib/seo';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 import { ProfessionalCTA } from '../components/animations/ProfessionalCTA';
 import { RevealOnScroll } from '../components/animations/RevealOnScroll';
 import { ProofStrip } from '../components/trust/ProofStrip';
@@ -56,17 +57,18 @@ export default function Home() {
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
 
   // SEO handled by <SEO> component below
+  const seo = copy?.seo?.home ?? DEFAULT_COPY.seo.home;
 
   const handleWhatsAppClick = (location: string) => {
-    trackEvent({
-      type: 'whatsapp_click',
+    trackEvent({ 
+      type: 'whatsapp_click', 
       where: location,
-      lang
+      lang 
     });
-
-    const message = copy.whatsapp.templates?.consultation || copy.whatsapp.ctaText || 'Hi, I want a free consultation.';
+    
+    const message = copy?.whatsapp?.templates?.consultation || copy?.whatsapp?.ctaText || 'Hi, I want a free consultation.';
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
-
+    
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
@@ -77,16 +79,16 @@ export default function Home() {
   const handleGetStartedClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-
+    
     // Fire analytics events (funnel: hero_cta_click -> start_onboarding -> submit_lead)
-    trackEvent({
+    trackEvent({ 
       type: 'hero_cta_click',
-      lang
+      lang 
     });
-    trackEvent({
-      type: 'start_onboarding',
+    trackEvent({ 
+      type: 'start_onboarding', 
       entry: 'home',
-      lang
+      lang 
     });
     trackEvent({ type: 'cta_click', where: 'home', cta: 'get_started', lang });
   };
@@ -123,9 +125,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-bg-primary">
-      <SEO
-        title={copy?.seo?.home?.title || "GuideHealth"}
-        description={copy?.seo?.home?.description || "Premium Dental Care"}
+      <SEO 
+        title={seo.title} 
+        description={seo.description}
         url="/"
       />
 
@@ -136,8 +138,8 @@ export default function Home() {
             {/* Left: Guided Panel */}
             <GuidedPanel
               showStepper={false}
-              headline={copy?.hero?.headline}
-              subheadline={copy?.hero?.subheadline}
+              headline={copy?.hero?.headline || DEFAULT_COPY.hero.headline}
+              subheadline={copy?.hero?.subheadline || DEFAULT_COPY.hero.subheadline}
               showTrustLine={true}
             >
               <div className="flex flex-col sm:flex-row gap-4">
@@ -145,22 +147,22 @@ export default function Home() {
                   onClick={handleGetStartedClick}
                   onNavigate={handleNavigateToOnboarding}
                   className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-                  aria-label={copy?.hero?.ctaPrimary || "Get Started"}
+                  aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
                 >
-                  {copy?.hero?.ctaPrimary || "Get Started"}
+                  {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
                   <ChevronRight className="w-5 h-5" />
                 </ProfessionalCTA>
                 <button
                   onClick={() => handleWhatsAppClick('hero_cta')}
                   className="px-6 py-3 bg-white border-2 border-accent-primary text-accent-primary rounded-lg hover:bg-accent-soft transition-colors font-semibold w-full sm:w-auto"
-                  aria-label={copy?.whatsapp?.ctaText || "WhatsApp"}
+                  aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
                 >
                   <MessageCircle className="w-5 h-5 inline mr-2" />
-                  {copy?.whatsapp?.ctaText || "WhatsApp"}
+                  {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
                 </button>
               </div>
               <p className="text-xs text-text-tertiary mt-3">
-                {copy?.disclaimer?.medical}
+                {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
               </p>
             </GuidedPanel>
 
@@ -189,14 +191,14 @@ export default function Home() {
         <section className="py-20 bg-bg-secondary">
           <div className="max-w-[1280px] mx-auto px-8">
             <div className="text-center mb-16 max-w-3xl mx-auto">
-              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy?.process?.title}</h2>
+              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy.process.title}</h2>
               <p className="text-text-secondary text-lg">
-                {copy?.process?.subtitle}
+                {copy.process.subtitle}
               </p>
             </div>
 
             <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-8">
-              {copy?.process?.steps?.map((step) => {
+              {copy.process.steps.map((step) => {
                 const StepIcon = iconMap[step.icon] || Heart;
                 return (
                   <ProcessCard
@@ -209,7 +211,7 @@ export default function Home() {
                 );
               })}
             </div>
-
+            
             <div className="text-center mt-12">
               <Link
                 to="/process"
@@ -229,14 +231,14 @@ export default function Home() {
         <section className="py-20 bg-white">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-16 max-w-3xl mx-auto">
-              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy?.whyUs?.title}</h2>
+              <h2 className="text-text-primary mb-6 text-3xl font-semibold">{copy?.whyUs?.title || DEFAULT_COPY.whyUs.title}</h2>
               <p className="text-text-secondary text-lg">
-                {copy?.whyUs?.subtitle}
+                {copy?.whyUs?.subtitle || DEFAULT_COPY.whyUs.subtitle}
               </p>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {copy?.whyUs?.points?.map((point, idx) => {
+              {(copy?.whyUs?.points || DEFAULT_COPY.whyUs.points).map((point, idx) => {
                 const PointIcon = trustIconMap[point.icon] || iconMap[point.icon] || Shield;
                 return (
                   <div key={idx} className="bg-bg-secondary rounded-lg p-6 border border-gray-100 hover:shadow-md transition-shadow">
@@ -258,14 +260,14 @@ export default function Home() {
         <section className="py-20 bg-white">
           <div className="max-w-7xl mx-auto px-8">
             <div className="text-center mb-12">
-              <h2 className="text-text-primary mb-4 text-3xl font-semibold">{copy?.packages?.title}</h2>
+              <h2 className="text-text-primary mb-4 text-3xl font-semibold">{copy?.packages?.title || DEFAULT_COPY.packages.title}</h2>
               <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-                {copy?.packages?.subtitle}
+                {copy?.packages?.subtitle || DEFAULT_COPY.packages.subtitle}
               </p>
             </div>
-
+            
             <div className="grid md:grid-cols-3 gap-6 mb-8">
-              {copy?.packages?.items?.map((pkg, idx) => (
+              {(copy?.packages?.items || DEFAULT_COPY.packages.items).map((pkg, idx) => (
                 <div
                   key={idx}
                   className={`bg-white rounded-lg p-8 border-2 ${pkg.popular ? 'border-accent-primary shadow-lg' : 'border-gray-200'} hover:shadow-xl transition-all`}
@@ -301,10 +303,10 @@ export default function Home() {
                 </div>
               ))}
             </div>
-
+            
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
               <p className="text-sm text-text-secondary text-center">
-                <strong className="text-text-primary">{copy?.packages?.disclaimer}</strong>
+                <strong className="text-text-primary">{copy?.packages?.disclaimer || DEFAULT_COPY.packages.disclaimer}</strong>
               </p>
             </div>
           </div>
@@ -324,7 +326,7 @@ export default function Home() {
 
             <div className="max-w-5xl mx-auto">
               <div className="grid md:grid-cols-3 gap-6 mb-8">
-                {copy?.testimonials?.map((testimonial, index) => (
+                {(copy?.testimonials || DEFAULT_COPY.testimonials).map((testimonial, index) => (
                   <div key={index} className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-1 mb-3">
                       {[...Array(testimonial.rating)].map((_, i) => (
@@ -366,7 +368,7 @@ export default function Home() {
             </div>
 
             <div className="space-y-4 mb-12">
-              {copy?.faq?.slice(0, 6).map((faq, index) => (
+              {(copy?.faq || DEFAULT_COPY.faq).slice(0, 6).map((faq, index) => (
                 <div
                   key={index}
                   className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
@@ -419,14 +421,14 @@ export default function Home() {
       {/* FinalCTA */}
       <section className="py-24 bg-gradient-to-br from-accent-primary to-accent-hover">
         <div className="max-w-4xl mx-auto px-8 text-center">
-          <h2 className="text-white mb-6 text-4xl font-bold">{copy?.cta?.final?.title}</h2>
+          <h2 className="text-white mb-6 text-4xl font-bold">{copy?.cta?.final?.title || DEFAULT_COPY.cta.final.title}</h2>
           <p className="text-white/90 text-lg mb-6 max-w-2xl mx-auto leading-relaxed">
-            {copy?.cta?.final?.subtitle}
+            {copy?.cta?.final?.subtitle || DEFAULT_COPY.cta.final.subtitle}
           </p>
           <p className="text-white/70 text-sm mb-10">
-            {copy?.disclaimer?.medical}
+            {copy?.disclaimer?.medical || DEFAULT_COPY.disclaimer.medical}
           </p>
-
+          
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
             <ProfessionalCTA
               onClick={(e) => {
@@ -436,21 +438,21 @@ export default function Home() {
               }}
               onNavigate={() => navigate('/onboarding')}
               className="px-8 py-4 bg-white text-accent-primary hover:bg-white/95 shadow-lg font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-              aria-label={copy?.hero?.ctaPrimary || "Get Started"}
+              aria-label={copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
             >
-              {copy?.hero?.ctaPrimary || "Get Started"}
+              {copy?.hero?.ctaPrimary || DEFAULT_COPY.hero.ctaPrimary}
               <ChevronRight className="w-5 h-5" />
             </ProfessionalCTA>
             <button
               onClick={() => handleWhatsAppClick('final_cta')}
               className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg hover:bg-white/10 transition-colors font-semibold w-full sm:w-auto flex items-center justify-center gap-2"
-              aria-label={copy?.whatsapp?.ctaText || "WhatsApp"}
+              aria-label={copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             >
               <MessageCircle className="w-5 h-5" />
-              {copy?.whatsapp?.ctaText || "WhatsApp"}
+              {copy?.whatsapp?.ctaText || DEFAULT_COPY.whatsapp.ctaText}
             </button>
           </div>
-
+          
           <div className="flex flex-wrap justify-center gap-6 text-white/80 text-sm">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4" />

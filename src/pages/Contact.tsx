@@ -8,6 +8,7 @@ import { saveLead } from '../lib/leadStore';
 import { validateSubmission, getHoneypotFieldName } from '../lib/antiSpam';
 import { SEO } from '../lib/seo';
 import { useLanguage } from '../lib/i18n';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
 
 export default function Contact() {
   const { copy } = useLanguage();
@@ -92,11 +93,14 @@ export default function Contact() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // SEO handled by <SEO> component below
+  const seo = copy?.seo?.contact ?? DEFAULT_COPY.seo.contact;
+
   return (
     <div className="min-h-screen bg-white">
       <SEO 
-        title={copy.seo.contact.title} 
-        description={copy.seo.contact.description}
+        title={seo.title} 
+        description={seo.description}
         url="/contact"
       />
 

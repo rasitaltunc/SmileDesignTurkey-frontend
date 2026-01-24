@@ -1,4 +1,4 @@
-import { Link } from './Link';
+import { Link, useNavigate } from 'react-router-dom';
 import { PrefetchLink } from './PrefetchLink';
 import { Menu, X, MessageCircle, Globe, User, LogOut } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -8,6 +8,7 @@ import { trackEvent } from '../lib/analytics';
 import { useLanguage } from '../lib/i18n';
 import { useAuthStore } from '../store/authStore';
 import { getHomePath, getHomeLabel } from '../lib/roleHome';
+import { hasValidPortalSession } from '../lib/portalSession';
 
 interface NavbarProps {
   minimal?: boolean;
@@ -22,6 +23,7 @@ function pushRoute(path: string) {
 }
 
 export default function Navbar({ minimal = false, variant = 'public' }: NavbarProps) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const { lang, setLang, content } = useLanguage();
 
@@ -34,7 +36,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     logout,
     clearError,
   } = useAuthStore();
-
+  
   // ✅ Doctor mode: Hide marketing buttons when path starts with /doctor
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const isDoctorRoute = currentPath.startsWith('/doctor');
@@ -52,13 +54,25 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     return getHomeLabel(role);
   }, [role]);
 
+  // ✅ Patient Portal handler (smart: Dashboard if session, Patient Portal if not)
+  const portalLabel = hasValidPortalSession() ? "Dashboard" : "Patient Portal";
+  
+  const handlePatientPortal = () => {
+    navigate(hasValidPortalSession() ? "/portal" : "/portal/login");
+  };
+
+  // ✅ Staff Login handler (employee/admin/doctor)
+  const handleStaffLogin = () => {
+    navigate("/login");
+  };
+
   const handleWhatsAppClick = () => {
     trackEvent({
       type: 'whatsapp_click',
       where: 'navbar',
       lang
     });
-    const message = content?.whatsapp?.defaultMessage || "Hello";
+    const message = content?.whatsapp?.defaultMessage || 'Hello, I\'m interested in learning more.';
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -104,7 +118,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     clearError();
     try {
       const result = await login(email.trim(), password);
-
+      
       // ÖNEMLİ: role yoksa redirect yok, modal açık kalır
       const role = result?.role;
       if (!role) return;
@@ -235,7 +249,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               </PrefetchLink>
             </div>
           )}
-
+          
           {/* ✅ Doctor mode: Show "Doctor Inbox" title instead of navigation */}
           {isDoctorMode && (
             <div className="hidden md:flex items-center">
@@ -260,10 +274,10 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                 <button
                   onClick={handleWhatsAppClick}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold text-teal-600 border border-teal-600 hover:bg-teal-50 transition-colors whitespace-nowrap shrink-0"
-                  aria-label={content?.whatsapp?.ctaText || "WhatsApp"}
+                  aria-label={content?.whatsapp?.ctaText || 'Ask on WhatsApp'}
                 >
                   <MessageCircle className="w-4 h-4" />
-                  {content?.whatsapp?.ctaText || "WhatsApp"}
+                  {content?.whatsapp?.ctaText || 'Ask on WhatsApp'}
                 </button>
 
                 <PrefetchLink
@@ -272,34 +286,49 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                   className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors whitespace-nowrap shrink-0"
                   onClick={() => trackEvent({ type: 'cta_click', where: 'navbar', cta: 'free_consultation', lang })}
                 >
-                  {content?.cta?.primary || "Get Started"}
+                  {content.cta.primary}
                 </PrefetchLink>
               </>
             )}
 
-            {/* Account - her zaman görünür */}
-            {!isAuthenticated ? (
-              <button
-                onClick={openAuth}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
-              >
-                <User className="w-4 h-4" />
-                Login
-              </button>
-            ) : (
+            {/* Public navbar: Patient Portal + Staff Login */}
+            {variant !== 'admin' && !isDoctorMode && !isAuthenticated && (
               <div className="flex items-center gap-2">
-                {roleLabel && role ? (
+                <button
+                  onClick={handlePatientPortal}
+                  className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors whitespace-nowrap shrink-0"
+                >
+                  {portalLabel}
+                </button>
+
+                <button
+                  onClick={handleStaffLogin}
+                  className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
+                >
+                  Staff Login
+                </button>
+              </div>
+            )}
+
+            {/* Authenticated user UI (employee/admin/doctor) */}
+            {isAuthenticated && (
+              <div className="flex items-center gap-2">
+                {/* Only show role-based link if user is employee/admin/doctor (not patient) */}
+                {roleLabel && role && role !== 'patient' ? (
                   <PrefetchLink
                     to={getHomePath(role)}
-                    prefetch={role === 'admin' || role === 'employee' ? 'admin' : role === 'doctor' ? 'doctor' : role === 'patient' ? 'patient' : undefined}
+                    prefetch={role === 'admin' || role === 'employee' ? 'admin' : role === 'doctor' ? 'doctor' : undefined}
                     className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
                   >
                     {roleLabel}
                   </PrefetchLink>
-                ) : roleLabel ? (
-                  <span className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-500 whitespace-nowrap shrink-0">
-                    {roleLabel}
-                  </span>
+                ) : roleLabel === 'My Portal' ? (
+                  <Link
+                    to="/portal"
+                    className="inline-flex items-center justify-center h-10 px-4 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    Portal
+                  </Link>
                 ) : null}
                 <button
                   onClick={handleLogout}
@@ -355,10 +384,10 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                       handleWhatsAppClick();
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-2 text-teal-600 border border-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
-                    aria-label={content?.whatsapp?.ctaText || "WhatsApp"}
+                    aria-label={content?.whatsapp?.ctaText || 'Ask on WhatsApp'}
                   >
                     <MessageCircle className="w-4 h-4" />
-                    {content?.whatsapp?.ctaText || "WhatsApp"}
+                    {content?.whatsapp?.ctaText || 'Ask on WhatsApp'}
                   </button>
 
                   <PrefetchLink
@@ -370,11 +399,11 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                       trackEvent({ type: 'cta_click', where: 'navbar_mobile', cta: 'free_consultation', lang });
                     }}
                   >
-                    {content?.cta?.primary || "Get Started"}
+                    {content.cta.primary}
                   </PrefetchLink>
                 </>
               )}
-
+              
               {/* ✅ Doctor mode: Show "Doctor Inbox" title in mobile menu */}
               {isDoctorMode && (
                 <div className="py-2">
@@ -509,8 +538,9 @@ function AuthModal(props: {
                 setView('portal');
                 setSelectedPortal('patient');
               }}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'portal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-                }`}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                view === 'portal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
               Patient/Doctor
             </button>
@@ -520,8 +550,9 @@ function AuthModal(props: {
                 setView('staff');
                 setSelectedPortal('admin');
               }}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-                }`}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                view === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
               Staff
             </button>
@@ -595,8 +626,9 @@ function RolePick(props: { label: string; active: boolean; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${active ? 'border-teal-300 bg-teal-50 text-teal-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-        }`}
+      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+        active ? 'border-teal-300 bg-teal-50 text-teal-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+      }`}
     >
       {label}
     </button>

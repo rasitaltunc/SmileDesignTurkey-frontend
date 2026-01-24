@@ -2,6 +2,7 @@ import { useState, useEffect, ReactNode, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { getSupabaseClient } from './lib/supabaseClient';
+import { hasValidPortalSession } from './lib/portalSession';
 import { installSessionRecovery } from './lib/auth/sessionRecovery';
 import { getHomePath } from './lib/roleHome';
 import { NavigationContext } from './lib/navigationContext';
@@ -11,6 +12,8 @@ import TreatmentDetail from './pages/TreatmentDetail';
 import PlanDashboard from './pages/PlanDashboard';
 import Intake from './pages/Intake';
 import Login from './pages/auth/Login';
+import AuthCallback from './pages/auth/AuthCallback';
+const SetPassword = lazy(() => import('./pages/auth/SetPassword'));
 import DoctorLayout from './layouts/DoctorLayout';
 import { PageTransition } from './components/animations/PageTransition';
 import Navbar from './components/Navbar';
@@ -34,6 +37,8 @@ const FAQ = lazy(() => import('./pages/FAQ'));
 const Contact = lazy(() => import('./pages/Contact'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const PendingReviewPortal = lazy(() => import('./pages/PendingReviewPortal'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const PortalLogin = lazy(() => import('./pages/PortalLogin'));
 
 // Loading fallback component
 function PageLoader() {
@@ -187,6 +192,26 @@ export default function App() {
     }
   }, []);
   
+  // ✅ CRITICAL: Clean up Supabase auth session if patient portal session exists
+  // Patient users should NOT stay logged in as employee/admin
+  useEffect(() => {
+    if (hasValidPortalSession()) {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        // Check if there's an active Supabase session
+        supabase.auth.getSession().then(({ data: sessionData }) => {
+          if (sessionData?.session) {
+            // Patient portal session exists but Supabase auth also exists - sign out Supabase
+            console.log('[App] Patient portal session detected - cleaning up Supabase auth session');
+            supabase.auth.signOut().catch((err) => {
+              console.warn('[App] Failed to sign out Supabase session:', err);
+            });
+          }
+        });
+      }
+    }
+  }, []); // Run once on mount
+  
   // Initialize auth session on mount
   useEffect(() => {
     checkSession();
@@ -271,6 +296,14 @@ export default function App() {
             } 
           />
           <Route 
+            path="/portal/login" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <PortalLogin />
+              </Suspense>
+            }
+          />
+          <Route
             path="/portal" 
             element={
               <Suspense fallback={<PageLoader />}>
@@ -297,9 +330,26 @@ export default function App() {
           <Route path="/intake" element={<Intake />} />
           <Route path="/plan-dashboard" element={<PlanDashboard />} />
           
-          {/* Login routes */}
+          {/* Auth routes */}
           <Route path="/login" element={<Login />} />
           {ENABLE_DEMO_LOGIN && <Route path="/demo-login" element={<Login />} />}
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route 
+            path="/verify-email" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <VerifyEmail />
+              </Suspense>
+            } 
+          />
+          <Route 
+            path="/set-password" 
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <SetPassword />
+              </Suspense>
+            } 
+          />
           
           {/* Patient portal */}
           <Route 
@@ -381,7 +431,8 @@ export default function App() {
             } 
           />
           
-          {/* Employee routes */}
+          {/* ✅ CRITICAL HARD GUARD: Employee routes - NEVER render if not employee/admin */}
+          {/* Patient users MUST be redirected to /portal, never see employee UI */}
           <Route path="/employee" element={<Navigate to="/employee/leads" replace />} />
           <Route 
             path="/employee/leads" 
@@ -391,7 +442,16 @@ export default function App() {
                   <AdminLeads />
                 </Suspense>
               </RequireRole>
-            } 
+            }
+          />
+          {/* Catch-all for /employee/* - hard redirect to portal if not employee/admin */}
+          <Route 
+            path="/employee/*" 
+            element={
+              <RequireRole roles={['employee', 'admin']} navigate={syncNavigate} isLoading={isLoading}>
+                <Navigate to="/portal" replace />
+              </RequireRole>
+            }
           />
           
           {/* Catch-all: 404 Not Found */}

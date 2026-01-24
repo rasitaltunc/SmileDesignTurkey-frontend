@@ -6,6 +6,7 @@
 import { getPortalSession } from './portalSession';
 
 export interface PortalData {
+  id: string; // lead_id for send-verification endpoint
   case_id: string;
   created_at: string;
   name: string | null;
@@ -17,6 +18,7 @@ export interface PortalData {
   portal_status: string;
   email_verified_at: string | null;
   coordinator_email: string | null;
+  has_password?: boolean;
   next_step: 'verify' | 'upload';
 }
 

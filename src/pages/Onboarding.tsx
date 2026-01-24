@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from '../components/Link';
-import { Upload, ChevronRight, ArrowLeft, CheckCircle, Lock, Shield } from 'lucide-react';
+import { Upload, ChevronRight, ArrowLeft, CheckCircle, Lock, Shield, X, FileText, Image, Loader2 } from 'lucide-react';
 import { 
   TopNav, 
   Stepper, 
@@ -15,16 +15,44 @@ import { Smile, Anchor, Layers, Crown, Sun, FileCheck } from 'lucide-react';
 import Footer from '../components/Footer';
 import { trackEvent } from '../lib/analytics';
 import { BRAND } from '../config';
-import { saveLead } from '../lib/leadStore';
-import { createPortalSession } from '../lib/portalSession';
+import { saveLead, addStagedFiles, getStagedFiles, removeStagedFile, clearStagedFiles, uploadStagedFiles } from '../lib/leadStore';
+import { getWhatsAppUrl } from '../lib/whatsapp';
+import { createPortalSession, hasValidPortalSession } from '../lib/portalSession';
 import { validateSubmission, getHoneypotFieldName } from '../lib/antiSpam';
 import { SEO } from '../lib/seo';
 import { useLanguage } from '../lib/i18n';
+import { DEFAULT_COPY } from '../lib/siteContentDefaults';
+import { toast } from '../lib/toast';
 
 export default function Onboarding() {
   const { copy } = useLanguage();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [stagedFilesList, setStagedFilesList] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // SEO handled by <SEO> component below
+  const seo = copy?.seo?.onboarding ?? DEFAULT_COPY.seo.onboarding;
+  
+  // Guardrail: If user has valid portal session, redirect to portal unless explicitly starting new plan
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const startNew = urlParams.get('startNew') === 'true';
+    
+    if (!startNew && hasValidPortalSession()) {
+      // User has active portal session - redirect to portal
+      // Only allow onboarding if ?startNew=true is explicitly set
+      navigate('/portal', { replace: true });
+      return;
+    }
+  }, [navigate]);
+  
+  // Sync staged files from store on mount
+  useEffect(() => {
+    setStagedFilesList(getStagedFiles());
+  }, []);
   
   const [formData, setFormData] = useState({
     treatment: '',
@@ -95,11 +123,14 @@ export default function Onboarding() {
 
   const handleSubmit = async () => {
     setErrorMessage(null);
+    setSubmitError(null);
+    setIsSubmitting(true);
     
     // Anti-spam validation
     const validation = validateSubmission(formData, formOpenTime);
     if (!validation.allowed) {
       setErrorMessage(validation.message || 'Please try again in a moment.');
+      setIsSubmitting(false);
       return;
     }
     
@@ -125,21 +156,62 @@ export default function Onboarding() {
     }
 
     // Save lead using new leads system (async) - returns case_id + portal_token
-    const { case_id, portal_token } = await saveLead({
-      source: 'onboarding',
-      name: formData.name || undefined,
-      email: formData.email || undefined,
-      phone: formData.whatsapp || undefined,
-      treatment: formData.treatment || undefined,
-      message: formData.goals || undefined,
-      timeline: formData.timeline || undefined,
-      lang: lang,
-      pageUrl: window.location.href,
-    });
+    let case_id: string | undefined;
+    let portal_token: string | undefined;
+    
+    try {
+      const result = await saveLead({
+        source: 'onboarding',
+        name: formData.name || undefined,
+        email: formData.email || undefined,
+        phone: formData.whatsapp || undefined,
+        treatment: formData.treatment || undefined,
+        message: formData.goals || undefined,
+        timeline: formData.timeline || undefined,
+        lang: lang,
+        pageUrl: window.location.href,
+      });
+      
+      case_id = result.case_id;
+      portal_token = result.portal_token;
+      
+      if (!case_id || !portal_token) {
+        throw new Error('Failed to create lead. Please try again or contact us via WhatsApp.');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to submit. Please try again or contact us via WhatsApp.';
+      setSubmitError(errorMsg);
+      setIsSubmitting(false);
+      trackEvent({ type: 'onboarding_submit_error', lang, error: errorMsg });
+      return;
+    }
 
     // Create portal session with portal_token (secure, never in URL)
     if (case_id && portal_token) {
       createPortalSession(case_id, portal_token, formData.email, formData.whatsapp, false);
+    }
+
+    // Upload staged files if any (after lead creation)
+    if (case_id && stagedFilesList.length > 0) {
+      try {
+        const uploadedPaths = await uploadStagedFiles(case_id);
+        if (uploadedPaths.length > 0) {
+          trackEvent({
+            type: 'staged_files_uploaded',
+            count: uploadedPaths.length,
+            case_id,
+          });
+          toast.success(`${uploadedPaths.length} file${uploadedPaths.length > 1 ? 's' : ''} uploaded successfully`);
+        } else if (stagedFilesList.length > 0) {
+          // Some files failed to upload
+          toast.info('Files will be available to upload in your portal');
+        }
+      } catch (uploadError) {
+        console.warn('[Onboarding] Failed to upload staged files:', uploadError);
+        toast.info('You can upload files later from your portal');
+      }
+      // Clear local state
+      setStagedFilesList([]);
     }
 
     // Track analytics (no PII) - note: submit_lead is now tracked in leadStore
@@ -160,6 +232,9 @@ export default function Onboarding() {
       lang,
     });
     
+    // Clear submitting state and redirect
+    setIsSubmitting(false);
+    
     // Redirect to portal (new flow) or fallback to plan-dashboard
     setTimeout(() => {
       if (case_id) {
@@ -168,6 +243,43 @@ export default function Onboarding() {
         navigate('/plan-dashboard');
       }
     }, 500);
+  };
+
+  // File upload handlers
+  const handleFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files);
+      addStagedFiles(fileArray);
+      setStagedFilesList(getStagedFiles());
+      trackEvent({ type: 'files_staged', count: fileArray.length, source: 'onboarding' });
+    }
+    // Reset input so same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  const handleRemoveFile = (index: number) => {
+    removeStagedFile(index);
+    setStagedFilesList(getStagedFiles());
+  };
+  
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith('image/')) {
+      return <Image className="w-4 h-4 text-accent-primary" />;
+    }
+    return <FileText className="w-4 h-4 text-accent-primary" />;
+  };
+  
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const canProceed = () => {
@@ -190,8 +302,8 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-overlay-wash">
       <SEO 
-        title={copy.seo.onboarding.title} 
-        description={copy.seo.onboarding.description}
+        title={seo.title} 
+        description={seo.description}
         url="/onboarding"
       />
       <TopNav variant="desktop" />
@@ -251,7 +363,23 @@ export default function Onboarding() {
                 placeholder="Example: I'm looking to improve my smile confidence. I have some staining and a chipped tooth that I'd like to address..."
               />
 
-              <div className="bg-accent-soft rounded-[var(--radius-md)] p-6 border border-accent-primary/20">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf,.pdf"
+                onChange={handleFileChange}
+                className="hidden"
+                aria-label="Upload photos or X-rays"
+              />
+              
+              {/* Clickable upload card */}
+              <button
+                type="button"
+                onClick={handleFileSelect}
+                className="w-full bg-accent-soft rounded-[var(--radius-md)] p-6 border border-accent-primary/20 hover:border-accent-primary hover:bg-accent-soft/80 transition-all cursor-pointer text-left"
+              >
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-white rounded-[var(--radius-sm)] flex items-center justify-center flex-shrink-0 shadow-premium-sm">
                     <Upload className="w-5 h-5 text-accent-primary" />
@@ -261,9 +389,48 @@ export default function Onboarding() {
                     <p className="text-text-secondary text-sm">
                       Secure & encrypted. Only your coordinator sees this. You can also skip and upload later.
                     </p>
+                    <p className="text-accent-primary text-sm mt-2 font-medium">
+                      Click to select files →
+                    </p>
                   </div>
                 </div>
-              </div>
+              </button>
+              
+              {/* Staged files list */}
+              {stagedFilesList.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-sm text-text-secondary font-medium">
+                    {stagedFilesList.length} file{stagedFilesList.length > 1 ? 's' : ''} ready to upload:
+                  </p>
+                  <div className="space-y-2">
+                    {stagedFilesList.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex items-center justify-between bg-white rounded-[var(--radius-sm)] p-3 border border-border-subtle"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {getFileIcon(file)}
+                          <div className="min-w-0">
+                            <p className="text-sm text-text-primary truncate">{file.name}</p>
+                            <p className="text-xs text-text-tertiary">{formatFileSize(file.size)}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFile(index);
+                          }}
+                          className="p-1 hover:bg-red-50 rounded transition-colors"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <X className="w-4 h-4 text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -487,6 +654,7 @@ export default function Onboarding() {
               variant="secondary"
               size="lg"
               onClick={handleBack}
+              disabled={isSubmitting}
               className="w-full sm:w-auto"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -501,24 +669,75 @@ export default function Onboarding() {
               variant="primary"
               size="lg"
               onClick={handleNext}
-              disabled={!canProceed()}
+              disabled={!canProceed() || isSubmitting}
               className="w-full sm:w-auto min-w-[200px]"
             >
               Continue
               <ChevronRight className="w-5 h-5" />
             </Button>
           ) : (
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={handleSubmit}
-              className="w-full sm:w-auto min-w-[200px]"
-            >
-              <CheckCircle className="w-5 h-5" />
-              See My Plan
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto min-w-[200px]"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating your plan…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    See My Plan
+                  </>
+                )}
+              </Button>
+              {isSubmitting && (
+                <p className="text-sm text-text-tertiary mt-2 text-center w-full">
+                  This usually takes 5–10 seconds. Please wait…
+                </p>
+              )}
+              {submitError && (
+                <div className="w-full mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800 mb-2">{submitError}</p>
+                  <button
+                    onClick={() => {
+                      const url = getWhatsAppUrl({
+                        phoneE164: BRAND.whatsappPhoneE164,
+                        text: "Hi, I'm having trouble submitting my onboarding form. Can you help?",
+                      });
+                      if (url) {
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
+                    className="text-sm text-red-700 underline hover:text-red-900"
+                  >
+                    Contact us via WhatsApp instead
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
+        
+        {/* Loading Overlay */}
+        {isSubmitting && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-xl p-8 max-w-md mx-4 text-center">
+              <Loader2 className="w-12 h-12 animate-spin text-accent-primary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-text-primary mb-2">
+                We're generating your secure portal…
+              </h3>
+              <p className="text-sm text-text-secondary">
+                This usually takes 5–10 seconds. Please don't close this page.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Trust Line */}
         <div className="flex flex-wrap justify-center gap-4 mt-12">
