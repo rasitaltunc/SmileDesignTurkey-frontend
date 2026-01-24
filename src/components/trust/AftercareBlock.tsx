@@ -14,7 +14,7 @@ export function AftercareBlock() {
 
   // Track view once per page load
   useEffect(() => {
-    if (!hasTrackedView.current && copy.aftercareBlock) {
+    if (!hasTrackedView.current && copy?.aftercareBlock) {
       trackEvent({
         type: 'trust_pack_view',
         page: currentPage,
@@ -22,9 +22,9 @@ export function AftercareBlock() {
       });
       hasTrackedView.current = true;
     }
-  }, [currentPage, lang, copy.aftercareBlock]);
+  }, [currentPage, lang, copy?.aftercareBlock]);
 
-  if (!copy.aftercareBlock) {
+  if (!copy?.aftercareBlock) {
     return null;
   }
 

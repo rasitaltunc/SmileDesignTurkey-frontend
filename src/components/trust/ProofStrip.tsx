@@ -29,9 +29,9 @@ export function ProofStrip() {
       });
       hasTrackedView.current = true;
     }
-  }, [currentPage, lang, copy.proofStrip]);
+  }, [currentPage, lang, copy?.proofStrip]);
 
-  if (!copy.proofStrip || copy.proofStrip.items.length === 0) {
+  if (!copy?.proofStrip || copy?.proofStrip?.items?.length === 0) {
     return null;
   }
 

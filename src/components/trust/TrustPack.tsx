@@ -26,9 +26,9 @@ export function TrustPack() {
       });
       hasTrackedView.current = true;
     }
-  }, [currentPage, lang, copy.trustPack]);
+  }, [currentPage, lang, copy?.trustPack]);
 
-  if (!copy.trustPack || copy.trustPack.badges.length === 0) {
+  if (!copy?.trustPack || copy?.trustPack?.badges?.length === 0) {
     return null;
   }
 
