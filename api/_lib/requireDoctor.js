@@ -95,33 +95,22 @@ async function requireDoctor(req) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // ✅ Try both id and user_id columns (schema flexibility)
+  // ✅ Query profile by id (profiles.id = auth.users.id)
+  // Schema: profiles(id uuid PK, role text, full_name text, title text, created_at timestamptz)
   let profile;
   let profileErr;
 
   try {
-    // Try id first (most common)
-    const { data: profById, error: errById } = await supa
+    const { data: prof, error: err } = await supa
       .from("profiles")
-      .select("id, user_id, role, full_name, title")
+      .select("id, role, full_name, title")
       .eq("id", uid)
       .maybeSingle();
 
-    if (!errById && profById) {
-      profile = profById;
+    if (err) {
+      profileErr = err;
     } else {
-      // Fallback: try user_id column
-      const { data: profByUserId, error: errByUserId } = await supa
-        .from("profiles")
-        .select("id, user_id, role, full_name, title")
-        .eq("user_id", uid)
-        .maybeSingle();
-
-      if (!errByUserId && profByUserId) {
-        profile = profByUserId;
-      } else {
-        profileErr = errByUserId || errById;
-      }
+      profile = prof;
     }
   } catch (queryErr) {
     profileErr = queryErr;
@@ -183,6 +172,3 @@ async function requireDoctor(req) {
 }
 
 module.exports = { requireDoctor };
-
-
-
