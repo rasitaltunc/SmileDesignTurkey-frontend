@@ -865,10 +865,23 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
 
   // B2: Generate AI Brief
   const handleGenerateBrief = async () => {
+    // ✅ CRITICAL: Wait for lead to load first
+    if (isLoadingLead) {
+      toast.error("Please wait for lead data to load before generating snapshot");
+      return;
+    }
+
     // ✅ Use resolvedLeadIdText first (canonical source), then fallback to lead?.id or leadId
     const activeLeadId = resolvedLeadIdText || lead?.id || leadId || null;
     if (!activeLeadId) {
-      toast.error("Missing leadId (lead not loaded yet). Refresh and try again.");
+      toast.error("Missing leadId. Please refresh the page and try again.");
+      console.error('[handleGenerateBrief] leadId is null', { 
+        resolvedLeadIdText, 
+        'lead?.id': lead?.id, 
+        leadId,
+        isLoadingLead,
+        finalIsDoctorMode
+      });
       return;
     }
 
@@ -1160,8 +1173,8 @@ export default function AdminPatientProfile({ doctorMode = false, leadId: propLe
                       const activeLeadUuid = lead?.lead_uuid ?? null;
                       // Button enable: id varsa kesin, id yoksa en azından uuid var mı gör
                       const canUseAi = Boolean(activeLeadId || activeLeadUuid);
-                      const normalizeDisabled = isLoadingNormalize || isLoadingBrief || !canUseAi;
-                      const snapshotDisabled = isLoadingBrief || isLoadingNormalize || !canUseAi;
+                      const normalizeDisabled = isLoadingLead || isLoadingNormalize || isLoadingBrief || !canUseAi;
+                      const snapshotDisabled = isLoadingLead || isLoadingBrief || isLoadingNormalize || !canUseAi;
 
                       return (
                         <>
