@@ -6,6 +6,7 @@
 
 const { generateDoctorNotePDF } = require("../../_pdfUtils");
 const { requireDoctor } = require("../../_lib/requireDoctor");
+const { validateServerEnv } = require("../../_lib/validateEnv");
 
 const buildSha =
   process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -33,6 +34,21 @@ module.exports = async function handler(req, res) {
         step: "method_check",
         requestId,
         buildSha,
+      });
+    }
+
+    // ✅ CRITICAL: Validate environment before proceeding
+    try {
+      validateServerEnv();
+    } catch (envErr) {
+      console.error('[doctor/note/approve] Environment validation failed:', envErr.message);
+      return res.status(500).json({
+        ok: false,
+        error: 'Server configuration error - missing required environment variables',
+        step: 'env_validation',
+        requestId,
+        buildSha,
+        details: envErr.message
       });
     }
 
