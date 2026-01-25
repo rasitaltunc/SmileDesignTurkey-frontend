@@ -194,8 +194,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Get PDF storage path
-    const pdfPath = note.pdf_storage_path || `pdf/doctor-notes/${noteId}.pdf`;
+    // ✅ Get PDF storage path (normalize to remove bucket prefix if exists)
+    let pdfPath = note.pdf_storage_path || `doctor-notes/${noteId}.pdf`;
+    // Remove "pdf/" prefix if accidentally included (backwards compatibility)
+    pdfPath = pdfPath.replace(/^pdf\//, '');
 
     // ✅ Generate signed URL (1 hour expiry)
     const { data: urlData, error: urlErr } = await dbClient.storage

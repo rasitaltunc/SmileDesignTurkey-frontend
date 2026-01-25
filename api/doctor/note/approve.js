@@ -164,8 +164,8 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ✅ Upload PDF to Supabase Storage (path: pdf/doctor-notes/{note_id}.pdf)
-    const storagePath = `pdf/doctor-notes/${noteId}.pdf`;
+    // ✅ Upload PDF to Supabase Storage (bucket: pdf, path: doctor-notes/{note_id}.pdf)
+    const storagePath = `doctor-notes/${noteId}.pdf`;
 
     const { error: uploadErr } = await dbClient.storage
       .from("pdf")

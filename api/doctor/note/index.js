@@ -322,7 +322,7 @@ module.exports = async function handler(req, res) {
     if (note && note.pdf_storage_path) {
       try {
         const urlResult = await dbClient.storage
-          .from("doctor-notes")
+          .from("pdf") // ✅ Correct bucket name (matches approve endpoint)
           .createSignedUrl(note.pdf_storage_path, 3600); // 1 hour expiry
         pdfUrl = urlResult.data?.signedUrl || null;
         if (urlResult.error) {

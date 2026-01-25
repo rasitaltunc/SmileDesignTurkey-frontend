@@ -312,15 +312,27 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
       return;
     }
 
+    // Open window immediately (prevents popup blocking)
+    const win = window.open('', '_blank', 'noopener,noreferrer');
+
     try {
       const result = await apiJsonAuth<{ ok: true; signedUrl: string }>(
         `/api/doctor/note/pdf?note_id=${encodeURIComponent(note.id)}`
       );
 
+      if (!win) {
+        toast.error('Popup blocked. Please allow popups for this site.');
+        return;
+      }
+
       if (result.ok && result.signedUrl) {
-        window.open(result.signedUrl, '_blank', 'noopener,noreferrer');
+        win.location.href = result.signedUrl;
+      } else {
+        win.close();
+        toast.error('Failed to get PDF URL');
       }
     } catch (err) {
+      if (win) win.close();
       const errorMessage = err instanceof Error ? err.message : 'Failed to load PDF';
       toast.error(errorMessage);
       console.error('[DoctorNotePanel] PDF error:', err);
@@ -622,7 +634,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
             </div>
           )}
         </div>
-        {isApproved && pdfUrl && (
+        {isApproved && (
           <button
             onClick={handleViewPDF}
             className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors"
