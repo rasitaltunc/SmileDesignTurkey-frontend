@@ -129,3 +129,34 @@ After deploying your frontend:
 3. Update `VITE_SUPABASE_URL` in your hosting platform's env vars
 4. Test admin page: `https://your-domain.com/admin/leads?token=your-token`
 
+---
+
+## ⚠️ Important Column Reference
+
+**Email Verification Column:**
+- ✅ **CORRECT:** `email_verified_at` (timestamp when email was verified)
+- ❌ **WRONG:** `verified_at` (this column does NOT exist)
+
+**Portal State Column:**
+- Column: `portal_state` 
+- Values: `'unverified'` | `'verified'` | `'password_set'` | `'active'`
+- Purpose: Single source of truth for portal UI state
+
+**Common Mistakes:**
+```sql
+-- ❌ WRONG (will fail)
+WHERE verified_at IS NOT NULL
+
+-- ✅ CORRECT
+WHERE email_verified_at IS NOT NULL
+
+-- ✅ BETTER (single source of truth)
+WHERE portal_state IN ('verified', 'password_set', 'active')
+```
+
+**Migration Files:**
+- All migrations should check column/table existence before updating
+- Use `information_schema.columns` to verify columns exist
+- Use defensive `DO $$ ... END $$;` blocks for idempotent migrations
+- See `supabase-migration-portal-state.sql` for reference pattern
+
