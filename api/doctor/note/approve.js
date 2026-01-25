@@ -157,6 +157,8 @@ module.exports = async function handler(req, res) {
         ok: false,
         error: "Failed to generate PDF",
         step: "generate_pdf",
+        detail: pdfErr instanceof Error ? pdfErr.message : String(pdfErr),
+        stack: process.env.NODE_ENV === 'development' ? (pdfErr instanceof Error ? pdfErr.stack : undefined) : undefined,
         requestId,
         buildSha,
       });
