@@ -96,14 +96,14 @@ async function requireDoctor(req) {
   });
 
   // ✅ Query profile by id (profiles.id = auth.users.id)
-  // Schema: profiles(id uuid PK, role text, full_name text, title text, created_at timestamptz)
+  // Schema: profiles(id uuid PK, role text, full_name text, created_at timestamptz)
   let profile;
   let profileErr;
 
   try {
     const { data: prof, error: err } = await supa
       .from("profiles")
-      .select("id, role, full_name, title")
+      .select("id, role, full_name")
       .eq("id", uid)
       .maybeSingle();
 
