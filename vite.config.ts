@@ -18,9 +18,11 @@
       }),
     ].filter(Boolean),
     define: {
-      __BUILD_SHA__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || ""),
-      __VERCEL_ENV__: JSON.stringify(process.env.VERCEL_ENV || ""),
-      __VERCEL_URL__: JSON.stringify(process.env.VERCEL_URL || ""),
+      __BUILD_SHA__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev'),
+      __BUILD_BRANCH__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_REF || process.env.GITHUB_REF_NAME || 'local'),
+      __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+      __VERCEL_ENV__: JSON.stringify(process.env.VERCEL_ENV || 'local'),
+      __VERCEL_URL__: JSON.stringify(process.env.VERCEL_URL || ''),
     },
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
