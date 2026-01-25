@@ -103,7 +103,7 @@ async function requireDoctor(req) {
     // Try id first (most common)
     const { data: profById, error: errById } = await supa
       .from("profiles")
-      .select("id, user_id, role, email, full_name, title")
+      .select("id, user_id, role, full_name, title")
       .eq("id", uid)
       .maybeSingle();
 
@@ -113,7 +113,7 @@ async function requireDoctor(req) {
       // Fallback: try user_id column
       const { data: profByUserId, error: errByUserId } = await supa
         .from("profiles")
-        .select("id, user_id, role, email, full_name, title")
+        .select("id, user_id, role, full_name, title")
         .eq("user_id", uid)
         .maybeSingle();
 
