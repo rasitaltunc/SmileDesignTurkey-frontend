@@ -100,6 +100,12 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ ok: false, error: "Failed to save password" });
     }
 
+    // ✅ NEW: Update portal_state to 'password_set' for better UI state management
+    await db
+      .from("leads")
+      .update({ portal_state: "password_set" })
+      .eq("id", targetLeadId);
+
     console.log("[portal-set-password] Password set for lead:", { lead_id: targetLeadId, email, session_lead_id: sessionLead.id });
 
     return res.status(200).json({ ok: true, has_password: true });

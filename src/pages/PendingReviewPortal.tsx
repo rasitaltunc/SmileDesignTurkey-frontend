@@ -81,10 +81,27 @@ export default function PendingReviewPortal() {
         console.log("portalData keys", Object.keys(portalData || {}));
         console.log("portalData sample", portalData);
         setPortalData(portalData);
-        // Use email_verified_at from portal data (authoritative)
-        const verified = !!(portalData.email_verified_at || session.email_verified);
+        
+        // ✅ IMPROVED: Use portal_state as single source of truth (with fallback)
+        // portal_state: 'unverified' | 'verified' | 'password_set' | 'active'
+        // If portal_state exists and is not 'unverified', user is verified
+        const hasPortalState = portalData.portal_state && portalData.portal_state !== 'unverified';
+        const hasLegacyVerified = !!(portalData.email_verified_at || session.email_verified);
+        const verified = hasPortalState || hasLegacyVerified;
+        
         setIsVerified(verified);
         setSession(session);
+        
+        // ✅ Auto-open password modal if verified but password not set yet
+        // portal_state 'verified' = email verified but no password
+        // portal_state 'password_set' or 'active' = password already set
+        if (verified && portalData.portal_state === 'verified') {
+          console.log('[PendingReviewPortal] User verified but no password - opening modal');
+          setTimeout(() => {
+            setPasswordModalOpen(true);
+          }, 1500);
+        }
+        
         // Auto-fill email from lead data if available
         if (portalData.email) {
           setVerificationEmail(portalData.email);
@@ -112,9 +129,18 @@ export default function PendingReviewPortal() {
         
         fetchPortalData().then((result) => {
           if (result.success && result.data) {
-            const verified = !!result.data.email_verified_at;
-            if (verified) {
-              // Verification just completed - update state and stop polling
+            // ✅ Check portal_state (preferred) or email_verified_at (fallback)
+            const hasPortalState = result.data.portal_state && result.data.portal_state !== 'unverified';
+            const hasLegacyVerified = !!result.data.email_verified_at;
+            const verified = hasPortalState || hasLegacyVerified;
+            
+            if (verified && !isVerified) {
+              // ✅ CRITICAL: Verification just completed - update everything
+              console.log('[PendingReviewPortal] Email verified! Opening password modal...', {
+                portal_state: result.data.portal_state,
+                email_verified_at: result.data.email_verified_at
+              });
+              
               setPortalData(result.data);
               setIsVerified(true);
               const session = getPortalSession();
@@ -122,6 +148,12 @@ export default function PendingReviewPortal() {
                 createPortalSession(session.case_id, session.portal_token, session.email, session.phone, true);
                 setSession(getPortalSession());
               }
+              
+              // ✅ Auto-open password modal after verification
+              setTimeout(() => {
+                setPasswordModalOpen(true);
+              }, 1000);
+              
               clearInterval(pollInterval);
             }
           }

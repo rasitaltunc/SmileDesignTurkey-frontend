@@ -89,6 +89,7 @@ module.exports = async function handler(req, res) {
     const updateData = {
       email: verifiedEmail, // Normalized email
       email_verified_at: now,
+      portal_state: 'verified', // ✅ NEW: Set portal_state for UI single source of truth
     };
     
     // Optionally update portal_status to 'active' if it's still 'pending_review' or null
@@ -128,7 +129,9 @@ module.exports = async function handler(req, res) {
         .update({
           email: verifiedEmail,
           email_verified_at: now,
+          portal_state: 'verified', // ✅ Set portal_state for canonical lead too
           portal_status: "active",
+          portal_state: "verified", // ✅ NEW: Set portal_state
         })
         .eq("id", canonicalLead.id);
 
