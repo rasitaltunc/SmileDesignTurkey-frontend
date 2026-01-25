@@ -4,6 +4,32 @@
 const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 
 /**
+ * Normalize text for PDF (WinAnsi encoding compatibility)
+ * Converts Turkish characters to ASCII equivalents
+ * @param {string} text - Text to normalize
+ * @returns {string} Normalized text
+ */
+function normalizeTextForPDF(text) {
+  if (!text) return '';
+  
+  return String(text)
+    .replace(/ı/g, 'i')
+    .replace(/İ/g, 'I')
+    .replace(/ğ/g, 'g')
+    .replace(/Ğ/g, 'G')
+    .replace(/ü/g, 'u')
+    .replace(/Ü/g, 'U')
+    .replace(/ş/g, 's')
+    .replace(/Ş/g, 'S')
+    .replace(/ö/g, 'o')
+    .replace(/Ö/g, 'O')
+    .replace(/ç/g, 'c')
+    .replace(/Ç/g, 'C');
+}
+
+
+
+/**
  * Generate Doctor Note PDF
  * @param {Object} params
  * @param {string} params.clinicName - Clinic name
@@ -39,7 +65,7 @@ async function generateDoctorNotePDF({
   let y = height - 50; // Start from top
 
   // Header: Clinic Name
-  page.drawText(clinicName, {
+  page.drawText(normalizeTextForPDF(clinicName), {
     x: 50,
     y: y,
     size: 20,
@@ -49,14 +75,14 @@ async function generateDoctorNotePDF({
   y -= 30;
 
   // Case Code & Lead ID
-  page.drawText(`Case Code: ${caseCode || "N/A"}`, {
+  page.drawText(normalizeTextForPDF(`Case Code: ${caseCode || "N/A"}`), {
     x: 50,
     y: y,
     size: 12,
     font: helvetica,
     color: rgb(0.3, 0.3, 0.3),
   });
-  page.drawText(`Lead ID: ${leadId || "N/A"}`, {
+  page.drawText(normalizeTextForPDF(`Lead ID: ${leadId || "N/A"}`), {
     x: 300,
     y: y,
     size: 12,
@@ -66,7 +92,7 @@ async function generateDoctorNotePDF({
   y -= 30;
 
   // Doctor Info
-  page.drawText(`Doctor: ${doctorName || "N/A"}`, {
+  page.drawText(normalizeTextForPDF(`Doctor: ${doctorName || "N/A"}`), {
     x: 50,
     y: y,
     size: 12,
@@ -74,7 +100,7 @@ async function generateDoctorNotePDF({
     color: rgb(0, 0, 0),
   });
   if (doctorTitle) {
-    page.drawText(`Title: ${doctorTitle}`, {
+    page.drawText(normalizeTextForPDF(`Title: ${doctorTitle}`), {
       x: 300,
       y: y,
       size: 12,
@@ -105,7 +131,8 @@ async function generateDoctorNotePDF({
 
   // Split note into lines (simple word wrap)
   const maxWidth = width - 100;
-  const words = noteText.split(/\s+/);
+  const normalizedNoteText = normalizeTextForPDF(noteText);
+  const words = normalizedNoteText.split(/\s+/);
   let currentLine = "";
   const lines = [];
 
@@ -210,7 +237,7 @@ async function generateDoctorNotePDF({
       grandTotal += total;
 
       // Truncate long item names
-      const displayName = itemName.length > 30 ? itemName.substring(0, 27) + "..." : itemName;
+      const displayName = normalizeTextForPDF(itemName.length > 30 ? itemName.substring(0, 27) + "..." : itemName);
 
       page.drawText(displayName, {
         x: 50,
@@ -387,7 +414,7 @@ async function generateQuotePDF({
   let y = height - 50;
 
   // Header
-  page.drawText(clinicName, {
+  page.drawText(normalizeTextForPDF(clinicName), {
     x: 50,
     y: y,
     size: 20,
@@ -412,7 +439,7 @@ async function generateQuotePDF({
     font: helvetica,
     color: rgb(0.3, 0.3, 0.3),
   });
-  page.drawText(`Case Code: ${caseCode || "N/A"}`, {
+  page.drawText(normalizeTextForPDF(`Case Code: ${caseCode || "N/A"}`), {
     x: 300,
     y: y,
     size: 12,
@@ -460,7 +487,7 @@ async function generateQuotePDF({
       const total = qty * unitPrice;
       subtotal += total;
 
-      const displayName = itemName.length > 30 ? itemName.substring(0, 27) + "..." : itemName;
+      const displayName = normalizeTextForPDF(itemName.length > 30 ? itemName.substring(0, 27) + "..." : itemName);
 
       page.drawText(displayName, { x: 50, y: y, size: 10, font: helvetica, color: rgb(0, 0, 0) });
       page.drawText(String(qty), { x: 300, y: y, size: 10, font: helvetica, color: rgb(0, 0, 0) });
