@@ -1,7 +1,7 @@
 // src/components/doctor/DoctorNotePanel.tsx
 // Doctor Note Panel - Create, edit, approve notes with signature and PDF
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiJsonAuth } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import {
@@ -83,6 +83,9 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogKind, setCatalogKind] = useState<'procedure' | 'material' | 'service'>('procedure');
 
+  // ✅ Loop guard: prevent infinite create → fetch → create cycle
+  const creatingRef = useRef(false);
+
   // Compute effectiveRef from all possible sources
   const effectiveRef = (() => {
     const candidates = [
@@ -146,6 +149,13 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
       return;
     }
 
+    // ✅ Loop guard: prevent concurrent creates
+    if (creatingRef.current) {
+      console.log('[DoctorNotePanel] Create already in progress, skipping');
+      return;
+    }
+    creatingRef.current = true;
+
     try {
       const result = await apiJsonAuth<{ ok: true; note_id: string }>(
         '/api/doctor/note/create',
@@ -163,6 +173,8 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
       const errorMessage = err instanceof Error ? err.message : 'Failed to create note';
       toast.error(errorMessage);
       console.error('[DoctorNotePanel] Create error:', err);
+    } finally {
+      creatingRef.current = false;
     }
   }, [effectiveRef, fetchNote]);
 

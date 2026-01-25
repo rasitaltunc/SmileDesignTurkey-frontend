@@ -27,13 +27,21 @@ export async function apiFetchAuth(input: RequestInfo | URL, init: RequestInit =
 
 /**
  * Authenticated JSON fetch with automatic error handling
+ * Now includes detail and step from backend for better debugging
  */
 export async function apiJsonAuth<T = any>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await apiFetchAuth(url, init);
   const json = await res.json().catch(() => ({}));
+  
   if (!res.ok || json?.ok === false) {
-    throw new Error(json?.error || `Request failed: ${res.status}`);
+    // ✅ Enhanced error message with detail and step from backend
+    const baseError = json?.error || `Request failed: ${res.status}`;
+    const step = json?.step ? ` [${json.step}]` : '';
+    const detail = json?.detail ? `: ${json.detail}` : '';
+    const buildSha = json?.buildSha ? ` (build: ${json.buildSha.slice(0, 7)})` : '';
+    
+    throw new Error(baseError + step + detail + buildSha);
   }
+  
   return json as T;
 }
-
