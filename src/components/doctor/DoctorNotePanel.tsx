@@ -305,176 +305,33 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
     }
   };
 
-  // View PDF
+  // View PDF - simplified toast-based approach
   const handleViewPDF = async () => {
+    console.log('[DoctorNotePanel] handleViewPDF called, note.id:', note?.id);
+    
     if (!note?.id) {
       toast.error('Note not found');
       return;
     }
 
-    // Open window immediately with loading content (prevents popup blocking)
-    const win = window.open('', '_blank', 'noopener,noreferrer');
-    
-    if (!win) {
-      toast.error('Popup blocked. Please allow popups for this site.');
-      return;
-    }
-
-    // Show loading state in popup
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Loading PDF...</title>
-          <style>
-            body {
-              margin: 0;
-              padding: 0;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              min-height: 100vh;
-              font-family: system-ui, -apple-system, sans-serif;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            }
-            .loader {
-              text-align: center;
-              color: white;
-            }
-            .spinner {
-              border: 4px solid rgba(255, 255, 255, 0.3);
-              border-top: 4px solid white;
-              border-radius: 50%;
-              width: 50px;
-              height: 50px;
-              animation: spin 1s linear infinite;
-              margin: 0 auto 20px;
-            }
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-            h2 { margin: 0 0 10px 0; }
-            p { margin: 0; opacity: 0.9; }
-          </style>
-        </head>
-        <body>
-          <div class="loader">
-            <div class="spinner"></div>
-            <h2>Loading PDF...</h2>
-            <p>Please wait while we fetch your document</p>
-          </div>
-        </body>
-      </html>
-    `);
-
     try {
+      toast.loading('Loading PDF...', { id: 'pdf-load' });
+      
       const result = await apiJsonAuth<{ ok: true; signedUrl: string }>(
         `/api/doctor/note/pdf?note_id=${encodeURIComponent(note.id)}`
       );
 
+      toast.dismiss('pdf-load');
+
       if (result.ok && result.signedUrl) {
-        // Redirect to actual PDF
-        win.location.href = result.signedUrl;
+        console.log('[DoctorNotePanel] Opening PDF:', result.signedUrl);
+        window.open(result.signedUrl, '_blank', 'noopener,noreferrer');
       } else {
-        // Show error in popup
-        win.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Error</title>
-              <style>
-                body {
-                  margin: 0;
-                  padding: 20px;
-                  font-family: system-ui, -apple-system, sans-serif;
-                  background: #fee;
-                  color: #c00;
-                }
-                .error {
-                  max-width: 600px;
-                  margin: 100px auto;
-                  padding: 30px;
-                  background: white;
-                  border-radius: 8px;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                }
-                h2 { margin-top: 0; }
-                button {
-                  margin-top: 20px;
-                  padding: 10px 20px;
-                  background: #c00;
-                  color: white;
-                  border: none;
-                  border-radius: 4px;
-                  cursor: pointer;
-                }
-                button:hover { background: #a00; }
-              </style>
-            </head>
-            <body>
-              <div class="error">
-                <h2>⚠️ Failed to load PDF</h2>
-                <p>The PDF could not be loaded. Please try again or contact support.</p>
-                <button onclick="window.close()">Close Window</button>
-              </div>
-            </body>
-          </html>
-        `);
         toast.error('Failed to get PDF URL');
       }
     } catch (err) {
-      // Show error in popup
+      toast.dismiss('pdf-load');
       const errorMessage = err instanceof Error ? err.message : 'Failed to load PDF';
-      win.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Error</title>
-            <style>
-              body {
-                margin: 0;
-                padding: 20px;
-                font-family: system-ui, -apple-system, sans-serif;
-                background: #fee;
-                color: #c00;
-              }
-              .error {
-                max-width: 600px;
-                margin: 100px auto;
-                padding: 30px;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-              }
-              h2 { margin-top: 0; }
-              pre {
-                background: #f5f5f5;
-                padding: 10px;
-                border-radius: 4px;
-                overflow-x: auto;
-              }
-              button {
-                margin-top: 20px;
-                padding: 10px 20px;
-                background: #c00;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-              }
-              button:hover { background: #a00; }
-            </style>
-          </head>
-          <body>
-            <div class="error">
-              <h2>⚠️ Error Loading PDF</h2>
-              <pre>${errorMessage}</pre>
-              <button onclick="window.close()">Close Window</button>
-            </div>
-          </body>
-        </html>
-      `);
       toast.error(errorMessage);
       console.error('[DoctorNotePanel] PDF error:', err);
     }
