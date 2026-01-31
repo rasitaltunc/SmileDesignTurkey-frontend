@@ -5,6 +5,8 @@ import { NavigationContext } from '@/lib/navigationContext';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
+import UnifiedPatientView from '@/components/admin/UnifiedPatientView';
+
 // Lazy load LeadNotesModal (heavy modal with editor/upload functionality)
 const LeadNotesModal = lazy(() => import('@/components/LeadNotesModal'));
 import LeadsFilters from '@/components/admin-leads/LeadsFilters';
@@ -287,7 +289,8 @@ interface LeadNote {
 
 export default function AdminLeads() {
   const { user, isAuthenticated, logout, role } = useAuthStore();
-  const { navigate } = useContext(NavigationContext);
+  const [showPatientView, setShowPatientView] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);  const { navigate } = useContext(NavigationContext);
   const isAdmin = role === 'admin';
   
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -1485,7 +1488,10 @@ export default function AdminLeads() {
               toast.error('No contact info available');
             }
           }}
-        />
+          onEmailClick={(email) => {
+            setSelectedEmail(email);
+            setShowPatientView(true);
+          }}        />
 
         {/* Notes Modal - Lazy loaded */}
         {(() => {
@@ -1507,7 +1513,21 @@ export default function AdminLeads() {
             </Suspense>
           );
         })()}
-      </div>
+
+        {/* Unified Patient View Modal */}
+        {showPatientView && selectedEmail && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+                <h2 className="text-lg font-bold">Hastanın Tüm Kaydı</h2>
+                <button onClick={() => setShowPatientView(false)} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+              </div>
+              <div className="p-6">
+                <UnifiedPatientView email={selectedEmail} />
+              </div>
+            </div>
+          </div>
+        )}      </div>
     </div>
   );
 }
