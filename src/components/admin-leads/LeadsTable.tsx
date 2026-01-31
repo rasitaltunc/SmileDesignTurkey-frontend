@@ -85,7 +85,7 @@ interface LeadsTableProps {
   onNextAction: (row: LeadRowVM, action: string) => void | Promise<void>;
   onCopyScript: (script: string[]) => void;
   onCopyContact: (phone: string | undefined, email: string | undefined) => void;
-}
+  onEmailClick?: (email: string) => void;}
 
 export default function LeadsTable({
   rows,
@@ -275,8 +275,11 @@ export default function LeadsTable({
                     </td>
 
                     {/* Email */}
+                    {/* Email */}
                     <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5 whitespace-nowrap truncate max-w-[200px]">
-                      {row.email || '-'}
+                      <button onClick={() => onEmailClick?.(row.email!)} className="text-blue-600 hover:underline cursor-pointer">
+                        {row.email || '-'}
+                      </button>
                     </td>
 
                     {/* Phone */}
