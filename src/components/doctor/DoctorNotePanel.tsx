@@ -2,6 +2,7 @@
 // Doctor Note Panel - Create, edit, approve notes with signature and PDF
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { apiJsonAuth } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import {
@@ -927,9 +928,23 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
       )}
 
       {/* Add Item Modal */}
-      {showAddItemModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-lg flex flex-col overflow-hidden min-h-0">
+      {showAddItemModal && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/40 p-4"
+          style={{ zIndex: 2147483647 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddItemModal(false);
+          }}
+        >
+          <div
+            className="rounded-xl bg-white shadow-lg overflow-hidden border border-gray-200"
+            style={{
+              width: "min(92vw, 720px)",
+              height: "min(85vh, 720px)",
+              display: "grid",
+              gridTemplateRows: "auto minmax(0, 1fr) auto",
+            }}
+          >
             {/* Header */}
             <div className="p-6 border-b flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Add Item from Catalog</h3>
@@ -964,10 +979,14 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               />
             </div>
 
-            {/* ✅ Scroll area with Safari fix */}
+            {/* Content Area - Scrollable */}
             <div
-              className="flex-1 min-h-0 overflow-y-auto p-6"
-              style={{ WebkitOverflowScrolling: "touch" as any }}
+              style={{
+                overflowY: "auto",
+                minHeight: 0,
+                WebkitOverflowScrolling: "touch",
+              }}
+              className="px-6 py-4"
             >
               {filteredCatalog.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
@@ -994,7 +1013,8 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
             </div>
             {/* Footer (if needed) */}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
