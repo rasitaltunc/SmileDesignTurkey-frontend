@@ -696,7 +696,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               <button
                 onClick={handleAddManualItem}
                 disabled={!effectiveRef}
-                className="inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold bg-gray-900 text-white shadow-sm hover:bg-gray-800 disabled:bg-gray-300 disabled:text-gray-900 disabled:border disabled:border-gray-400 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 shadow-sm hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add Manual
