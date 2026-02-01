@@ -688,7 +688,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               <button
                 onClick={() => setShowAddItemModal(true)}
                 disabled={!effectiveRef}
-                className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:text-gray-900 disabled:border disabled:border-gray-400 disabled:cursor-not-allowed transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add from Catalog
@@ -820,7 +820,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
           <button
             onClick={handleAIEstimate}
             disabled={isLoadingEstimate || !effectiveRef || !estimateText.trim()}
-            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
+            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:text-gray-900 disabled:border disabled:border-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {isLoadingEstimate ? (
               <>
@@ -909,7 +909,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
           <button
             onClick={handleApprove}
             disabled={isApproving || !effectiveRef}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 text-white text-base font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 text-white text-base font-semibold rounded-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:text-gray-900 disabled:border disabled:border-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {isApproving ? (
               <>
