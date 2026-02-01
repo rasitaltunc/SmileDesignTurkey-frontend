@@ -660,7 +660,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
           <button
             onClick={handleSave}
             disabled={isSaving || !effectiveRef}
-            className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-900 disabled:border disabled:border-gray-400 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-white border border-gray-300 text-gray-700 shadow-sm hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
           >
             {isSaving ? (
               <>
