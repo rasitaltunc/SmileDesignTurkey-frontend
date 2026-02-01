@@ -942,11 +942,19 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               width: "min(92vw, 720px)",
               height: "min(85vh, 720px)",
               display: "grid",
-              gridTemplateRows: "auto minmax(0, 1fr) auto",
+              gridTemplateRows: "auto auto minmax(0, 1fr)",
             }}
           >
-            {/* Header */}
-            <div className="p-6 border-b flex items-center justify-between">
+            {/* Header - STICKY with z-index */}
+            <div
+              className="p-6 border-b flex items-center justify-between"
+              style={{
+                position: "sticky",
+                top: 0,
+                zIndex: 20,
+                backgroundColor: "white",
+              }}
+            >
               <h3 className="text-lg font-semibold text-gray-900">Add Item from Catalog</h3>
               <button
                 onClick={() => {
@@ -959,8 +967,16 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               </button>
             </div>
 
-            {/* Filters */}
-            <div className="p-6 border-b flex gap-2">
+            {/* Filters - STICKY */}
+            <div
+              className="p-6 border-b flex gap-2"
+              style={{
+                position: "sticky",
+                top: 73, // Adjusted approximate header height
+                zIndex: 15,
+                backgroundColor: "white",
+              }}
+            >
               <select
                 value={catalogKind}
                 onChange={(e) => setCatalogKind(e.target.value as typeof catalogKind)}
