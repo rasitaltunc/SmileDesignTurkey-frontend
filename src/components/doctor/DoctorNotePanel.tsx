@@ -95,7 +95,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
       lead?.id,
       (lead as any)?.case_code ? String((lead as any).case_code).replace(/^CASE-/, '').trim() : null,
     ].filter(Boolean);
-    
+
     const raw = candidates[0] || '';
     const normalized = String(raw).replace(/^CASE-/, '').trim();
     return normalized || null;
@@ -308,7 +308,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
   // View PDF - simplified toast-based approach
   const handleViewPDF = async () => {
     console.log('[DoctorNotePanel] handleViewPDF called, note.id:', note?.id);
-    
+
     if (!note?.id) {
       toast.error('Note not found');
       return;
@@ -316,7 +316,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
 
     try {
       toast.loading('Loading PDF...', { id: 'pdf-load' });
-      
+
       const result = await apiJsonAuth<{ ok: true; signedUrl: string }>(
         `/api/doctor/note/pdf?note_id=${encodeURIComponent(note.id)}`
       );
@@ -660,7 +660,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
           <button
             onClick={handleSave}
             disabled={isSaving || !effectiveRef}
-            className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-900 disabled:border disabled:border-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {isSaving ? (
               <>
@@ -696,7 +696,7 @@ export default function DoctorNotePanel({ lead, leadRef: propLeadRef }: DoctorNo
               <button
                 onClick={handleAddManualItem}
                 disabled={!effectiveRef}
-                className="inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold bg-gray-900 text-white shadow-sm hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-700 disabled:border disabled:border-gray-200 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold bg-gray-900 text-white shadow-sm hover:bg-gray-800 disabled:bg-gray-300 disabled:text-gray-900 disabled:border disabled:border-gray-400 disabled:cursor-not-allowed transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Add Manual
