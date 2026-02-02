@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { PenTool, Loader2, CheckCircle2, AlertCircle, Upload } from 'lucide-react';
+import { PenTool, Loader2, CheckCircle2, AlertCircle, Upload, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
@@ -101,6 +101,46 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
         }
     };
 
+    const handleDelete = async (type: 'signature' | 'stamp', e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent file picker from opening
+
+        const confirmDelete = window.confirm(
+            `Are you sure you want to delete this ${type}? You can upload a new one after.`
+        );
+
+        if (!confirmDelete) return;
+
+        const isSignature = type === 'signature';
+        const setUrl = isSignature ? setSignatureUrl : setStampUrl;
+        const setLoading = isSignature ? setIsLoadingSignature : setIsLoadingStamp;
+        const fieldName = isSignature ? 'signature_storage_path' : 'stamp_storage_path';
+
+        setLoading(true);
+        try {
+            // 1. Delete from storage (optional but clean)
+            const currentPath = isSignature ? settings?.signature_storage_path : settings?.stamp_storage_path;
+            if (currentPath && supabase) {
+                await supabase.storage
+                    .from('doctor-assets')
+                    .remove([currentPath]);
+            }
+
+            // 2. Clear from DB
+            if (onSave) {
+                await onSave({ [fieldName]: null });
+            }
+
+            // 3. Clear local state
+            setUrl(null);
+            toast.success(`${type} deleted successfully`);
+        } catch (err: any) {
+            console.error('Delete failed:', err);
+            toast.error(err.message || 'Failed to delete');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-8">
             {/* Signature Section */}
@@ -133,7 +173,15 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
                                 alt="Signature"
                                 className="max-h-[160px] object-contain"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg gap-3">
+                                <button
+                                    onClick={(e) => handleDelete('signature', e)}
+                                    disabled={isLoadingSignature}
+                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                </button>
                                 <span className="bg-white/90 text-gray-700 px-3 py-1 rounded-md text-sm font-medium shadow-sm">
                                     Click to change
                                 </span>
@@ -193,7 +241,15 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
                                 alt="Stamp"
                                 className="max-h-[160px] object-contain"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg gap-3">
+                                <button
+                                    onClick={(e) => handleDelete('stamp', e)}
+                                    disabled={isLoadingStamp}
+                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete
+                                </button>
                                 <span className="bg-white/90 text-gray-700 px-3 py-1 rounded-md text-sm font-medium shadow-sm">
                                     Click to change
                                 </span>
