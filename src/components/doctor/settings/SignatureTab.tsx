@@ -5,6 +5,7 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
 export default function SignatureTab({ settings = {}, onSave }: { settings?: any, onSave?: (updates: any) => Promise<void> } = {}) {
+    console.log('SignatureTab MOUNTED', { settings, onSave, signatureUrl: settings?.signature_url }); // DEBUG LOG
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
     const [stampUrl, setStampUrl] = useState<string | null>(null);
     const [isLoadingSignature, setIsLoadingSignature] = useState(false);
