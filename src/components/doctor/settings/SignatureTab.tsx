@@ -4,7 +4,7 @@ import { toast } from '@/lib/toast';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 
-export default function SignatureTab({ settings, onSave }: { settings: any, onSave: (updates: any) => Promise<void> }) {
+export default function SignatureTab({ settings = {}, onSave }: { settings?: any, onSave?: (updates: any) => Promise<void> } = {}) {
     const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
     const [stampUrl, setStampUrl] = useState<string | null>(null);
     const [isLoadingSignature, setIsLoadingSignature] = useState(false);
@@ -70,7 +70,11 @@ export default function SignatureTab({ settings, onSave }: { settings: any, onSa
             const publicUrl = data.publicUrl;
 
             // 3. Update DB via onSave (optimistic UI update handled by parent)
-            await onSave({ [fieldName]: publicUrl });
+            if (onSave) {
+                await onSave({ [fieldName]: publicUrl });
+            } else {
+                console.log('onSave not provided, skipping DB update');
+            }
 
             // Update local state (redundant if parent updates, but good for immediate feedback)
             setUrl(publicUrl);
