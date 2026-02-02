@@ -121,8 +121,8 @@ export default function DoctorSettingsPanel() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${isActive
-                                        ? 'bg-teal-50 text-teal-700'
-                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                    ? 'bg-teal-50 text-teal-700'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                                     }`}
                             >
                                 <Icon className={`w-5 h-5 ${isActive ? 'text-teal-600' : 'text-gray-500'}`} />
@@ -243,50 +243,7 @@ function ProfileTab({ settings, onSave }: { settings: any, onSave: (updates: any
     );
 }
 
-function SignatureTab({ onSave }: { onSave: () => void }) {
-    return (
-        <div className="space-y-8">
-            {/* Signature Section */}
-            <div className="border border-gray-200 rounded-xl p-6">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h4 className="text-base font-semibold text-gray-900">Your Signature</h4>
-                        <p className="text-sm text-gray-500">Used for official prescriptions and notes</p>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        ✅ Active
-                    </span>
-                </div>
 
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center gap-3 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
-                    <PenTool className="w-8 h-8 text-gray-400" />
-                    <p className="text-sm font-medium text-gray-600">Click to upload or draw signature</p>
-                    <p className="text-xs text-gray-400">PNG, JPG up to 2MB</p>
-                </div>
-            </div>
-
-            {/* Stamp Section */}
-            <div className="border border-gray-200 rounded-xl p-6">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h4 className="text-base font-semibold text-gray-900">Clinic Stamp</h4>
-                        <p className="text-sm text-gray-500">Official clinic stamp overlay</p>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        ❌ Not Uploaded
-                    </span>
-                </div>
-
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center gap-3 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
-                    <div className="w-12 h-12 bg-white rounded-full border border-gray-200 flex items-center justify-center">
-                        <span className="text-xl">🏢</span>
-                    </div>
-                    <p className="text-sm font-medium text-gray-600">Upload Clinic Stamp</p>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 function TemplatesTab({ onSave }: { onSave: () => void }) {
     return (
