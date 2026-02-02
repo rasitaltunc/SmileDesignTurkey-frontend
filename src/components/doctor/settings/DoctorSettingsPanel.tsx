@@ -12,6 +12,7 @@ import {
 import { toast } from '@/lib/toast';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
+import SignatureTab from './SignatureTab';
 
 // Tabs configuration
 const TABS = [
@@ -87,11 +88,10 @@ export default function DoctorSettingsPanel() {
                 });
 
             if (error) throw error;
-            toast.success('Saved');
+            // toast.success('Saved'); // Optional: Too noisy for text inputs, good for buttons
         } catch (err) {
             console.error('Error saving settings:', err);
             toast.error('Failed to save changes');
-            // Revert optimistic update? (Simplified: assuming success 99%)
         }
     }, [user, supabase, settings]);
 
@@ -121,8 +121,8 @@ export default function DoctorSettingsPanel() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${isActive
-                                    ? 'bg-teal-50 text-teal-700'
-                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                        ? 'bg-teal-50 text-teal-700'
+                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                                     }`}
                             >
                                 <Icon className={`w-5 h-5 ${isActive ? 'text-teal-600' : 'text-gray-500'}`} />
@@ -149,7 +149,7 @@ export default function DoctorSettingsPanel() {
                 <div className="flex-1 overflow-y-auto p-8">
                     <div className="max-w-3xl space-y-8">
                         {activeTab === 'profile' && <ProfileTab settings={settings} onSave={handleSaveSettings} />}
-                        {activeTab === 'signature' && <SignatureTab onSave={() => { }} />}
+                        {activeTab === 'signature' && <SignatureTab settings={settings} onSave={handleSaveSettings} />}
                         {activeTab === 'templates' && <TemplatesTab onSave={() => { }} />}
                         {activeTab === 'defaults' && <DefaultsTab onSave={() => { }} />}
                         {activeTab === 'integrations' && <IntegrationsTab onSave={() => { }} />}
