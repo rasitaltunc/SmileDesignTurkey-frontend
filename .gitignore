@@ -5,3 +5,6 @@ dist/
 
 # temporary/source archives
 sdt-source.zip
+.vercel
+.env
+.DS_Store

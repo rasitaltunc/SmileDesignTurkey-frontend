@@ -101,19 +101,19 @@ export default function PatientPortal() {
 
         await uploadPatientFile(upload.file);
         clearInterval(progressInterval);
-        
+
         setUploadQueue((prev) =>
           prev.map((u) => (u.file === upload.file ? { ...u, status: 'success' as const, progress: 100 } : u))
         );
-        
+
         // Reload files list
         setIsLoadingFiles(true);
         const fileList = await getPatientFiles();
         setFiles(fileList);
         setIsLoadingFiles(false);
-        
+
         setToast({ message: `${upload.file.name} uploaded successfully`, type: 'success' });
-        
+
         // Remove from queue after 2 seconds
         setTimeout(() => {
           setUploadQueue((prev) => prev.filter((u) => u.file !== upload.file));
@@ -178,11 +178,10 @@ export default function PatientPortal() {
         {/* Toast Notification */}
         {toast && (
           <div
-            className={`mb-4 p-4 rounded-lg flex items-center gap-3 ${
-              toast.type === 'success'
+            className={`mb-4 p-4 rounded-lg flex items-center gap-3 ${toast.type === 'success'
                 ? 'bg-green-50 border border-green-200 text-green-800'
                 : 'bg-red-50 border border-red-200 text-red-800'
-            }`}
+              }`}
           >
             {toast.type === 'success' ? (
               <CheckCircle className="w-5 h-5 flex-shrink-0" />
@@ -225,7 +224,7 @@ export default function PatientPortal() {
         {/* Patient Profile & Lead Info */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">My Information</h2>
-          
+
           {portalData ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

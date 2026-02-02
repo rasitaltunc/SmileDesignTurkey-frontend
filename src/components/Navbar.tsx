@@ -36,7 +36,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     logout,
     clearError,
   } = useAuthStore();
-  
+
   // ✅ Doctor mode: Hide marketing buttons when path starts with /doctor
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
   const isDoctorRoute = currentPath.startsWith('/doctor');
@@ -56,7 +56,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
 
   // ✅ Patient Portal handler (smart: Dashboard if session, Patient Portal if not)
   const portalLabel = hasValidPortalSession() ? "Dashboard" : "Patient Portal";
-  
+
   const handlePatientPortal = () => {
     navigate(hasValidPortalSession() ? "/portal" : "/portal/login");
   };
@@ -118,7 +118,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
     clearError();
     try {
       const result = await login(email.trim(), password);
-      
+
       // ÖNEMLİ: role yoksa redirect yok, modal açık kalır
       const role = result?.role;
       if (!role) return;
@@ -249,7 +249,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
               </PrefetchLink>
             </div>
           )}
-          
+
           {/* ✅ Doctor mode: Show "Doctor Inbox" title instead of navigation */}
           {isDoctorMode && (
             <div className="hidden md:flex items-center">
@@ -286,7 +286,7 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                   className="inline-flex items-center justify-center h-10 px-5 rounded-xl text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors whitespace-nowrap shrink-0"
                   onClick={() => trackEvent({ type: 'cta_click', where: 'navbar', cta: 'free_consultation', lang })}
                 >
-                  {content.cta.primary}
+                  {content?.cta?.primary || 'Free Consultation'}
                 </PrefetchLink>
               </>
             )}
@@ -399,11 +399,11 @@ export default function Navbar({ minimal = false, variant = 'public' }: NavbarPr
                       trackEvent({ type: 'cta_click', where: 'navbar_mobile', cta: 'free_consultation', lang });
                     }}
                   >
-                    {content.cta.primary}
+                    {content?.cta?.primary || 'Free Consultation'}
                   </PrefetchLink>
                 </>
               )}
-              
+
               {/* ✅ Doctor mode: Show "Doctor Inbox" title in mobile menu */}
               {isDoctorMode && (
                 <div className="py-2">
@@ -538,9 +538,8 @@ function AuthModal(props: {
                 setView('portal');
                 setSelectedPortal('patient');
               }}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                view === 'portal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'portal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                }`}
             >
               Patient/Doctor
             </button>
@@ -550,9 +549,8 @@ function AuthModal(props: {
                 setView('staff');
                 setSelectedPortal('admin');
               }}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                view === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'staff' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                }`}
             >
               Staff
             </button>
@@ -626,9 +624,8 @@ function RolePick(props: { label: string; active: boolean; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-        active ? 'border-teal-300 bg-teal-50 text-teal-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-      }`}
+      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${active ? 'border-teal-300 bg-teal-50 text-teal-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+        }`}
     >
       {label}
     </button>

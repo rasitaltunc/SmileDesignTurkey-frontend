@@ -15,12 +15,12 @@ function toDoctorLeadDTO(lead) {
   // ✅ AGE-PROOF: Only return explicitly allowed fields (no age/gender, no PII)
   // ✅ SNAPSHOT-PROOF: snapshot kolonu yok, sadece ai_summary kullan
   const snapshotRaw = lead.ai_summary ? String(lead.ai_summary) : "";
-  
+
   // ✅ REF: Privacy-safe reference (prefer lead_uuid UUID, fallback to id TEXT)
   const leadUuid = lead.lead_uuid ? String(lead.lead_uuid).trim() : null;
   const leadId = lead.id ? String(lead.id).trim() : null;
   const ref = leadUuid || leadId || null;
-  
+
   // ✅ CASE_CODE: CASE-${id} if id exists, else CASE-${lead_uuid.slice(0,8)}
   let case_code = null;
   if (leadId) {
@@ -31,8 +31,11 @@ function toDoctorLeadDTO(lead) {
     const cleaned = String(leadUuid).replace(/-/g, '').slice(0, 8).toUpperCase();
     case_code = cleaned ? `CASE-${cleaned}` : null;
   }
-  
+
   return {
+    // ✅ Needed for AI Brief API (it queries by this ID)
+    id: lead.id,
+
     // ✅ Privacy-safe reference for navigation
     ref: ref,
     // ✅ Unique case code for display

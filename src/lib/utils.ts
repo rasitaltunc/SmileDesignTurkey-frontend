@@ -1,3 +1,10 @@
+import { type ClassValue, clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
 /**
  * Get public site URL (production-safe)
  * Uses window.location.origin if available, falls back to env var
@@ -7,7 +14,7 @@ export function getPublicSiteUrl(): string {
   // Always prefer window.location.origin in browser (most accurate)
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
-    
+
     // In production, reject localhost (security check)
     if (import.meta.env.PROD && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
       console.warn('[getPublicSiteUrl] localhost detected in production, using env fallback');
@@ -16,7 +23,7 @@ export function getPublicSiteUrl(): string {
       return origin;
     }
   }
-  
+
   // Fallback to env var (useful for SSR or when window is not available)
   const envUrl = import.meta.env.VITE_PUBLIC_SITE_URL;
   if (envUrl && envUrl.trim().length > 0) {
@@ -27,13 +34,13 @@ export function getPublicSiteUrl(): string {
     }
     return envUrl.trim();
   }
-  
+
   // Only allow localhost fallback in dev mode
   if (import.meta.env.DEV) {
     console.warn('[getPublicSiteUrl] Using localhost fallback (dev mode only)');
     return 'http://localhost:5173'; // Vite default port
   }
-  
+
   // Production: no valid URL found
   throw new Error('getPublicSiteUrl: No valid site URL found. Set VITE_PUBLIC_SITE_URL or ensure window.location.origin is available.');
 }
@@ -48,12 +55,12 @@ export function getReturnToFromQuery(searchParams: URLSearchParams, hasValidPort
   if (returnTo && returnTo.trim().length > 0) {
     return returnTo.trim();
   }
-  
+
   // If user has valid portal session, default to portal
   if (hasValidPortalSession()) {
     return defaultPortalPath;
   }
-  
+
   // Otherwise default to onboarding
   return '/onboarding';
 }
