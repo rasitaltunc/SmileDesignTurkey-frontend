@@ -21,10 +21,21 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
     // Initialize state from settings
     useEffect(() => {
         if (settings) {
-            if (settings.signature_url) setSignatureUrl(settings.signature_url);
-            if (settings.stamp_url) setStampUrl(settings.stamp_url);
+            const resolveUrl = (path: string | null | undefined) => {
+                if (!path) return null;
+                if (path.startsWith('http')) return path; // Already a URL
+                const { data } = supabase.storage.from('doctor-assets').getPublicUrl(path);
+                return data.publicUrl;
+            };
+
+            // check for storage_path first (new), then url (legacy/fallback)
+            const sigPath = settings.signature_storage_path || settings.signature_url;
+            if (sigPath) setSignatureUrl(resolveUrl(sigPath));
+
+            const stampPath = settings.stamp_storage_path || settings.stamp_url;
+            if (stampPath) setStampUrl(resolveUrl(stampPath));
         }
-    }, [settings]);
+    }, [settings, supabase]);
 
     // Handle Upload
     const handleUpload = async (file: File, type: 'signature' | 'stamp') => {
@@ -46,7 +57,7 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
         const isSignature = type === 'signature';
         const setLoading = isSignature ? setIsLoadingSignature : setIsLoadingStamp;
         const setUrl = isSignature ? setSignatureUrl : setStampUrl;
-        const fieldName = isSignature ? 'signature_url' : 'stamp_url';
+        const fieldName = isSignature ? 'signature_storage_path' : 'stamp_storage_path'; // CHANGED: Use storage_path column
 
         setLoading(true);
         try {
@@ -63,21 +74,21 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
 
             if (uploadError) throw uploadError;
 
-            // 2. Get Public URL
+            // 2. Get Public URL (for local display only)
             const { data } = supabase.storage
                 .from('doctor-assets')
                 .getPublicUrl(filePath);
 
             const publicUrl = data.publicUrl;
 
-            // 3. Update DB via onSave (optimistic UI update handled by parent)
+            // 3. Update DB via onSave (save the PATH, not the URL)
             if (onSave) {
-                await onSave({ [fieldName]: publicUrl });
+                await onSave({ [fieldName]: filePath });
             } else {
                 console.log('onSave not provided, skipping DB update');
             }
 
-            // Update local state (redundant if parent updates, but good for immediate feedback)
+            // Update local state for immediate feedback
             setUrl(publicUrl);
 
             toast.success(`${isSignature ? 'Signature' : 'Stamp'} uploaded successfully`);
