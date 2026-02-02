@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import SignatureTab from './SignatureTab';
+import TemplatesTab from './TemplatesTab';
 
 // Tabs configuration
 const TABS = [
@@ -245,34 +246,7 @@ function ProfileTab({ settings, onSave }: { settings: any, onSave: (updates: any
 
 
 
-function TemplatesTab({ settings, onSave }: { settings: any, onSave: (updates: any) => void }) {
-    return (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-4">
-                {['Detailed Clinical', 'Brief Summary', 'Patient Copy'].map((name) => (
-                    <div key={name} className="relative flex items-start p-4 border rounded-xl hover:bg-gray-50 cursor-pointer transition-all border-gray-200">
-                        <div className="min-w-0 flex-1 text-sm">
-                            <label className="font-medium text-gray-900 select-none cursor-pointer">
-                                {name}
-                            </label>
-                            <p className="text-gray-500">Standard template layout with full medical details.</p>
-                        </div>
-                        <div className="ml-3 flex items-center h-5">
-                            <input
-                                type="radio"
-                                name="template"
-                                className="h-4 w-4 text-teal-600 border-gray-300 focus:ring-teal-500"
-                            />
-                        </div>
-                    </div>
-                ))}
-            </div>
-            <button className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-500 hover:border-gray-400 hover:text-gray-700">
-                + Create Custom Template
-            </button>
-        </div>
-    );
-}
+
 
 function DefaultsTab({ settings, onSave }: { settings: any, onSave: (updates: any) => void }) {
     return (
