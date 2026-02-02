@@ -101,9 +101,8 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
         }
     };
 
-    const handleDelete = async (type: 'signature' | 'stamp', e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent file picker from opening
-
+    const handleDelete = async (type: 'signature' | 'stamp') => {
+        // 1. Ask confirmation
         const confirmDelete = window.confirm(
             `Are you sure you want to delete this ${type}? You can upload a new one after.`
         );
@@ -117,20 +116,28 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
 
         setLoading(true);
         try {
-            // 1. Delete from storage (optional but clean)
-            const currentPath = isSignature ? settings?.signature_storage_path : settings?.stamp_storage_path;
+            // 2. Get current path from settings
+            const currentPath = isSignature
+                ? settings?.signature_storage_path
+                : settings?.stamp_storage_path;
+
+            // 3. Delete from storage (optional but clean)
             if (currentPath && supabase) {
-                await supabase.storage
-                    .from('doctor-assets')
-                    .remove([currentPath]);
+                try {
+                    await supabase.storage
+                        .from('doctor-assets')
+                        .remove([currentPath]);
+                } catch (storageErr) {
+                    console.warn('Storage delete failed (non-blocking):', storageErr);
+                }
             }
 
-            // 2. Clear from DB
+            // 4. Clear from database
             if (onSave) {
                 await onSave({ [fieldName]: null });
             }
 
-            // 3. Clear local state
+            // 5. Clear local state
             setUrl(null);
             toast.success(`${type} deleted successfully`);
         } catch (err: any) {
@@ -173,11 +180,15 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
                                 alt="Signature"
                                 className="max-h-[160px] object-contain"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg gap-3">
+                            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
                                 <button
-                                    onClick={(e) => handleDelete('signature', e)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete('signature');
+                                    }}
                                     disabled={isLoadingSignature}
-                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50"
+                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Delete this signature"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                     Delete
@@ -241,11 +252,15 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
                                 alt="Stamp"
                                 className="max-h-[160px] object-contain"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg gap-3">
+                            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
                                 <button
-                                    onClick={(e) => handleDelete('stamp', e)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete('stamp');
+                                    }}
                                     disabled={isLoadingStamp}
-                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50"
+                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Delete this stamp"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                     Delete
