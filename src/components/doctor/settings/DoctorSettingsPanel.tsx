@@ -14,6 +14,7 @@ import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/store/authStore';
 import SignatureTab from './SignatureTab';
 import TemplatesTab from './TemplatesTab';
+import DefaultsTab from './DefaultsTab';
 
 // Tabs configuration
 const TABS = [
@@ -248,56 +249,7 @@ function ProfileTab({ settings, onSave }: { settings: any, onSave: (updates: any
 
 
 
-function DefaultsTab({ settings, onSave }: { settings: any, onSave: (updates: any) => void }) {
-    return (
-        <div className="space-y-8">
-            <section>
-                <h4 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider">Brief Generation</h4>
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Default Tone</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                            <option>Detailed (Professional)</option>
-                            <option>Brief (Concise)</option>
-                            <option>Patient-Friendly</option>
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Language</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                            <option>Turkish (TR)</option>
-                            <option>English (EN)</option>
-                        </select>
-                    </div>
-                </div>
-            </section>
 
-            <div className="border-t border-gray-200"></div>
-
-            <section>
-                <h4 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider">Materials & Pricing</h4>
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Favorite Material</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                            <option>E-max CAD</option>
-                            <option>Zirconia (Standard)</option>
-                            <option>Zirconia (Premium)</option>
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Pricing Tier</label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                            <option>Standard</option>
-                            <option>Premium</option>
-                            <option>VIP</option>
-                        </select>
-                    </div>
-                </div>
-            </section>
-        </div>
-    );
-}
 
 function IntegrationsTab({ settings, onSave }: { settings: any, onSave: (updates: any) => void }) {
     return (
