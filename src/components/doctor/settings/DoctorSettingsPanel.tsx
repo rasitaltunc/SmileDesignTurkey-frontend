@@ -150,9 +150,9 @@ export default function DoctorSettingsPanel() {
                     <div className="max-w-3xl space-y-8">
                         {activeTab === 'profile' && <ProfileTab settings={settings} onSave={handleSaveSettings} />}
                         {activeTab === 'signature' && <SignatureTab settings={settings} onSave={handleSaveSettings} />}
-                        {activeTab === 'templates' && <TemplatesTab onSave={() => { }} />}
-                        {activeTab === 'defaults' && <DefaultsTab onSave={() => { }} />}
-                        {activeTab === 'integrations' && <IntegrationsTab onSave={() => { }} />}
+                        {activeTab === 'templates' && <TemplatesTab settings={settings} onSave={handleSaveSettings} />}
+                        {activeTab === 'defaults' && <DefaultsTab settings={settings} onSave={handleSaveSettings} />}
+                        {activeTab === 'integrations' && <IntegrationsTab settings={settings} onSave={handleSaveSettings} />}
                     </div>
                 </div>
             </div>
@@ -245,7 +245,7 @@ function ProfileTab({ settings, onSave }: { settings: any, onSave: (updates: any
 
 
 
-function TemplatesTab({ onSave }: { onSave: () => void }) {
+function TemplatesTab({ settings, onSave }: { settings: any, onSave: (updates: any) => void }) {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4">
@@ -274,7 +274,7 @@ function TemplatesTab({ onSave }: { onSave: () => void }) {
     );
 }
 
-function DefaultsTab({ onSave }: { onSave: () => void }) {
+function DefaultsTab({ settings, onSave }: { settings: any, onSave: (updates: any) => void }) {
     return (
         <div className="space-y-8">
             <section>
@@ -325,7 +325,7 @@ function DefaultsTab({ onSave }: { onSave: () => void }) {
     );
 }
 
-function IntegrationsTab({ onSave }: { onSave: () => void }) {
+function IntegrationsTab({ settings, onSave }: { settings: any, onSave: (updates: any) => void }) {
     return (
         <div className="space-y-6">
             {/* WhatsApp */}
