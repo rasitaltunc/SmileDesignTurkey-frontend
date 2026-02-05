@@ -174,29 +174,28 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
                     {isLoadingSignature ? (
                         <Loader2 className="w-10 h-10 text-teal-600 animate-spin" />
                     ) : signatureUrl ? (
-                        <div className="relative group w-full flex justify-center">
+                        <div className="relative w-full flex justify-center">
                             <img
                                 src={signatureUrl}
                                 alt="Signature"
                                 className="max-h-[160px] object-contain"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete('signature');
-                                    }}
-                                    disabled={isLoadingSignature}
-                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Delete this signature"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                    Delete
-                                </button>
-                                <span className="bg-white/90 text-gray-700 px-3 py-1 rounded-md text-sm font-medium shadow-sm">
-                                    Click to change
-                                </span>
-                            </div>
+                            {/* Delete button - always visible in corner */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete('signature');
+                                }}
+                                disabled={isLoadingSignature}
+                                className="absolute top-0 right-0 flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-md text-xs font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Delete this signature"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                                Delete
+                            </button>
+                            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-800/70 text-white px-2 py-0.5 rounded text-xs">
+                                Click to change
+                            </span>
                         </div>
                     ) : (
                         <>
@@ -246,29 +245,28 @@ export default function SignatureTab({ settings = {}, onSave }: { settings?: any
                     {isLoadingStamp ? (
                         <Loader2 className="w-10 h-10 text-teal-600 animate-spin" />
                     ) : stampUrl ? (
-                        <div className="relative group w-full flex justify-center">
+                        <div className="relative w-full flex justify-center">
                             <img
                                 src={stampUrl}
                                 alt="Stamp"
                                 className="max-h-[160px] object-contain"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete('stamp');
-                                    }}
-                                    disabled={isLoadingStamp}
-                                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    title="Delete this stamp"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                    Delete
-                                </button>
-                                <span className="bg-white/90 text-gray-700 px-3 py-1 rounded-md text-sm font-medium shadow-sm">
-                                    Click to change
-                                </span>
-                            </div>
+                            {/* Delete button - always visible in corner */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete('stamp');
+                                }}
+                                disabled={isLoadingStamp}
+                                className="absolute top-0 right-0 flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-md text-xs font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Delete this stamp"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                                Delete
+                            </button>
+                            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-800/70 text-white px-2 py-0.5 rounded text-xs">
+                                Click to change
+                            </span>
                         </div>
                     ) : (
                         <>
