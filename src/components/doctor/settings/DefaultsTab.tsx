@@ -1,5 +1,4 @@
-import { Switch } from '@headlessui/react'; // Assuming headlessui is installed, or use standard checkbox if not available. Use standard to be safe.
-// Actually, let's use a standard checkbox with Tailwind styling to avoid potential missing dependency issues if not confirmed.
+import { toast } from '@/lib/toast';
 
 export default function DefaultsTab({
     settings,
@@ -9,9 +8,15 @@ export default function DefaultsTab({
     onSave?: (updates: any) => Promise<void>
 } = {}) {
 
-    const handleChange = (field: string, value: any) => {
+    const handleChange = async (field: string, value: any) => {
         if (onSave) {
-            onSave({ [field]: value });
+            try {
+                await onSave({ [field]: value });
+                toast.success('Saved');
+            } catch (err) {
+                console.error('Failed to save:', err);
+                toast.error('Failed to save');
+            }
         }
     };
 
