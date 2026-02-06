@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Sparkles, ChevronDown, ChevronUp, Copy, RefreshCw, AlertCircle, Clock } from "lucide-react";
+import { Sparkles, ChevronDown, ChevronUp, Copy, RefreshCw, AlertCircle, Clock, FileDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { generateBothPDFs, preparePDFData } from "@/lib/pdf/pdfGenerator";
+import { toast } from "@/lib/toast";
+
 
 interface DoctorBriefCardProps {
     leadId: string;
+    lead?: any; // Full lead object for PDF generation
     className?: string;
 }
 
@@ -18,12 +22,13 @@ interface BriefData {
     confidence_score: number;
 }
 
-export function DoctorBriefCard({ leadId, className }: DoctorBriefCardProps) {
+export function DoctorBriefCard({ leadId, lead, className }: DoctorBriefCardProps) {
     const [brief, setBrief] = useState<BriefData | null>(null);
     const [loading, setLoading] = useState(true); // Start loading immediately to avoid flicker
     const [error, setError] = useState<string | null>(null);
     const [expanded, setExpanded] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [generatingPDF, setGeneratingPDF] = useState(false);
     // Track if we've already done the auto-expand/collapse cycle
     const autoCollapseRef = React.useRef(false);
 
@@ -91,6 +96,52 @@ Action: ${brief.next_action}
         navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleGeneratePDFs = async () => {
+        if (!brief || !lead) {
+            toast.error('Brief or lead data not available');
+            return;
+        }
+
+        setGeneratingPDF(true);
+        try {
+            // Fetch doctor settings for signature
+            const { createClient } = await import('@supabase/supabase-js');
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+
+            // Get current user
+            const { data: { user } } = await supabaseClient.auth.getUser();
+
+            let doctorSettings = null;
+            if (user) {
+                const { data } = await supabaseClient
+                    .from('doctor_settings')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .single();
+                doctorSettings = data;
+            }
+
+            // Prepare PDF data
+            const { patientData, doctorData } = preparePDFData(
+                lead,
+                brief,
+                doctorSettings || undefined
+            );
+
+            // Generate both PDFs
+            await generateBothPDFs(patientData, doctorData);
+
+            toast.success('PDFs generated successfully!');
+        } catch (err: any) {
+            console.error('PDF generation error:', err);
+            toast.error(err.message || 'Failed to generate PDFs');
+        } finally {
+            setGeneratingPDF(false);
+        }
     };
 
     if (loading && !brief) {
@@ -216,13 +267,24 @@ Action: ${brief.next_action}
                     </div>
                 </div>
 
-                <div className="pt-2 flex justify-end">
+                <div className="pt-2 flex justify-end gap-2">
                     <button
                         onClick={handleCopy}
                         className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 font-medium px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors"
                     >
                         {copied ? <Sparkles className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         {copied ? "Copied!" : "Copy Summary"}
+                    </button>
+                    <button
+                        onClick={handleGeneratePDFs}
+                        disabled={generatingPDF}
+                        className="flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-700 font-medium px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {generatingPDF ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                        ) : (
+                            <><FileDown className="w-3.5 h-3.5" /> Generate PDFs</>
+                        )}
                     </button>
                 </div>
             </div>

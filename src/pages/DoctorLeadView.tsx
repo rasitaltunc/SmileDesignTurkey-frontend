@@ -131,7 +131,7 @@ export default function DoctorLeadView() {
           </div>
 
           {/* Doctor AI Brief Card */}
-          <DoctorBriefCard leadId={lead?.id || (leadRef as string)} />
+          <DoctorBriefCard leadId={lead?.id || (leadRef as string)} lead={lead} />
 
           {/* Doctor Note Panel - ALWAYS render when leadRef exists */}
           {leadRef && (
