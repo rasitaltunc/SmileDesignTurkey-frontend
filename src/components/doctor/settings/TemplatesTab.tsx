@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import CustomTemplateModal, { CustomTemplate } from './CustomTemplateModal';
 
 export default function TemplatesTab({
     settings,
@@ -11,16 +12,21 @@ export default function TemplatesTab({
 } = {}) {
     const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
     const [showCustomModal, setShowCustomModal] = useState(false);
+    const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([]);
 
-    // Initialize state from settings - watch specific property
+    // Initialize state from settings
     useEffect(() => {
         if (settings?.default_template_id) {
             setSelectedTemplate(settings.default_template_id);
             console.log('TemplatesTab sync:', settings.default_template_id);
         }
-    }, [settings?.default_template_id]);
+        if (settings?.custom_templates && Array.isArray(settings.custom_templates)) {
+            setCustomTemplates(settings.custom_templates);
+            console.log('Custom templates loaded:', settings.custom_templates.length);
+        }
+    }, [settings?.default_template_id, settings?.custom_templates]);
 
-    const templates = [
+    const builtInTemplates = [
         {
             id: 'detailed',
             name: 'Detailed Clinical',
@@ -54,36 +60,126 @@ export default function TemplatesTab({
         }
     };
 
+    const handleSaveCustomTemplate = async (template: CustomTemplate) => {
+        const updatedTemplates = [...customTemplates, template];
+        setCustomTemplates(updatedTemplates);
+
+        if (onSave) {
+            await onSave({ custom_templates: updatedTemplates });
+        }
+    };
+
+    const handleDeleteCustomTemplate = async (templateId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        const template = customTemplates.find(t => t.id === templateId);
+        if (!template) return;
+
+        if (!window.confirm(`Delete "${template.name}" template?`)) return;
+
+        const updatedTemplates = customTemplates.filter(t => t.id !== templateId);
+        setCustomTemplates(updatedTemplates);
+
+        // If deleted template was selected, clear selection
+        if (selectedTemplate === templateId) {
+            setSelectedTemplate(null);
+        }
+
+        if (onSave) {
+            try {
+                await onSave({
+                    custom_templates: updatedTemplates,
+                    ...(selectedTemplate === templateId ? { default_template_id: null } : {})
+                });
+                toast.success('Template deleted');
+            } catch (err) {
+                console.error('Failed to delete template:', err);
+                toast.error('Failed to delete');
+                // Rollback
+                setCustomTemplates(customTemplates);
+            }
+        }
+    };
+
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-4">
-                {templates.map((template) => (
-                    <div
-                        key={template.id}
-                        onClick={() => handleSelectTemplate(template.id)}
-                        className={`relative flex items-start p-4 border rounded-xl hover:bg-gray-50 cursor-pointer transition-all ${selectedTemplate === template.id
-                            ? 'border-teal-500 bg-teal-50/30 ring-1 ring-teal-500'
-                            : 'border-gray-200'
-                            }`}
-                    >
-                        <div className="min-w-0 flex-1 text-sm">
-                            <label className="font-medium text-gray-900 select-none cursor-pointer">
-                                {template.name}
-                            </label>
-                            <p className="text-gray-500">{template.description}</p>
+            {/* Built-in Templates Section */}
+            <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-3">Built-in Templates</h4>
+                <div className="grid grid-cols-1 gap-3">
+                    {builtInTemplates.map((template) => (
+                        <div
+                            key={template.id}
+                            onClick={() => handleSelectTemplate(template.id)}
+                            className={`relative flex items-start p-4 border rounded-xl hover:bg-gray-50 cursor-pointer transition-all ${selectedTemplate === template.id
+                                ? 'border-teal-500 bg-teal-50/30 ring-1 ring-teal-500'
+                                : 'border-gray-200'
+                                }`}
+                        >
+                            <div className="min-w-0 flex-1 text-sm">
+                                <label className="font-medium text-gray-900 select-none cursor-pointer">
+                                    {template.name}
+                                </label>
+                                <p className="text-gray-500">{template.description}</p>
+                            </div>
+                            <div className="ml-3 flex items-center h-5">
+                                <input
+                                    type="radio"
+                                    name="template"
+                                    checked={selectedTemplate === template.id}
+                                    onChange={() => handleSelectTemplate(template.id)}
+                                    className="h-4 w-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                />
+                            </div>
                         </div>
-                        <div className="ml-3 flex items-center h-5">
-                            <input
-                                type="radio"
-                                name="template"
-                                checked={selectedTemplate === template.id}
-                                onChange={() => handleSelectTemplate(template.id)}
-                                className="h-4 w-4 text-teal-600 border-gray-300 focus:ring-teal-500"
-                            />
-                        </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
+
+            {/* Custom Templates Section */}
+            {customTemplates.length > 0 && (
+                <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-3">Custom Templates</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                        {customTemplates.map((template) => (
+                            <div
+                                key={template.id}
+                                onClick={() => handleSelectTemplate(template.id)}
+                                className={`relative flex items-start p-4 border rounded-xl hover:bg-gray-50 cursor-pointer transition-all group ${selectedTemplate === template.id
+                                    ? 'border-teal-500 bg-teal-50/30 ring-1 ring-teal-500'
+                                    : 'border-gray-200'
+                                    }`}
+                            >
+                                <div className="min-w-0 flex-1 text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <label className="font-medium text-gray-900 select-none cursor-pointer">
+                                            {template.name}
+                                        </label>
+                                        <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">Custom</span>
+                                    </div>
+                                    <p className="text-gray-500">{template.description || `${template.sections.length} sections • ${template.layout} layout`}</p>
+                                </div>
+                                <div className="ml-3 flex items-center gap-3">
+                                    <button
+                                        onClick={(e) => handleDeleteCustomTemplate(template.id, e)}
+                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Delete template"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                    <input
+                                        type="radio"
+                                        name="template"
+                                        checked={selectedTemplate === template.id}
+                                        onChange={() => handleSelectTemplate(template.id)}
+                                        className="h-4 w-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Create Custom Template Button */}
             <button
@@ -94,29 +190,13 @@ export default function TemplatesTab({
                 Create Custom Template
             </button>
 
-            {/* Placeholder Modal for Create Custom Template */}
-            {showCustomModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-                        <h3 className="text-lg font-semibold text-gray-900">Create Custom Template</h3>
-                        <p className="text-sm text-gray-600 mt-2">
-                            Custom template creation coming in Step B. This modal will include:
-                        </p>
-                        <ul className="text-sm text-gray-500 mt-3 ml-4 list-disc space-y-1">
-                            <li>Template name input</li>
-                            <li>Section builder (drag & drop)</li>
-                            <li>Preview pane</li>
-                            <li>Save & Apply buttons</li>
-                        </ul>
-                        <button
-                            onClick={() => setShowCustomModal(false)}
-                            className="mt-6 w-full px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-colors"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            )}
+            {/* Custom Template Modal */}
+            <CustomTemplateModal
+                isOpen={showCustomModal}
+                onClose={() => setShowCustomModal(false)}
+                onSave={handleSaveCustomTemplate}
+                existingTemplates={customTemplates}
+            />
         </div>
     );
 }
