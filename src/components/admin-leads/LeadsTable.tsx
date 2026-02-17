@@ -1,5 +1,8 @@
-import React, { useRef } from 'react';
+import React from 'react';
+import { FormInput } from '@/components/ui/FormInput';
 import { X, Save, MessageSquare, CheckCircle2, Phone, Mail, MessageCircle, Copy, ChevronRight } from 'lucide-react';
+import { useRedZone } from '@/hooks/useRedZone';
+import { InterventionToast } from '@/components/ui/InterventionToast';
 
 // Types
 export interface LeadRowVM {
@@ -19,7 +22,7 @@ export interface LeadRowVM {
   follow_up_at?: string | null;
   next_action?: string | null;
   last_contacted_at?: string | null;
-  
+
   // Computed fields
   priorityBadge: { emoji: string; label: string; color: string };
   priorityScore: number;
@@ -35,7 +38,7 @@ export interface LeadRowVM {
   hasEmail: boolean;
   nextAction: { icon: string; label: string; action: string };
   actionReasoning: string;
-  
+
   // Computed UI helpers
   whatsAppUrl: string | null;
   isWhatsAppLead: boolean;
@@ -70,7 +73,7 @@ interface LeadsTableProps {
   leadRowRefs: React.MutableRefObject<Record<string, HTMLTableRowElement | null>>;
   leadStatusOptions: LeadStatusOption[];
   leadStatusLabels: Record<string, string>;
-  
+
   // Callbacks
   onRowClick: (leadId: string) => void;
   onOpenNotes: (leadId: string) => void;
@@ -85,7 +88,8 @@ interface LeadsTableProps {
   onNextAction: (row: LeadRowVM, action: string) => void | Promise<void>;
   onCopyScript: (script: string[]) => void;
   onCopyContact: (phone: string | undefined, email: string | undefined) => void;
-  onEmailClick?: (email: string) => void;}
+  onEmailClick?: (email: string) => void;
+}
 
 export default function LeadsTable({
   rows,
@@ -116,7 +120,15 @@ export default function LeadsTable({
   onNextAction,
   onCopyScript,
   onCopyContact,
+  onEmailClick,
 }: LeadsTableProps) {
+  // Red Zone Hook
+  const { detectedZone, checkInput, dismissZone } = useRedZone();
+
+  const handleCopyScript = (text: string) => {
+    onNotesChange(text);
+    dismissZone();
+  };
   if (rows.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-12 text-center">
@@ -172,9 +184,8 @@ export default function LeadsTable({
                   <tr
                     ref={(el) => { leadRowRefs.current[row.id] = el; }}
                     onClick={() => onRowClick(row.id)}
-                    className={`hover:bg-gray-50 group cursor-pointer transition-colors ${
-                      isActive ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" : ""
-                    }`}
+                    className={`hover:bg-gray-50 group cursor-pointer transition-colors ${isActive ? "bg-blue-50/40 border-blue-300 ring-2 ring-blue-200" : ""
+                      }`}
                   >
                     {/* Created */}
                     <td className="px-6 py-4 align-middle text-sm text-gray-700 leading-5">
@@ -365,18 +376,17 @@ export default function LeadsTable({
                           </div>
                         </div>
                       ) : (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                          (row.status?.toLowerCase() || 'new') === 'new' ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100' :
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${(row.status?.toLowerCase() || 'new') === 'new' ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100' :
                           row.status?.toLowerCase() === 'contacted' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100' :
-                          row.status?.toLowerCase() === 'deposit_paid' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
-                          row.status?.toLowerCase() === 'appointment_set' ? 'bg-purple-50 text-purple-700 ring-1 ring-purple-100' :
-                          row.status?.toLowerCase() === 'arrived' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100' :
-                          row.status?.toLowerCase() === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
-                          row.status?.toLowerCase() === 'lost' ? 'bg-gray-50 text-gray-700 ring-1 ring-gray-100' :
-                          'bg-gray-50 text-gray-700 ring-1 ring-gray-100'
-                        }`}>
-                          {leadStatusLabels[row.status?.toLowerCase() || 'new'] || 
-                           (row.status ? row.status.charAt(0).toUpperCase() + row.status.slice(1).replace(/_/g, ' ') : 'New Lead')}
+                            row.status?.toLowerCase() === 'deposit_paid' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
+                              row.status?.toLowerCase() === 'appointment_set' ? 'bg-purple-50 text-purple-700 ring-1 ring-purple-100' :
+                                row.status?.toLowerCase() === 'arrived' ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100' :
+                                  row.status?.toLowerCase() === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' :
+                                    row.status?.toLowerCase() === 'lost' ? 'bg-gray-50 text-gray-700 ring-1 ring-gray-100' :
+                                      'bg-gray-50 text-gray-700 ring-1 ring-gray-100'
+                          }`}>
+                          {leadStatusLabels[row.status?.toLowerCase() || 'new'] ||
+                            (row.status ? row.status.charAt(0).toUpperCase() + row.status.slice(1).replace(/_/g, ' ') : 'New Lead')}
                         </span>
                       )}
                     </td>
@@ -418,7 +428,7 @@ export default function LeadsTable({
                         </div>
                       ) : (
                         <span className="text-sm text-gray-700 truncate block">
-                          {row.follow_up_at 
+                          {row.follow_up_at
                             ? new Date(row.follow_up_at).toLocaleString()
                             : '-'}
                         </span>
@@ -455,13 +465,20 @@ export default function LeadsTable({
                     {/* Notes */}
                     <td className="px-6 py-4 text-sm text-gray-500 overflow-hidden" style={{ width: '220px', maxWidth: '220px' }}>
                       {isEditing ? (
-                        <div className="flex flex-col gap-2">
-                          <input
-                            type="text"
+                        <div className="flex flex-col gap-2 relative">
+                          <InterventionToast
+                            zone={detectedZone}
+                            onDismiss={dismissZone}
+                            onCopy={handleCopyScript}
+                          />
+                          <FormInput
                             value={editNotes}
-                            onChange={(e) => onNotesChange(e.target.value)}
+                            onChange={(e) => {
+                              onNotesChange(e.target.value);
+                              checkInput(e.target.value);
+                            }}
                             placeholder="Add notes..."
-                            className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                            className="w-full"
                           />
                           <div className="flex gap-2">
                             <button
@@ -630,7 +647,7 @@ export default function LeadsTable({
                   </tr>
 
                   {/* Next Best Action Row */}
-                  <tr 
+                  <tr
                     key={`${row.id}-action`}
                     className={`${isActive ? "bg-blue-50/20" : "bg-gray-50/50"} border-t border-gray-100`}
                   >

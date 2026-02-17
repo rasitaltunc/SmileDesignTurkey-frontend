@@ -37,9 +37,15 @@ export function ProofStrip() {
 
   return (
     <RevealOnScroll direction="up" delay={0}>
-      <section className="py-8 bg-accent-soft/30 border-b border-gray-100" aria-label="Trust indicators">
-        <div className="max-w-7xl mx-auto px-8">
-          <div className="flex flex-wrap items-center justify-center gap-6 md:gap-8 text-sm text-text-secondary">
+      <section className="py-6 border-b border-t relative z-10"
+        style={{
+          borderColor: 'var(--hub-glass-border)',
+          background: 'rgba(0,0,0,0.2)'
+        }}
+        aria-label="Trust indicators"
+      >
+        <div className="max-w-7xl mx-auto px-4 overflow-x-auto no-scrollbar">
+          <div className="flex flex-nowrap md:flex-wrap items-center justify-start md:justify-center gap-6 md:gap-8 min-w-max text-xs font-medium">
             {copy?.proofStrip?.items?.map((item, idx) => {
               const IconComponent = iconMap[item.icon] || Shield;
               const handleClick = () => {
@@ -55,11 +61,12 @@ export function ProofStrip() {
                 <button
                   key={idx}
                   onClick={handleClick}
-                  className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+                  className="flex items-center gap-2 transition-opacity cursor-pointer group whitespace-nowrap"
+                  style={{ color: 'var(--hub-text-secondary)' }}
                   aria-label={item.text}
                 >
-                  <IconComponent className="w-4 h-4 text-accent-primary" aria-hidden="true" />
-                  <span>{item.text}</span>
+                  <IconComponent className="w-3.5 h-3.5 group-hover:text-teal-400 transition-colors" style={{ color: 'var(--hub-accent)' }} aria-hidden="true" />
+                  <span className="group-hover:text-white transition-colors">{item.text}</span>
                 </button>
               );
             })}

@@ -1,3 +1,4 @@
+import { FormInput } from '@/components/ui/FormInput';
 import { MessageCircle, Phone, Mail, MapPin, Clock, Globe } from 'lucide-react';
 import { useState } from 'react';
 import Footer from '../components/Footer';
@@ -27,16 +28,16 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    
+
     // Anti-spam validation
     const validation = validateSubmission(formData, formOpenTime);
     if (!validation.allowed) {
       setErrorMessage(validation.message || 'Please try again in a moment.');
       return;
     }
-    
+
     const lang = formData.language.toLowerCase().substring(0, 2) || BRAND.defaultLang;
-    
+
     // Save lead using new leads system (async)
     await saveLead({
       source: 'contact',
@@ -47,23 +48,23 @@ export default function Contact() {
       lang: lang,
       pageUrl: window.location.href,
     });
-    
+
     // Mailto fallback
     const subject = encodeURIComponent(`Contact from ${formData.name}`);
     const body = encodeURIComponent(
       `Name: ${formData.name}\nEmail: ${formData.email}\nPhone: ${formData.phone}\nLanguage: ${formData.language}\n\nMessage:\n${formData.message}`
     );
     window.location.href = `mailto:hello@guidehealth.com?subject=${subject}&body=${body}`;
-    
+
     // Track analytics (no PII) - note: submit_lead is now tracked in leadStore
-    trackEvent({ 
+    trackEvent({
       type: 'contact_submit',
       where: 'contact_page',
       hasEmail: !!formData.email,
       hasPhone: !!formData.phone,
-      lang 
+      lang
     });
-    
+
     setIsSubmitted(true);
     setTimeout(() => {
       setIsSubmitted(false);
@@ -73,15 +74,15 @@ export default function Contact() {
 
   const handleWhatsAppClick = () => {
     const lang = formData.language.toLowerCase().substring(0, 2) || BRAND.defaultLang;
-    trackEvent({ 
-      type: 'whatsapp_click', 
+    trackEvent({
+      type: 'whatsapp_click',
       where: 'contact',
-      lang 
+      lang
     });
-    
+
     const message = `Hi, I have a question. Language: ${formData.language || BRAND.defaultLang}.`;
     const url = getWhatsAppUrl({ phoneE164: BRAND.whatsappPhoneE164, text: message });
-    
+
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
@@ -98,8 +99,8 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen bg-white">
-      <SEO 
-        title={seo.title} 
+      <SEO
+        title={seo.title}
         description={seo.description}
         url="/contact"
       />
@@ -226,48 +227,38 @@ export default function Contact() {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label htmlFor="name" className="block text-sm text-gray-700 mb-2">
-                    Name *
-                  </label>
-                  <input
-                    type="text"
+                  <FormInput
+                    label="Name *"
                     id="name"
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     placeholder="Your full name"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="block text-sm text-gray-700 mb-2">
-                    Email *
-                  </label>
-                  <input
+                  <FormInput
+                    label="Email *"
                     type="email"
                     id="email"
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     placeholder="your@email.com"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="phone" className="block text-sm text-gray-700 mb-2">
-                    Phone (Optional)
-                  </label>
-                  <input
+                  <FormInput
+                    label="Phone (Optional)"
                     type="tel"
                     id="phone"
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                     placeholder="+90 507 957 30 62"
                   />
                 </div>

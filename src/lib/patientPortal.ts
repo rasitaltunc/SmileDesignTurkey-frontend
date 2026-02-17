@@ -4,7 +4,6 @@
  */
 
 import { getSupabaseClient } from './supabaseClient';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface PatientPortalData {
   link_id: string;
@@ -38,6 +37,23 @@ const BUCKET_NAME = 'patient_uploads';
  * Returns null if patient has no linked lead
  */
 export async function getPatientPortalData(): Promise<PatientPortalData | null> {
+  // DEMO MODE: Return mock data
+  if (import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true') {
+    return {
+      link_id: 'demo-link-123',
+      patient_id: 'demo-patient-id',
+      linked_at: new Date().toISOString(),
+      lead_id: 'demo-lead-123',
+      name: 'Sarah Connor',
+      email: 'sarah@example.com',
+      phone: '+44 7700 900077',
+      treatment_type: 'Hollywood Smile',
+      lead_created_at: new Date(Date.now() - 86400000 * 3).toISOString(), // 3 days ago
+      lead_status: 'quote_sent',
+      lead_source: 'instagram'
+    };
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error('Supabase client not configured');
@@ -69,6 +85,26 @@ export async function getPatientPortalData(): Promise<PatientPortalData | null> 
  * Get list of uploaded files for the current patient
  */
 export async function getPatientFiles(): Promise<PatientFile[]> {
+  // DEMO MODE: Return mock files
+  if (import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true') {
+    return [
+      {
+        name: 'Smile_Simulation_Front.jpg',
+        id: 'demo-file-1',
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        updated_at: new Date(Date.now() - 3600000).toISOString(),
+        metadata: { size: 1024 * 1024 * 2.5, mimetype: 'image/jpeg' }
+      },
+      {
+        name: 'Treatment_Plan_Quote.pdf',
+        id: 'demo-file-2',
+        created_at: new Date(Date.now() - 86400000).toISOString(),
+        updated_at: new Date(Date.now() - 86400000).toISOString(),
+        metadata: { size: 1024 * 500, mimetype: 'application/pdf' }
+      }
+    ];
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error('Supabase client not configured');

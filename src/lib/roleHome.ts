@@ -3,9 +3,9 @@
 
 export function getHomePath(role: string | null | undefined): string {
   if (!role) return "/";
-  
+
   const normalizedRole = String(role).trim().toLowerCase();
-  
+
   switch (normalizedRole) {
     case "admin":
       return "/admin/leads";
@@ -13,8 +13,10 @@ export function getHomePath(role: string | null | undefined): string {
       return "/employee/leads";
     case "doctor":
       return "/doctor";
+    case "consultant":
+      return "/consultant";
     case "patient":
-      return "/portal";
+      return "/hub";
     default:
       return "/";
   }
@@ -22,9 +24,9 @@ export function getHomePath(role: string | null | undefined): string {
 
 export function getHomeLabel(role: string | null | undefined): string {
   if (!role) return "Home";
-  
+
   const normalizedRole = String(role).trim().toLowerCase();
-  
+
   switch (normalizedRole) {
     case "admin":
       return "Leads";
@@ -32,6 +34,8 @@ export function getHomeLabel(role: string | null | undefined): string {
       return "Leads";
     case "doctor":
       return "Inbox";
+    case "consultant":
+      return "Dashboard";
     case "patient":
       return "My Portal";
     default:

@@ -5,6 +5,8 @@ import { generateBothPDFs, preparePDFData } from "@/lib/pdf/pdfGenerator";
 import { toast } from "@/lib/toast";
 
 
+import { XPBurst } from "./ui/XPBurst";
+
 interface DoctorBriefCardProps {
     leadId: string;
     lead?: any; // Full lead object for PDF generation
@@ -13,7 +15,7 @@ interface DoctorBriefCardProps {
 
 interface BriefData {
     patient_name: string;
-    age: number | null;
+    age: number | undefined | null; // Allow null or undefined
     contact: string;
     chief_complaint: string;
     key_points: string[];
@@ -29,12 +31,39 @@ export function DoctorBriefCard({ leadId, lead, className }: DoctorBriefCardProp
     const [expanded, setExpanded] = useState(false);
     const [copied, setCopied] = useState(false);
     const [generatingPDF, setGeneratingPDF] = useState(false);
+    const [showXP, setShowXP] = useState(false);
     // Track if we've already done the auto-expand/collapse cycle
     const autoCollapseRef = React.useRef(false);
 
     const fetchBrief = async (force: boolean = false) => {
         setLoading(true);
         setError(null);
+
+        // DEMO MODE BYPASS for Brief
+        if (import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true') {
+            console.log('[DoctorBriefCard] ⚡️ DEMO MODE');
+            await new Promise(r => setTimeout(r, 1200));
+            setBrief({
+                patient_name: lead?.name || "Sarah Connor",
+                age: 34,
+                contact: "+44 7700 900077",
+                chief_complaint: lead?.message || "I want to fix my smile. It is very expensive though.",
+                key_points: ["Price sensitivity", "Aesthetic concern", "High motivation"],
+                images: [],
+                next_action: "Schedule Video Consultation",
+                confidence_score: 0.95
+            });
+            setLoading(false);
+            if (!autoCollapseRef.current) {
+                setExpanded(true);
+                setTimeout(() => {
+                    setExpanded(false);
+                    autoCollapseRef.current = true;
+                }, 15000);
+            }
+            return;
+        }
+
         try {
             // In a real app, this would be your API endpoint
             // Adjust the URL if your environment differs
@@ -95,6 +124,7 @@ Action: ${brief.next_action}
     `.trim();
         navigator.clipboard.writeText(text);
         setCopied(true);
+        setShowXP(true); // Trigger XP Burst
         setTimeout(() => setCopied(false), 2000);
     };
 
@@ -288,6 +318,14 @@ Action: ${brief.next_action}
                     </button>
                 </div>
             </div>
+
+            {showXP && (
+                <XPBurst
+                    amount={15}
+                    label="AI Efficiency"
+                    onComplete={() => setShowXP(false)}
+                />
+            )}
         </div>
     );
 }

@@ -29,17 +29,17 @@ export default function Login() {
   const { login, loginWithTestUser, isLoading, error, clearError } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  
+
   // Get "next" parameter from URL
   const getNextParam = () => {
     const params = new URLSearchParams(window.location.search);
     return params.get('next') || null;
   };
-  
+
   const getDefaultHome = (role: string | null) => {
     if (role === 'admin') return '/admin/leads';
     if (role === 'employee') return '/employee/leads';
-    if (role === 'patient') return '/patient/portal';
+    if (role === 'patient') return '/hub';
     if (role === 'doctor') return '/doctor';
     return '/';
   };
@@ -47,19 +47,19 @@ export default function Login() {
   const handleLogin = async (e?: React.FormEvent) => {
     e?.preventDefault();
     clearError();
-    
+
     if (!email || !password) {
       return;
     }
-    
+
     try {
       const result = await login(email, password);
       const role = result?.role;
-      
+
       // Get redirect target
       const next = getNextParam();
       const target = next || getDefaultHome(role);
-      
+
       // Navigate to target
       window.history.pushState({}, '', target);
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -72,7 +72,7 @@ export default function Login() {
     clearError();
     try {
       const result = await loginWithTestUser(testEmail, testPassword);
-      
+
       // ÖNEMLİ: role yoksa redirect yok
       const role = result?.role;
       if (!role) return;
@@ -80,7 +80,7 @@ export default function Login() {
       // Get redirect target
       const next = getNextParam();
       const target = next || getDefaultHome(role);
-      
+
       // Navigate to target
       window.history.pushState({}, '', target);
       window.dispatchEvent(new PopStateEvent('popstate'));

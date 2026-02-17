@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { FormInput } from '@/components/ui/FormInput';
 
 export default function Intake() {
   const [formData, setFormData] = useState({
@@ -28,7 +29,7 @@ export default function Intake() {
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-      
+
       const response = await fetch(`${apiUrl}/api/patient-intake`, {
         method: 'POST',
         headers: {
@@ -99,63 +100,49 @@ export default function Intake() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
+              <FormInput
+                label="Full Name"
                 id="full_name"
                 name="full_name"
                 required
                 minLength={2}
                 value={formData.full_name}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 placeholder="John Doe"
               />
             </div>
 
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                Phone Number
-              </label>
-              <input
+              <FormInput
+                label="Phone Number"
                 type="tel"
                 id="phone"
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 placeholder="+90 555 123 4567"
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <input
+              <FormInput
+                label="Email Address"
                 type="email"
                 id="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 placeholder="john@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
-                Country
-              </label>
-              <input
-                type="text"
+              <FormInput
+                label="Country"
                 id="country"
                 name="country"
                 value={formData.country}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 placeholder="Turkey"
               />
             </div>

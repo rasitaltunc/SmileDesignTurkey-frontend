@@ -10,8 +10,8 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   role: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithTestUser: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ user: User | null; role: string | null } | void>;
+  loginWithTestUser: (email: string, password: string) => Promise<{ user: User | null; role: string | null } | void>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
   fetchRole: () => Promise<void>;
@@ -55,7 +55,7 @@ export const useAuthStore = create<AuthState>()(
           const { data: sessionData } = await supabase.auth.getSession();
           const token = sessionData?.session?.access_token;
           let role: string | null = null;
-          
+
           if (token) {
             try {
               const r = await fetch("/api/get_current_user_role", {
@@ -94,6 +94,41 @@ export const useAuthStore = create<AuthState>()(
 
       loginWithTestUser: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
+
+        // MOCK LOGIN BYPASS
+        const ENABLE_DEMO_LOGIN = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
+        if (ENABLE_DEMO_LOGIN) {
+          console.log('⚡️ DEMO MODE: Bypassing Supabase Auth');
+
+          // Determine role based on email
+          let role = 'patient';
+          if (email.includes('doctor')) role = 'doctor';
+          if (email.includes('admin')) role = 'admin';
+          if (email.includes('employee')) role = 'employee';
+
+          // Mock delay
+          await new Promise(resolve => setTimeout(resolve, 800));
+
+          const mockUser = {
+            id: 'demo-user-123',
+            email: email,
+            aud: 'authenticated',
+            created_at: new Date().toISOString(),
+            user_metadata: { full_name: 'Demo User' },
+            app_metadata: { provider: 'email' }
+          } as any;
+
+          set({
+            user: mockUser,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+            role: role
+          });
+
+          return { user: mockUser, role };
+        }
+
         try {
           const supabase = getSupabaseClient();
           if (!supabase) {
@@ -101,7 +136,7 @@ export const useAuthStore = create<AuthState>()(
           }
 
           console.log(`Attempting login with: ${email}`);
-          
+
           const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password,
@@ -110,7 +145,7 @@ export const useAuthStore = create<AuthState>()(
           if (error) {
             console.error('Supabase login error:', error);
             set({ isAuthenticated: false, role: null, user: null });
-            throw error; // ÖNEMLİ: throw et ki catch'e düşsün
+            throw error;
           }
 
           console.log('Login successful!', data.user);
@@ -125,7 +160,7 @@ export const useAuthStore = create<AuthState>()(
           const { data: sessionData } = await supabase.auth.getSession();
           const token = sessionData?.session?.access_token;
           let role: string | null = null;
-          
+
           if (token) {
             try {
               const r = await fetch("/api/get_current_user_role", {
@@ -148,7 +183,7 @@ export const useAuthStore = create<AuthState>()(
             error: null,
             role,
           });
-          
+
           return { user: data.user, role };
         } catch (e: any) {
           console.error('Login error:', e);
@@ -168,7 +203,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           // Mark manual logout to prevent "expired" toast
           markManualLogout();
-          
+
           const supabase = getSupabaseClient();
           if (supabase) {
             await supabase.auth.signOut({ scope: 'local' });
@@ -191,6 +226,17 @@ export const useAuthStore = create<AuthState>()(
       checkSession: async () => {
         set({ isLoading: true });
         try {
+          // DEMO MODE BYPASS: If we are in demo mode and have a user, don't wipe it
+          const ENABLE_DEMO_LOGIN = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
+          if (ENABLE_DEMO_LOGIN) {
+            const currentUser = get().user;
+            if (currentUser?.id?.startsWith('demo-')) {
+              console.log('⚡️ DEMO MODE: Preserving mock session');
+              set({ isAuthenticated: true, isLoading: false });
+              return;
+            }
+          }
+
           const supabase = getSupabaseClient();
           if (!supabase) throw new Error("Supabase client not configured");
 
@@ -221,7 +267,7 @@ export const useAuthStore = create<AuthState>()(
           // ✅ Access token al
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;
-          
+
           if (!token) {
             set({ role: null });
             return;
@@ -232,7 +278,7 @@ export const useAuthStore = create<AuthState>()(
             headers: { Authorization: `Bearer ${token}` },
           });
           const j = await r.json();
-          
+
           if (j.ok && j.role) {
             set({ role: String(j.role).trim().toLowerCase() || null });
           } else {
@@ -255,5 +301,5 @@ export const useAuthStore = create<AuthState>()(
 export const initializeAuth = async (): Promise<() => void> => {
   const { checkSession } = useAuthStore.getState();
   await checkSession();
-  return () => {};
+  return () => { };
 };

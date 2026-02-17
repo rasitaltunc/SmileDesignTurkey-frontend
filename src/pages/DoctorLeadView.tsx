@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { apiJsonAuth } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { ArrowLeft, Brain, RefreshCw, FileText } from 'lucide-react';
+import { ArrowLeft, RefreshCw, FileText } from 'lucide-react';
 import DoctorNotePanel from '@/components/doctor/DoctorNotePanel';
 import { DoctorBriefCard } from '@/components/DoctorBriefCard';
 
@@ -48,6 +48,25 @@ export default function DoctorLeadView() {
       setError(null);
 
       try {
+        // DEMO MODE BYPASS
+        if (import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true') {
+          console.log('⚡️ DEMO MODE: Returning mock lead details');
+          await new Promise(r => setTimeout(r, 600));
+          if (!cancelled) {
+            setLead({
+              id: '123',
+              ref: '123',
+              case_code: 'CASE-123',
+              name: 'Sarah Connor',
+              treatment: 'Smile Makeover',
+              message: 'I want to fix my smile. It is very expensive though.',
+              original_message: 'I want to fix my smile. It is very expensive though.',
+              doctor_review_status: 'pending'
+            });
+          }
+          return;
+        }
+
         const result = await apiJsonAuth<{ ok: true; lead: Lead; documents?: any[] }>(
           `/api/doctor/lead?ref=${encodeURIComponent(leadRef)}`
         );
